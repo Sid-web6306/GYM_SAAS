@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚀 Gym SaaS MVP
 
-## Getting Started
+A multi-tenant SaaS application for managing gym memberships, schedules, and check-ins. This project is a solo-developer effort to build a functional MVP within 6 weeks.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🎯 Project Goal
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The primary goal is to build and deploy a core set of features that allow a small gym owner to manage their members and basic operations digitally. This MVP will serve as a proof-of-concept for potential users and investors.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ✨ Core Features (MVP Scope)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+*   **Secure Authentication:** Gym owners can sign up and log in.
+*   **Multi-tenancy:** Each gym owner's data is isolated and secure.
+*   **Member Management:** Ability to add, view, update, and delete members.
+*   **Dashboard:** A simple overview of key metrics (e.g., total members).
+*   **Check-in System:** A basic feature for members to check into the gym.
 
-## Learn More
+## 🛠️ Technology Stack
 
-To learn more about Next.js, take a look at the following resources:
+*   **Frontend:** Next.js 14 (App Router) with TypeScript
+*   **Styling:** Tailwind CSS + Shadcn/ui
+*   **Backend (BaaS):** Supabase (PostgreSQL, Auth, Storage)
+*   **Deployment:** Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🚀 Getting Started
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Instructions for setting up the project locally will be added soon.
