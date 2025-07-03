@@ -10,12 +10,9 @@ import { loginWithEmail, loginWithSocialProvider, type LoginFormState } from "@/
 import Link from "next/link";
 import { FaFacebook } from "react-icons/fa";
 import { FcGoogle } from "react-icons/fc";
-
-// --- CORRECTED IMPORTS ---
-import React, { useEffect, useActionState } from "react"; // Import useActionState from 'react'
-import { useFormStatus } from "react-dom"; // useFormStatus remains in 'react-dom'
-// ---
-
+import React, { useEffect } from "react";
+import {  useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
 
@@ -29,10 +26,9 @@ const SubmitButton = () => {
 };
 
 const LoginPage = () => {
-  // --- CORRECTED HOOK USAGE ---
-  // We use the imported 'useActionState' directly
-  const [state, formAction] = useActionState<LoginFormState, FormData>(loginWithEmail, { error: null });
+  const [state, formAction] = useActionState<LoginFormState | null, FormData>(loginWithEmail, null);
 
+  // This allows us to show a message from redirects, e.g., from the auth callback
   const searchParams = useSearchParams();
   const message = searchParams.get('message');
 

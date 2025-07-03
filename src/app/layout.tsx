@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { Suspense } from "react"; // <-- Import Suspense from React
+import { PageLoader } from "@/components/layout/PageLoader"; // <-- Import our loader
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,12 +20,15 @@ const RootLayout = ({
 }>) => {
   return (
     <html lang="en">
-      {/*
-        The <body> tag is now the immediate and only child of the <html> tag.
-        All other content, including the Toaster, is inside the body.
-      */}
       <body className={inter.className}>
-        {children}
+        {/* 
+          By placing Suspense here, we wrap the entire application.
+          Any page that needs to "bail out" of static rendering
+          will trigger this fallback, showing a full-page loader.
+        */}
+        <Suspense fallback={<PageLoader />}>
+          {children}
+        </Suspense>
         <Toaster richColors position="top-right" />
       </body>
     </html>
