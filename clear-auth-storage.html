@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Auth Storage</title>
+</head>
+<body>
+    <h1>Clear Auth Storage</h1>
+    <button onclick="clearStorage()">Clear Storage and Reload</button>
+    <script>
+        function clearStorage() {
+            localStorage.removeItem('auth-store');
+            alert('Storage cleared! Redirecting to login...');
+            window.location.href = 'http://localhost:3000/login';
+        }
+    </script>
+</body>
+</html>

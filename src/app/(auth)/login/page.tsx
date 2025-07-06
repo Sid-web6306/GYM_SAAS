@@ -13,8 +13,11 @@ import { FcGoogle } from "react-icons/fc";
 import React, { useEffect } from "react";
 import {  useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { toast } from "sonner";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { getAuthMessage, AuthMessageKey } from "@/lib/auth-messages";
+import { useAuthStore } from "@/stores/auth-store";
+import { toastActions } from "@/stores/toast-store";
+import { withSuspense } from "@/components/providers/suspense-provider";
 
 const SubmitButton = () => {
   const { pending } = useFormStatus();
@@ -25,21 +28,60 @@ const SubmitButton = () => {
   );
 };
 
-const LoginPage = () => {
+const LoginPageComponent = () => {
   const [state, formAction] = useActionState<LoginFormState | null, FormData>(loginWithEmail, null);
-
-  // This allows us to show a message from redirects, e.g., from the auth callback
   const searchParams = useSearchParams();
-  const message = searchParams.get('message');
+  const router = useRouter();
+  
+  // Check if user is already authenticated
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
+  const isInitialized = useAuthStore((state) => state.isInitialized);
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (isInitialized && isAuthenticated) {
+      console.log('Login page: User is authenticated, redirecting to dashboard');
+      router.replace('/dashboard');
+    }
+  }, [isInitialized, isAuthenticated, router]);
+
+
 
   useEffect(() => {
     if (state?.error) {
-      toast.error("Login Error", { description: state.error });
+      toastActions.error("Login Error", state.error);
     }
-    if (message) {
-      toast.error("Error", { description: message });
+    
+    // Handle URL-based auth messages
+    const messageKey = searchParams.get('message');
+    if (messageKey) {
+      const message = getAuthMessage(messageKey as AuthMessageKey);
+      if (message) {
+        toastActions.error("Authentication Error", message);
+      }
     }
-  }, [state, message]);
+  }, [state, searchParams]);
+
+  // Show loading while checking authentication (with timeout)
+  if (!isInitialized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Show loading while redirecting authenticated user
+  if (isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
@@ -65,7 +107,12 @@ const LoginPage = () => {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="password">Password</Label>
+                  <div className="flex items-center">
+                    <Label htmlFor="password">Password</Label>
+                    <Link href="/forgot-password" className="ml-auto inline-block text-sm underline">
+                      Forgot your password?
+                    </Link>
+                  </div>
                   <Input id="password" name="password" type="password" required />
                 </div>
                 <SubmitButton />
@@ -106,5 +153,8 @@ const LoginPage = () => {
     </div>
   );
 };
+
+// Wrap with Suspense to handle useSearchParams
+const LoginPage = withSuspense(LoginPageComponent);
 
 export default LoginPage;

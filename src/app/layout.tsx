@@ -2,37 +2,41 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { StoreProvider } from "@/components/providers/store-provider";
+import { SessionProvider } from "@/components/providers/session-provider";
+import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import { Suspense } from "react"; // <-- Import Suspense from React
-import { PageLoader } from "@/components/layout/PageLoader"; // <-- Import our loader
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Gym SaaS MVP",
-  description: "Manage your gym with ease",
+  description: "A comprehensive gym management system",
 };
 
-const RootLayout = ({
+export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) => {
+}) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        {/* 
-          By placing Suspense here, we wrap the entire application.
-          Any page that needs to "bail out" of static rendering
-          will trigger this fallback, showing a full-page loader.
-        */}
-        <Suspense fallback={<PageLoader />}>
-          {children}
-        </Suspense>
-        <Toaster richColors position="top-right" />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem={false}
+          disableTransitionOnChange={false}
+          themes={['light', 'blue', 'green', 'purple', 'rose']}
+        >
+          <StoreProvider>
+            <SessionProvider>
+              {children}
+            </SessionProvider>
+            <Toaster />
+          </StoreProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
-};
-
-export default RootLayout;
+}

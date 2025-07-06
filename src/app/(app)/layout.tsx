@@ -3,44 +3,60 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import React from 'react'
-import { Button } from '@/components/ui/button'
-import { logout } from '@/actions/auth.actions' // We will create this action next
+import { ClientLayout } from './client-layout'
 
 const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // Get user session - this is the most reliable check
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  
+  console.log('AppLayout: Auth check', { 
+    hasUser: !!user, 
+    userError,
+    userEmail: user?.email 
+  })
+
+  // Simple auth check - just check for user
   if (!user) {
+    console.log('AppLayout: No user found, redirecting to login')
     return redirect('/login')
   }
 
+  const currentUser = user
+
   // Fetch profile data to get the gym name and user name
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('full_name, gyms(name)') // This is a join to the gyms table!
-    .eq('id', user.id)
+    .select('full_name, gym_id, gyms(name)') // Include gym_id to check onboarding status
+    .eq('id', currentUser.id)
     .single();
   
+  console.log('AppLayout: Profile check', { 
+    hasProfile: !!profile, 
+    hasGymId: !!profile?.gym_id, 
+    profileError 
+  })
+  
+  // Check if user has completed onboarding
+  if (!profile?.gym_id) {
+    console.log('AppLayout: No gym_id, redirecting to onboarding')
+    return redirect('/onboarding')
+  }
+  
   const gymName = profile?.gyms?.name || 'My Gym';
-  const userName = profile?.full_name || user.email;
+  const userName = profile?.full_name || currentUser.email || 'User';
+
+  console.log('AppLayout: Auth successful, rendering app', { 
+    gymName, 
+    userName, 
+    userId: currentUser.id 
+  })
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="bg-background border-b sticky top-0 z-10">
-        <nav className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
-          <div className="font-bold text-lg">{gymName}</div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">{userName}</span>
-            <form action={logout}>
-              <Button variant="outline" size="sm">Log Out</Button>
-            </form>
-          </div>
-        </nav>
-      </header>
-      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
-      </main>
-    </div>
+    <ClientLayout initialGymName={gymName} initialUserName={userName}>
+      {children}
+    </ClientLayout>
   )
 }
 
