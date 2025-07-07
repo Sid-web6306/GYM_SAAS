@@ -1,118 +1,92 @@
 'use client'
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mail, CheckCircle } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
-import React from "react";
-import { createClient } from "@/utils/supabase/client";
-import { toastActions } from "@/stores/toast-store";
-import { useAuthStore } from "@/stores/auth-store";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation"
+import { useAuth } from '@/hooks/use-auth'
+import { useEffect } from 'react'
 
 const ConfirmEmailPage = () => {
-  const user = useAuthStore(state => state.user)
-  const initialize = useAuthStore(state => state.initialize)
-  const [isResending, setIsResending] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
-  
-  // Get fresh user data on mount
-  React.useEffect(() => {
-    initialize();
-  }, [initialize]);
+  const router = useRouter()
+  // Use TanStack Query hooks for auth state
+  const { user, isLoading, isAuthenticated } = useAuth()
 
-  const handleResendEmail = async () => {
-    const currentEmail = user?.email || '';
-    if (!currentEmail) {
-      toastActions.error("Error", "Please sign up again to get a confirmation email.");
-      return;
+  // Redirect if user is authenticated and email is confirmed
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user?.email_confirmed_at) {
+      console.log('Email confirmed, redirecting to dashboard')
+      router.replace('/dashboard')
     }
+  }, [isLoading, isAuthenticated, user, router])
 
-    setIsResending(true);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: currentEmail,
-      });
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
-      if (error) {
-        toastActions.error("Error", error.message);
-      } else {
-        toastActions.success("Success", "Confirmation email sent successfully!");
-        setEmailSent(true);
-      }
-    } catch {
-      toastActions.error("Error", "Failed to resend email. Please try again.");
-    } finally {
-      setIsResending(false);
-    }
-  };
+  // If redirecting
+  if (isAuthenticated && user?.email_confirmed_at) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground">Email confirmed! Redirecting...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
-      <Card className="mx-auto max-w-md w-full">
+      <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
-              <Mail className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-            </div>
-          </div>
-          <CardTitle className="text-2xl">Check your email</CardTitle>
-          <CardDescription className="text-center">
-            We&apos;ve sent a confirmation link to your email address
+          <CardTitle>Check Your Email</CardTitle>
+          <CardDescription>
+            We&apos;ve sent a confirmation link to your email address.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="text-center space-y-4">
-            <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
-              <CheckCircle className="h-4 w-4" />
-              <span>Click the link in your email to confirm your account</span>
-            </div>
-            
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              After confirming your email, you&apos;ll be redirected to complete your gym profile.
-            </div>
+        <CardContent className="text-center space-y-4">
+          <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+            <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+              <strong>Email sent to:</strong>
+            </p>
+            <p className="text-sm font-mono bg-white dark:bg-gray-800 px-2 py-1 rounded border">
+              {user?.email || 'your-email@example.com'}
+            </p>
           </div>
-
-          <div className="space-y-4">
-            <div className="text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Didn&apos;t receive the email? Check your spam folder or try resending.
-              </p>
-              
-              <Button 
-                variant="outline" 
-                onClick={handleResendEmail}
-                disabled={isResending}
-                className="w-full"
-              >
-                {isResending ? "Sending..." : emailSent ? "Email sent!" : "Resend confirmation email"}
-              </Button>
-            </div>
-
-            <div className="text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Wrong email address?{" "}
-                <Link href="/signup" className="text-blue-600 hover:underline">
-                  Sign up again
-                </Link>
-              </p>
-            </div>
-
-            <div className="text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Already have an account?{" "}
-                <Link href="/login" className="text-blue-600 hover:underline">
-                  Log in
-                </Link>
-              </p>
-            </div>
+          
+          <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+            <p>Please check your email and click the confirmation link to continue.</p>
+            <p>After confirming, you&apos;ll be automatically redirected to complete your profile.</p>
+          </div>
+          
+          <div className="pt-4 space-y-2">
+            <Button 
+              onClick={() => window.location.reload()}
+              className="w-full"
+            >
+              I&apos;ve confirmed my email
+            </Button>
+            
+            <Button 
+              variant="outline"
+              onClick={() => router.push('/login')}
+              className="w-full"
+            >
+              Back to Login
+            </Button>
           </div>
         </CardContent>
       </Card>
     </div>
-  );
-};
+  )
+}
 
-export default ConfirmEmailPage;
+export default ConfirmEmailPage

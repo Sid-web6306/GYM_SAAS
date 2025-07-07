@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/server'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import type { User } from '@supabase/supabase-js'
 
 // --- Types for Form State ---
 export type SignupFormState = {
@@ -181,12 +182,39 @@ export const completeOnboarding = async (
     // Redirect to dashboard after successful onboarding
     redirect('/dashboard')
   } catch (error) {
+    console.log('Onboarding error caught:', error, {
+      isError: error instanceof Error,
+      message: error instanceof Error ? error.message : 'No message',
+      hasDigest: error && typeof error === 'object' && 'digest' in error,
+      errorType: typeof error,
+      errorConstructor: error?.constructor?.name
+    })
+    
+    // Check if this is a Next.js redirect error (which is expected behavior)
+    if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
+      console.log('Re-throwing NEXT_REDIRECT error')
+      throw error
+    }
+    
+    // Check if error has digest property indicating it's a Next.js internal error
+    if (error && typeof error === 'object' && 'digest' in error) {
+      console.log('Re-throwing Next.js internal error with digest')
+      throw error
+    }
+    
+    // Check for redirect-related errors by message content
+    if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
+      console.log('Re-throwing redirect-related error')
+      throw error
+    }
+    
+    console.log('Treating as actual error, not redirect')
     const errorMessage = handleAuthError(error, 'Onboarding');
     return { error: { message: errorMessage } }
   }
 }
 
-// --- SOCIAL ONBOARDING ACTION (Separate from regular signup) ---
+// --- ENHANCED SOCIAL ONBOARDING ACTION ---
 export const completeSocialOnboarding = async (
   prevState: OnboardingFormState | null,
   formData: FormData
@@ -194,7 +222,7 @@ export const completeSocialOnboarding = async (
   const supabase = await createClient()
   const gymName = formData.get('gym-name') as string;
 
-  // Enhanced user validation
+  // Enhanced user validation with social provider data
   const { user, error: userError } = await validateUserSession(supabase);
   if (userError || !user) {
     redirect('/login?message=session-expired');
@@ -208,12 +236,17 @@ export const completeSocialOnboarding = async (
   }
   
   try {
-    // Call our RPC function to update the existing profile
-    console.log('Social onboarding: Calling complete_user_profile', {
+    // Extract additional profile data from social provider
+    const socialProfileData = extractSocialProfileData(user);
+    
+    console.log('Social onboarding: Extracted profile data', {
       userId: user.id,
+      email: user.email,
+      socialData: socialProfileData,
       gymName: gymValidation.data.gymName
     })
     
+    // Call enhanced RPC function with social profile data
     const { error: dbError } = await supabase.rpc('complete_user_profile', {
       user_id: user.id,
       gym_name: gymValidation.data.gymName,
@@ -222,6 +255,22 @@ export const completeSocialOnboarding = async (
     if (dbError) {
       const errorMessage = handleAuthError(dbError, 'Social onboarding RPC');
       return { error: { message: errorMessage } }
+    }
+    
+    // Update profile with social data if available
+    if (socialProfileData.full_name) {
+      const { error: profileUpdateError } = await supabase
+        .from('profiles')
+        .update({
+          full_name: socialProfileData.full_name || user.email?.split('@')[0] || 'User',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+      
+      if (profileUpdateError) {
+        console.warn('Social onboarding: Failed to update profile with social data', profileUpdateError)
+        // Don't fail the whole process for profile update issues
+      }
     }
     
     console.log('Social onboarding: Success, waiting for profile update before redirect')
@@ -251,9 +300,72 @@ export const completeSocialOnboarding = async (
     // Redirect to dashboard after successful onboarding
     redirect('/dashboard')
   } catch (error) {
+    console.log('Social onboarding error caught:', error, {
+      isError: error instanceof Error,
+      message: error instanceof Error ? error.message : 'No message',
+      hasDigest: error && typeof error === 'object' && 'digest' in error,
+      errorType: typeof error,
+      errorConstructor: error?.constructor?.name
+    })
+    
+    // Check if this is a Next.js redirect error (which is expected behavior)
+    if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
+      console.log('Re-throwing NEXT_REDIRECT error')
+      throw error
+    }
+    
+    // Check if error has digest property indicating it's a Next.js internal error
+    if (error && typeof error === 'object' && 'digest' in error) {
+      console.log('Re-throwing Next.js internal error with digest')
+      throw error
+    }
+    
+    // Check for redirect-related errors by message content
+    if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
+      console.log('Re-throwing redirect-related error')
+      throw error
+    }
+    
+    console.log('Treating as actual error, not redirect')
     const errorMessage = handleAuthError(error, 'Social onboarding');
     return { error: { message: errorMessage } }
   }
+}
+
+// --- HELPER FUNCTION TO EXTRACT SOCIAL PROFILE DATA ---
+function extractSocialProfileData(user: User) {
+  const userMetadata = user.user_metadata || {};
+  const appMetadata = user.app_metadata || {};
+  
+  // Extract profile data based on provider
+  const provider = appMetadata.provider || 'unknown';
+  let full_name = '';
+  let avatar_url = '';
+  
+  switch (provider) {
+    case 'google':
+      full_name = userMetadata.full_name || userMetadata.name || '';
+      avatar_url = userMetadata.avatar_url || userMetadata.picture || '';
+      break;
+      
+    case 'facebook':
+      full_name = userMetadata.full_name || userMetadata.name || '';
+      avatar_url = userMetadata.avatar_url || userMetadata.picture?.data?.url || '';
+      break;
+      
+    default:
+      // Fallback for other providers
+      full_name = userMetadata.full_name || userMetadata.name || userMetadata.display_name || '';
+      avatar_url = userMetadata.avatar_url || userMetadata.picture || '';
+  }
+  
+  return {
+    provider,
+    full_name: full_name.trim(),
+    avatar_url: avatar_url,
+    email: user.email || '',
+    email_verified: user.email_confirmed_at ? true : false,
+  };
 }
 
 // --- SIMPLIFIED SIGNUP WITH EMAIL ACTION ---
@@ -377,32 +489,78 @@ export const loginWithEmail = async (
 };
 
 // --- ENHANCED SOCIAL LOGIN ACTION ---
-export const loginWithSocialProvider = async (provider: 'google' | 'facebook') => {
+export const loginWithSocialProvider = async (
+  provider: 'google' | 'facebook',
+  options?: {
+    redirectTo?: string
+    scopes?: string
+  }
+) => {
   const supabase = await createClient();
   const origin = (await headers()).get('origin');
 
   if (!origin) { 
+    console.error('Social login: No origin header found')
     redirect('/login?message=social-auth-error')
   }
 
+  // Enhanced OAuth configuration with better scopes
+  const authOptions = {
+    provider,
+    options: { 
+      redirectTo: options?.redirectTo || `${origin}/auth/callback`,
+      // Request additional permissions for better profile data
+      scopes: options?.scopes || (provider === 'google' 
+        ? 'email profile openid' 
+        : 'email public_profile'
+      ),
+      // Ensure we get fresh consent for profile data
+      queryParams: {
+        ...(provider === 'google' && {
+          access_type: 'offline',
+          prompt: 'consent',
+        }),
+        ...(provider === 'facebook' && {
+          auth_type: 'rerequest',
+        }),
+      },
+    },
+  }
+
+  console.log(`Initiating ${provider} OAuth with options:`, authOptions)
+
   try {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: `${origin}/auth/callback` },
-    })
+    const { data, error } = await supabase.auth.signInWithOAuth(authOptions)
 
     if (error) { 
-      console.error('Social login error:', error);
-      redirect('/login?message=social-auth-error')
+      console.error(`${provider} OAuth error:`, error)
+      
+      // Handle specific OAuth errors
+      if (error.message.includes('access_denied')) {
+        redirect('/login?message=social-auth-cancelled')
+      } else if (error.message.includes('invalid_request')) {
+        redirect('/login?message=social-auth-invalid')
+      } else {
+        redirect('/login?message=social-auth-error')
+      }
     }
     
     if (data.url) { 
-      redirect(data.url) // We redirect to the URL provided by Supabase (e.g., Google's login page)
+      console.log(`Redirecting to ${provider} OAuth URL:`, data.url)
+      redirect(data.url)
     } else { 
+      console.error(`${provider} OAuth: No redirect URL received`)
       redirect('/login?message=social-auth-error')
     }
   } catch (error) {
-    console.error('Social login error:', error);
+    // Check if this is a Next.js redirect error (which is expected behavior)
+    if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
+      // Re-throw redirect errors so they can be handled properly by Next.js
+      throw error
+    }
+    
+    // Only log and handle actual unexpected errors
+    console.error(`${provider} OAuth unexpected error:`, error)
     redirect('/login?message=social-auth-error')
   }
 }

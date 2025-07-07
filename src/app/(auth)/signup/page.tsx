@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { FcGoogle } from "react-icons/fc";
 import { FaFacebook } from "react-icons/fa";
+import { Loader2 } from "lucide-react";
 
 import { loginWithSocialProvider, signupWithEmail, completeSocialOnboarding } from "@/actions/auth.actions";
 import React from "react";
@@ -22,7 +23,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useAuthStore } from "@/stores/auth-store";
+import { useAuth } from '@/hooks/use-auth';
 import { toastActions } from "@/stores/toast-store";
 import { withSuspense } from "@/components/providers/suspense-provider";
 
@@ -39,24 +40,68 @@ const GymNameSchema = z.object({
 type SignupFormData = z.infer<typeof SignupSchema>;
 type GymNameFormData = z.infer<typeof GymNameSchema>;
 
+// Enhanced Social Button Component with loading states
+const SocialButton = ({ 
+  provider, 
+  onClick, 
+  isLoading, 
+  disabled 
+}: { 
+  provider: 'google' | 'facebook'
+  onClick: () => void
+  isLoading: boolean
+  disabled: boolean
+}) => {
+  const isGoogle = provider === 'google'
+  const Icon = isGoogle ? FcGoogle : FaFacebook
+  const bgColor = isGoogle ? "bg-white hover:bg-gray-50" : "bg-[#1877F2] hover:bg-[#166eab]"
+  const textColor = isGoogle ? "text-gray-900" : "text-white hover:text-white"
+  const borderColor = isGoogle ? "border-gray-300" : "border-[#1877F2]"
+  const providerName = isGoogle ? 'Google' : 'Facebook'
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className={`${bgColor} ${textColor} ${borderColor} relative transition-all duration-200 ${
+        isLoading ? 'opacity-70 cursor-not-allowed' : ''
+      }`}
+      onClick={onClick}
+      disabled={disabled || isLoading}
+    >
+      {isLoading ? (
+        <>
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          <span>Connecting...</span>
+        </>
+      ) : (
+        <>
+          <Icon className="mr-2 h-5 w-5" />
+          <span>Continue with {providerName}</span>
+        </>
+      )}
+    </Button>
+  )
+}
+
 // Submit button component with proper accessibility
 const SubmitButton = ({ isSocialOnboarding, isSubmitting }: { 
   isSocialOnboarding: boolean;
   isSubmitting: boolean;
 }) => {
   const buttonText = isSocialOnboarding ? "Complete Profile" : "Sign up with Email";
-  const pendingText = isSocialOnboarding ? "Saving..." : "Signing Up...";
+  const pendingText = isSocialOnboarding ? "Saving..." : "Creating Account...";
 
   return (
     <Button 
       type="submit" 
-      className="w-full" 
+      className="w-full transition-all duration-200" 
       disabled={isSubmitting}
       aria-describedby={isSubmitting ? "submit-status" : undefined}
     >
       {isSubmitting ? (
         <>
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+          <Loader2 className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
           {pendingText}
         </>
       ) : (
@@ -76,22 +121,24 @@ const SignUpPageComponent = () => {
   const router = useRouter();
   const isSocialOnboarding = searchParams.get('social') === 'true';
   
-  // Zustand stores
-  const user = useAuthStore((state) => state.user);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
-  const isInitialized = useAuthStore((state) => state.isInitialized);
+  // Use TanStack Query hooks for auth state
+  const { user, isAuthenticated, isLoading } = useAuth();
   const userEmail = user?.email || '';
+
+  // Social auth loading states
+  const [socialLoading, setSocialLoading] = React.useState<{
+    google: boolean;
+    facebook: boolean;
+  }>({ google: false, facebook: false });
 
   // Redirect authenticated users to dashboard (except during social onboarding)
   React.useEffect(() => {
-    if (isInitialized && isAuthenticated && !isSocialOnboarding) {
+    if (!isLoading && isAuthenticated && !isSocialOnboarding) {
       console.log('Signup page: User is authenticated, redirecting to dashboard');
       router.replace('/dashboard');
     }
-  }, [isInitialized, isAuthenticated, isSocialOnboarding, router]);
-  
+  }, [isLoading, isAuthenticated, isSocialOnboarding, router]);
 
-  
   // React Hook Form setup
   const signupForm = useForm<SignupFormData>({
     resolver: zodResolver(SignupSchema),
@@ -109,6 +156,36 @@ const SignUpPageComponent = () => {
   });
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  // Enhanced social login handler with loading states
+  const handleSocialLogin = async (provider: 'google' | 'facebook') => {
+    setSocialLoading(prev => ({ ...prev, [provider]: true }));
+    
+    try {
+      toastActions.info(
+        'Redirecting...', 
+        `Redirecting to ${provider === 'google' ? 'Google' : 'Facebook'} for authentication.`
+      );
+      
+      // Call the enhanced social login action
+      await loginWithSocialProvider(provider, {
+        scopes: provider === 'google' 
+          ? 'email profile openid' 
+          : 'email public_profile'
+      });
+    } catch (error) {
+      console.error(`${provider} login error:`, error);
+      toastActions.error(
+        'Authentication Error', 
+        `Failed to connect with ${provider === 'google' ? 'Google' : 'Facebook'}. Please try again.`
+      );
+    } finally {
+      // Reset loading state after a delay (in case redirect doesn't happen immediately)
+      setTimeout(() => {
+        setSocialLoading(prev => ({ ...prev, [provider]: false }));
+      }, 3000);
+    }
+  };
 
   // Reset form submission state when component unmounts or mode changes
   React.useEffect(() => {
@@ -181,11 +258,11 @@ const SignUpPageComponent = () => {
   };
 
   // Show loading while checking authentication
-  if (!isInitialized) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <Loader2 className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
@@ -197,7 +274,7 @@ const SignUpPageComponent = () => {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <Loader2 className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-sm text-muted-foreground">Redirecting to dashboard...</p>
         </div>
       </div>
@@ -209,6 +286,8 @@ const SignUpPageComponent = () => {
   const description = isSocialOnboarding
     ? "Welcome! Just one more step to get started."
     : "Choose your preferred sign up method";
+
+  const isSocialButtonDisabled = isSubmitting || socialLoading.google || socialLoading.facebook;
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
@@ -224,21 +303,18 @@ const SignUpPageComponent = () => {
           {!isSocialOnboarding && (
             <>
               <div className="grid grid-cols-1 gap-4">
-                <Button
-                  variant="outline"
-                  onClick={() => loginWithSocialProvider('google')}
-                >
-                  <FcGoogle className="mr-2 h-5 w-5" />
-                  Continue with Google
-                </Button>
-                <Button
-                  variant="outline"
-                  className="bg-[#1877F2] text-white hover:bg-[#166eab] hover:text-white"
-                  onClick={() => loginWithSocialProvider('facebook')}
-                >
-                  <FaFacebook className="mr-2 h-5 w-5" />
-                  Continue with Facebook
-                </Button>
+                <SocialButton
+                  provider="google"
+                  onClick={() => handleSocialLogin('google')}
+                  isLoading={socialLoading.google}
+                  disabled={isSocialButtonDisabled}
+                />
+                <SocialButton
+                  provider="facebook"
+                  onClick={() => handleSocialLogin('facebook')}
+                  isLoading={socialLoading.facebook}
+                  disabled={isSocialButtonDisabled}
+                />
               </div>
 
               <div className="relative my-6">

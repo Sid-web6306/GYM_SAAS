@@ -1,217 +1,157 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { logout } from '@/actions/auth.actions'
-import { useAuthStore, useGymStore } from '@/stores'
-import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
-import { toastActions } from '@/stores/toast-store'
+import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { 
-  LayoutDashboard, 
   Users, 
-  Calendar, 
-  TrendingUp, 
-  Settings,
-  LogOut,
-  Menu,
+  LayoutDashboard, 
+  Settings, 
+  LogOut, 
+  Menu, 
   X,
-  Dumbbell
+  Dumbbell,
+  User
 } from 'lucide-react'
-import { ThemeSelector } from '@/components/ui/theme-selector'
+import { Button } from '@/components/ui/button'
+import { useAuth, useLogout } from '@/hooks/use-auth'
+import { RequireAuth } from '@/components/auth/AuthGuard'
 
 interface ClientLayoutProps {
   children: React.ReactNode
-  initialGymName: string
-  initialUserName: string
 }
 
-export const ClientLayout = ({ children, initialGymName, initialUserName }: ClientLayoutProps) => {
-  const initialize = useAuthStore(state => state.initialize)
-  const isInitialized = useAuthStore(state => state.isInitialized)
-  const user = useAuthStore(state => state.user)
-  const profile = useAuthStore(state => state.profile)
-  const logoutStore = useAuthStore(state => state.logout)
-  const gym = useGymStore((state) => state.gym)
-  const router = useRouter()
-  const pathname = usePathname()
+function ClientLayoutContent({ children }: ClientLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  
-  useEffect(() => {
-    if (!isInitialized) {
-      initialize()
-    }
-  }, [initialize, isInitialized])
+  const pathname = usePathname()
+  const { profile, user } = useAuth()
+  const logoutMutation = useLogout()
 
-  // Use store values if available, otherwise fallback to initial values
-  const gymName = gym?.name || initialGymName
-  const userName = profile?.full_name || user?.email || initialUserName
-
-  // Handle logout with proper state clearing
   const handleLogout = async () => {
-    try {
-      // Call server action
-      const result = await logout()
-      
-      if (result.success) {
-        // Clear client-side state
-        await logoutStore()
-        
-        // Show success message
-        toastActions.success('Logged Out', 'You have been logged out successfully.')
-        
-        // Redirect to login page
-        router.push('/login')
-      } else {
-        toastActions.error('Logout Error', result.error || 'Failed to log out')
-      }
-    } catch (error) {
-      console.error('Logout error:', error)
-      toastActions.error('Logout Error', 'Failed to log out. Please try again.')
-    }
+    logoutMutation.mutate()
   }
 
-  // Navigation items
-  const navigationItems = [
-    {
-      name: 'Dashboard',
-      href: '/dashboard',
-      icon: LayoutDashboard,
-    },
-    {
-      name: 'Members',
-      href: '/members',
-      icon: Users,
-    },
-    {
-      name: 'Schedule',
-      href: '/schedule',
-      icon: Calendar,
-    },
-    {
-      name: 'Analytics',
-      href: '/analytics',
-      icon: TrendingUp,
-    },
-    {
-      name: 'Settings',
-      href: '/settings',
-      icon: Settings,
-    },
+  const navigation = [
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Members', href: '/members', icon: Users },
+    { name: 'Settings', href: '/settings', icon: Settings },
   ]
 
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out
-        lg:translate-x-0 lg:static lg:inset-0
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        {/* Sidebar Header */}
-        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <Dumbbell className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-bold text-lg text-gray-900 truncate">{gymName}</span>
+      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
+        <div className="flex items-center justify-between h-16 px-4 border-b">
+          <div className="flex items-center">
+            <Dumbbell className="h-8 w-8 text-purple-600" />
+            <span className="ml-2 text-xl font-bold text-gray-900">
+              {profile?.gym_id ? 'Gym SaaS' : 'Setup Required'}
+            </span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="lg:hidden"
+          <button
             onClick={() => setSidebarOpen(false)}
+            className="lg:hidden"
           >
-            <X className="h-5 w-5" />
-          </Button>
+            <X className="h-6 w-6" />
+          </button>
         </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          {navigationItems.map((item) => {
-            const isActive = pathname === item.href
-            const Icon = item.icon
-            
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                  ${isActive 
-                    ? 'bg-primary text-white shadow-sm' 
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-                  }
-                `}
-              >
-                <Icon className="h-5 w-5 shrink-0" />
-                {item.name}
-              </Link>
-            )
-          })}
+        
+        <nav className="mt-5 px-2">
+          <div className="space-y-1">
+            {navigation.map((item) => {
+              const isActive = pathname === item.href
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`${
+                    isActive
+                      ? 'bg-purple-100 text-purple-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <item.icon
+                    className={`${
+                      isActive ? 'text-purple-500' : 'text-gray-400 group-hover:text-gray-500'
+                    } mr-3 h-6 w-6`}
+                  />
+                  {item.name}
+                </Link>
+              )
+            })}
+          </div>
         </nav>
 
-        {/* Theme Selector */}
-        <div className="px-4 py-3 border-t border-gray-200">
-          <ThemeSelector />
-        </div>
-
-        {/* User Section - Moved to bottom */}
-        <div className="border-t border-gray-200 p-4 mt-auto">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium text-gray-700">
-                {userName.charAt(0).toUpperCase()}
-              </span>
+        {/* User section */}
+        <div className="absolute bottom-0 w-full p-4 border-t">
+          <div className="flex items-center mb-3">
+            <div className="flex-shrink-0">
+              <User className="h-8 w-8 text-gray-400" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{userName}</p>
-              <p className="text-xs text-gray-500">Gym Owner</p>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-900">
+                {profile?.full_name || user?.email || 'User'}
+              </p>
+              <p className="text-xs text-gray-500">
+                {user?.email}
+              </p>
             </div>
           </div>
           <Button
+            onClick={handleLogout}
             variant="outline"
             size="sm"
-            onClick={handleLogout}
-            className="w-full justify-start text-gray-700 hover:text-gray-900"
+            className="w-full"
+            disabled={logoutMutation.isPending}
           >
-            <LogOut className="mr-2 h-4 w-4" />
-            Log Out
+            <LogOut className="h-4 w-4 mr-2" />
+            {logoutMutation.isPending ? 'Signing out...' : 'Sign out'}
           </Button>
         </div>
       </div>
 
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden transition-all duration-300"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile header */}
-        <header className="lg:hidden bg-white border-b border-gray-200 px-4 py-3">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top bar */}
+        <div className="bg-white shadow-sm border-b lg:hidden">
+          <div className="flex items-center justify-between h-16 px-4">
+            <button
               onClick={() => setSidebarOpen(true)}
+              className="text-gray-500 hover:text-gray-600"
             >
-              <Menu className="h-5 w-5" />
-            </Button>
-            <span className="font-semibold text-gray-900">{gymName}</span>
-            <div className="w-8" /> {/* Spacer for center alignment */}
+              <Menu className="h-6 w-6" />
+            </button>
+            <h1 className="text-lg font-semibold text-gray-900">
+              {navigation.find(item => item.href === pathname)?.name || 'Dashboard'}
+            </h1>
+            <div></div>
           </div>
-        </header>
+        </div>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto">
           {children}
         </main>
       </div>
+
+      {/* Sidebar overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
     </div>
   )
 }
+
+export default function ClientLayout({ children }: ClientLayoutProps) {
+  return (
+    <RequireAuth>
+      <ClientLayoutContent>
+        {children}
+      </ClientLayoutContent>
+    </RequireAuth>
+  )
+} 

@@ -2,9 +2,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { StoreProvider } from "@/components/providers/store-provider";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -29,12 +29,12 @@ export default function RootLayout({
           disableTransitionOnChange={false}
           themes={['light', 'blue', 'green', 'purple', 'rose']}
         >
-          <StoreProvider>
+          <QueryProvider>
             <SessionProvider>
               {children}
             </SessionProvider>
             <Toaster />
-          </StoreProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

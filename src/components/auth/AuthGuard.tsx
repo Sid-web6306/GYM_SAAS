@@ -1,45 +1,61 @@
 'use client'
 
-import { useAuthStore } from '@/stores/auth-store'
+import { useAuthGuard } from '@/hooks/use-auth'
+import { LoadingSpinner } from '@/components/layout/LoadingSpinner'
 
 interface AuthGuardProps {
   children: React.ReactNode
   requireAuth?: boolean
-  requireOnboarding?: boolean
+  requireGym?: boolean
+  redirectTo?: string
+  fallback?: React.ReactNode
 }
 
-export const AuthGuard = ({ 
+export function AuthGuard({ 
   children, 
   requireAuth = true, 
-  requireOnboarding = false
-}: AuthGuardProps) => {
-  // const { isInitialized, isAuthenticated } = useAuthStore((state) => ({
-  //   isInitialized: state.isInitialized,
-  //   isAuthenticated: state.isAuthenticated()
-  // }))
-  const isInitialized = useAuthStore(state => state.isInitialized);
-  const isAuthenticated = useAuthStore(state => state.isAuthenticated());
-
-  // Simplified AuthGuard - let SessionProvider handle most logic
-  // Only do basic checks, don't block rendering during initialization
+  requireGym = false, 
+  redirectTo = '/login',
+  fallback = <LoadingSpinner />
+}: AuthGuardProps) {
+  const { canAccess, isLoading } = useAuthGuard({
+    requireAuth,
+    requireGym,
+    redirectTo
+  })
   
-  // For onboarding pages, allow rendering even if not initialized
-  // SessionProvider will handle the navigation logic
-  if (requireOnboarding) {
-    // Onboarding pages can render while initializing
-    // SessionProvider will redirect if needed
-    return <>{children}</>
+  if (isLoading) {
+    return <>{fallback}</>
   }
-
-  // For other protected pages, only show if initialized
-  if (!isInitialized) {
-    return null // Let SessionProvider handle the loading state
+  
+  if (!canAccess) {
+    return null // Redirect is handled by the hook
   }
-
-  // Additional component-level validations
-  if (requireAuth && !isAuthenticated) {
-    return null // SessionProvider will handle redirect
-  }
-
+  
   return <>{children}</>
+}
+
+// Convenience components for common patterns
+export function RequireAuth({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
+  return (
+    <AuthGuard requireAuth={true} fallback={fallback}>
+      {children}
+    </AuthGuard>
+  )
+}
+
+export function RequireGym({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
+  return (
+    <AuthGuard requireAuth={true} requireGym={true} fallback={fallback}>
+      {children}
+    </AuthGuard>
+  )
+}
+
+export function GuestOnly({ children, redirectTo = '/dashboard' }: { children: React.ReactNode; redirectTo?: string }) {
+  return (
+    <AuthGuard requireAuth={false} redirectTo={redirectTo}>
+      {children}
+    </AuthGuard>
+  )
 } 

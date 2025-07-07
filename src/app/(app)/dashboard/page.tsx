@@ -4,136 +4,239 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   Users, 
-  Calendar, 
   DollarSign, 
-  TrendingUp, 
   Activity,
   UserPlus,
   Dumbbell,
   Clock,
-  ArrowUpRight
+  ArrowUpRight,
+  TrendingUp,
+  Calendar,
+  Settings,
+  AlertCircle
 } from 'lucide-react';
-import { useEffect } from 'react';
-import { useAuthStore, useGymStore, useMembersStore } from '@/stores';
+import { useAuth } from '@/hooks/use-auth';
+import { useGymStats, useGymAnalytics } from '@/hooks/use-gym-data';
+import { useRecentActivity } from '@/hooks/use-members-data';
+import { useAuthStore } from '@/stores/auth-store';
 import { MemberGrowthChart } from '@/components/charts/member-growth-chart';
 import { RevenueChart } from '@/components/charts/revenue-chart';
 import { CheckinTrendsChart } from '@/components/charts/checkin-trends-chart';
 import Link from 'next/link';
 
 const DashboardPage = () => {
-  // Toasts now show immediately via toastActions - no hook needed
+  // Get auth state from TanStack Query
+  const { profile, hasGym, isAuthenticated, isLoading: authLoading } = useAuth()
+  const gymId = profile?.gym_id
+
+  // Get UI state from Zustand (client-only state)
+  const { showWelcomeMessage } = useAuthStore()
+
+  // Use TanStack Query hooks for all server state
+  const { 
+    data: stats, 
+    isLoading: statsLoading, 
+    error: statsError,
+    refetch: refetchStats 
+  } = useGymStats(gymId || null)
   
-  // Session and store hooks
-  const hasGym = useAuthStore((state) => state.hasGym());
-  const stats = useGymStore(state => state.stats)
-  const gymLoading = useGymStore(state => state.isLoading)
-  const recentActivity = useMembersStore(state => state.recentActivity)
-  const membersLoading = useMembersStore(state => state.isLoading)
-  const fetchRecentActivity = useMembersStore(state => state.fetchRecentActivity)
+  const { 
+    data: analytics, 
+    isLoading: analyticsLoading 
+  } = useGymAnalytics(gymId || null)
   
-  const isLoading = gymLoading || membersLoading
+  const { 
+    data: recentActivity, 
+    isLoading: activityLoading 
+  } = useRecentActivity(gymId || null)
+  
+  const isLoading = authLoading || statsLoading || analyticsLoading || activityLoading
 
-  useEffect(() => {
-    const initializeDashboard = async () => {
-      if (hasGym) {
-        // Fetch gym stats and recent activity
-        await fetchRecentActivity()
-      }
-    }
+  // Show auth loading state
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading authentication...</p>
+        </div>
+      </div>
+    )
+  }
 
-    initializeDashboard()
-  }, [hasGym, fetchRecentActivity])
+  // Show no gym state
+  if (!hasGym) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center max-w-md">
+          <Dumbbell className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+          <h2 className="text-2xl font-semibold mb-2">Welcome to Your Gym Dashboard</h2>
+          <p className="text-muted-foreground mb-6">
+            Complete your gym setup to start managing members, tracking analytics, and growing your business.
+          </p>
+          <Link href="/onboarding">
+            <Button size="lg">
+              <Settings className="h-4 w-4 mr-2" />
+              Complete Setup
+            </Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
+  // Show error state
+  if (statsError) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center max-w-md">
+          <AlertCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Failed to load dashboard</h2>
+          <p className="text-muted-foreground mb-6">
+            There was an error loading your dashboard data. Please try again.
+          </p>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={() => refetchStats()} variant="outline">
+              Try Again
+            </Button>
+            <Link href="/members">
+              <Button>Go to Members</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Generate stat cards with loading states
   const statCards = [
     {
       title: "Total Members",
-      value: stats?.totalMembers || 0,
-      change: `+${stats?.newMembersThisMonth || 0} this month`,
+      value: isLoading ? "..." : (stats?.totalMembers || 0).toLocaleString(),
+      change: isLoading ? "Loading..." : `+${stats?.newMembersThisMonth || 0} this month`,
       icon: Users,
       color: "text-blue-600",
-      href: "/members"
+      href: "/members",
+      loading: isLoading
     },
     {
       title: "Active Members",
-      value: stats?.activeMembers || 0,
-      change: `${Math.round(((stats?.activeMembers || 0) / (stats?.totalMembers || 1)) * 100)}% of total`,
+      value: isLoading ? "..." : (stats?.activeMembers || 0).toLocaleString(),
+      change: isLoading ? "Loading..." : `${Math.round(((stats?.activeMembers || 0) / Math.max(stats?.totalMembers || 1, 1)) * 100)}% of total`,
       icon: Activity,
       color: "text-green-600",
-      href: "/members"
+      href: "/members?status=active",
+      loading: isLoading
     },
     {
       title: "Monthly Revenue",
-      value: `$${(stats?.monthlyRevenue || 0).toLocaleString()}`,
-      change: "+12% from last month",
+      value: isLoading ? "..." : `$${(stats?.monthlyRevenue || 0).toLocaleString()}`,
+      change: isLoading ? "Loading..." : `Projected: $${(stats?.projectedMonthlyRevenue || 0).toLocaleString()}`,
       icon: DollarSign,
       color: "text-emerald-600",
-      href: "/analytics"
+      href: "/analytics",
+      loading: isLoading
     },
     {
       title: "Today's Check-ins",
-      value: stats?.todayCheckins || 0,
-      change: `Avg: ${stats?.averageDailyCheckins || 0}/day`,
+      value: isLoading ? "..." : (stats?.todayCheckins || 0).toLocaleString(),
+      change: isLoading ? "Loading..." : `Avg: ${stats?.averageDailyCheckins || 0}/day`,
       icon: Clock,
       color: "text-orange-600",
-      href: "/schedule"
+      href: "/schedule",
+      loading: isLoading
     }
   ];
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">Loading your gym&apos;s overview...</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardHeader className="space-y-0 pb-2">
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded w-full"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
+    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Welcome back! Here&apos;s what&apos;s happening at your gym today.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-muted-foreground">
+            Welcome back! Here&apos;s what&apos;s happening at your gym today.
+          </p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Link href="/analytics">
+            <Button size="sm" variant="outline">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Analytics
+            </Button>
+          </Link>
+          <Link href="/members">
+            <Button size="sm">
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add Member
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((stat, index) => (
-          <Card key={index} className="hover:shadow-md transition-all duration-200 group cursor-pointer">
-            <Link href={stat.href}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stat.title}
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                  <ArrowUpRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+      {/* Welcome Message (UI State from Zustand) */}
+      {showWelcomeMessage && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="p-2 bg-blue-100 rounded-full">
+                  <Dumbbell className="h-6 w-6 text-blue-600" />
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">
-                  {stat.change}
-                </p>
-              </CardContent>
-            </Link>
+                <div>
+                  <h3 className="font-semibold text-blue-900">Welcome to your gym dashboard!</h3>
+                  <p className="text-sm text-blue-700">
+                    Start by adding members, setting up schedules, and tracking your business growth.
+                  </p>
+                </div>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => useAuthStore.getState().setShowWelcomeMessage(false)}
+                className="text-blue-600 hover:text-blue-800"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {statCards.map((card) => (
+          <Card key={card.title} className="hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                {card.title}
+              </CardTitle>
+              <card.icon className={`h-4 w-4 ${card.color}`} />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {card.loading ? (
+                  <div className="h-7 bg-gray-200 rounded animate-pulse w-16"></div>
+                ) : (
+                  card.value
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {card.loading ? (
+                  <div className="h-3 bg-gray-200 rounded animate-pulse w-24 mt-1"></div>
+                ) : (
+                  card.change
+                )}
+              </div>
+              {!card.loading && (
+                <Link 
+                  href={card.href} 
+                  className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground mt-2 transition-colors"
+                >
+                  View details <ArrowUpRight className="ml-1 h-3 w-3" />
+                </Link>
+              )}
+            </CardContent>
           </Card>
         ))}
       </div>
@@ -148,40 +251,65 @@ const DashboardPage = () => {
                 <Activity className="h-5 w-5" />
                 Recent Activity
               </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Latest member check-ins and activities
+              </p>
             </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/members">
+            <Link href="/members">
+              <Button variant="outline" size="sm">
                 View All
                 <ArrowUpRight className="ml-1 h-3 w-3" />
-              </Link>
-            </Button>
+              </Button>
+            </Link>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentActivity && recentActivity.length > 0 ? (
-                recentActivity.slice(0, 5).map((activity) => (
-                  <div key={activity.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                      <Dumbbell className="h-4 w-4 text-blue-600" />
-                    </div>
+            {activityLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 animate-pulse">
+                    <div className="h-8 w-8 bg-gray-200 rounded-full"></div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium">
-                        {activity.member?.first_name} {activity.member?.last_name} {activity.activity_type === 'check_in' ? 'checked in' : 'checked out'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(activity.timestamp).toLocaleTimeString()}
-                      </p>
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No recent activity</p>
-                  <p className="text-sm">Member activities will appear here</p>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            ) : recentActivity && recentActivity.length > 0 ? (
+              <div className="space-y-4">
+                {recentActivity.slice(0, 5).map((activity) => (
+                  <div key={activity.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                      activity.activity_type === 'check_in' 
+                        ? 'bg-green-100 text-green-600' 
+                        : 'bg-orange-100 text-orange-600'
+                    }`}>
+                      <Dumbbell className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">
+                        {activity.member?.first_name} {activity.member?.last_name}{' '}
+                        <span className={activity.activity_type === 'check_in' ? 'text-green-600' : 'text-orange-600'}>
+                          {activity.activity_type === 'check_in' ? 'checked in' : 'checked out'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(activity.timestamp).toLocaleTimeString([], { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <div>No recent activity</div>
+                <div className="text-sm">Member activities will appear here</div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -189,32 +317,35 @@ const DashboardPage = () => {
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Common tasks and shortcuts
+            </p>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button className="w-full justify-start" variant="outline" asChild>
-              <Link href="/members">
+            <Link href="/members">
+              <Button className="w-full justify-start" variant="outline">
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add New Member
-              </Link>
-            </Button>
-            <Button className="w-full justify-start" variant="outline" asChild>
-              <Link href="/schedule">
+              </Button>
+            </Link>
+            <Link href="/schedule">
+              <Button className="w-full justify-start" variant="outline">
                 <Calendar className="mr-2 h-4 w-4" />
                 View Schedule
-              </Link>
-            </Button>
-            <Button className="w-full justify-start" variant="outline" asChild>
-              <Link href="/analytics">
+              </Button>
+            </Link>
+            <Link href="/analytics">
+              <Button className="w-full justify-start" variant="outline">
                 <TrendingUp className="mr-2 h-4 w-4" />
                 View Analytics
-              </Link>
-            </Button>
-            <Button className="w-full justify-start" variant="outline" asChild>
-              <Link href="/settings">
-                <DollarSign className="mr-2 h-4 w-4" />
-                Manage Settings
-              </Link>
-            </Button>
+              </Button>
+            </Link>
+            <Link href="/settings">
+              <Button className="w-full justify-start" variant="outline">
+                <Settings className="mr-2 h-4 w-4" />
+                Gym Settings
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
@@ -223,24 +354,67 @@ const DashboardPage = () => {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Member Growth Chart */}
         <MemberGrowthChart 
-          data={undefined} 
-          isLoading={isLoading}
+          data={analytics?.memberGrowthData} 
+          isLoading={analyticsLoading}
         />
         
         {/* Revenue Chart */}
         <RevenueChart 
-          data={undefined} 
-          isLoading={isLoading}
+          data={analytics?.revenueData} 
+          isLoading={analyticsLoading}
         />
       </div>
 
       {/* Check-in Trends Chart */}
       <CheckinTrendsChart 
-        data={undefined} 
-        isLoading={isLoading}
+        data={analytics?.checkinData} 
+        isLoading={analyticsLoading}
       />
+
+      {/* Performance Metrics */}
+      {stats && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Performance Metrics
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Key performance indicators for your gym
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="text-center p-4 rounded-lg bg-muted/50">
+                <div className="text-2xl font-bold text-green-600">
+                  {stats.memberRetentionRate.toFixed(1)}%
+                </div>
+                <div className="text-sm text-muted-foreground">Retention Rate</div>
+              </div>
+              <div className="text-center p-4 rounded-lg bg-muted/50">
+                <div className="text-2xl font-bold text-blue-600">
+                  {stats.averageMembershipLength.toFixed(1)}
+                </div>
+                <div className="text-sm text-muted-foreground">Avg. Membership (months)</div>
+              </div>
+              <div className="text-center p-4 rounded-lg bg-muted/50">
+                <div className="text-2xl font-bold text-purple-600">
+                  {stats.newMembersThisWeek}
+                </div>
+                <div className="text-sm text-muted-foreground">New This Week</div>
+              </div>
+              <div className="text-center p-4 rounded-lg bg-muted/50">
+                <div className="text-2xl font-bold text-orange-600">
+                  {Math.round((stats.todayCheckins / Math.max(stats.activeMembers, 1)) * 100)}%
+                </div>
+                <div className="text-sm text-muted-foreground">Today&apos;s Check-in Rate</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
 
-export default DashboardPage;
+export default DashboardPage; 

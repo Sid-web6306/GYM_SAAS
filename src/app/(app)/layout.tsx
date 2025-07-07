@@ -3,58 +3,35 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import React from 'react'
-import { ClientLayout } from './client-layout'
+import ClientLayout from './client-layout'
 
 const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const supabase = await createClient()
 
-  // Get user session - this is the most reliable check
+  // Server-side auth check - just verify user exists
   const { data: { user }, error: userError } = await supabase.auth.getUser()
   
-  console.log('AppLayout: Auth check', { 
-    hasUser: !!user, 
-    userError,
-    userEmail: user?.email 
-  })
-
-  // Simple auth check - just check for user
-  if (!user) {
-    console.log('AppLayout: No user found, redirecting to login')
+  // If no user, redirect to login (server-side redirect for SEO/performance)
+  if (!user || userError) {
+    console.log('AppLayout: No authenticated user, redirecting to login')
     return redirect('/login')
   }
 
-  const currentUser = user
-
-  // Fetch profile data to get the gym name and user name
-  const { data: profile, error: profileError } = await supabase
+  // Get basic profile info for initial render (TanStack Query will handle updates)
+  const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, gym_id, gyms(name)') // Include gym_id to check onboarding status
-    .eq('id', currentUser.id)
+    .select('full_name, gym_id, gyms(name)')
+    .eq('id', user.id)
     .single();
   
-  console.log('AppLayout: Profile check', { 
-    hasProfile: !!profile, 
-    hasGymId: !!profile?.gym_id, 
-    profileError 
-  })
-  
-  // Check if user has completed onboarding
+  // Server-side onboarding check
   if (!profile?.gym_id) {
-    console.log('AppLayout: No gym_id, redirecting to onboarding')
+    console.log('AppLayout: No gym setup, redirecting to onboarding')
     return redirect('/onboarding')
   }
-  
-  const gymName = profile?.gyms?.name || 'My Gym';
-  const userName = profile?.full_name || currentUser.email || 'User';
-
-  console.log('AppLayout: Auth successful, rendering app', { 
-    gymName, 
-    userName, 
-    userId: currentUser.id 
-  })
 
   return (
-    <ClientLayout initialGymName={gymName} initialUserName={userName}>
+    <ClientLayout>
       {children}
     </ClientLayout>
   )

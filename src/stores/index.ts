@@ -1,38 +1,37 @@
 // src/stores/index.ts
 
 // Export all stores
-export * from './auth-store'
-export * from './gym-store'
-export * from './members-store'
-export * from './toast-store'
+export * from './auth-store' // UI state only (client-side)
+export * from './ui-store'   // UI state and preferences
+export * from './toast-store' // Toast notifications
 
-// Import stores for initialization
-import { useAuthStore } from './auth-store'
-import { useGymStore } from './gym-store'
-import { useMembersStore } from './members-store'
-
-// Global store initialization
-export const initializeStores = async () => {
-  try {
-    // Initialize auth store first (no await needed as it's synchronous)
-    useAuthStore.getState().initialize()
-    
-    // Wait a bit for auth to initialize, then check for other stores
-    await new Promise(resolve => setTimeout(resolve, 100))
-    
-    // Once auth is initialized, we can initialize other stores if needed
-    const { user, profile } = useAuthStore.getState()
-    
-    if (user && profile?.gym_id) {
-      // Initialize gym and members data
-      await Promise.all([
-        useGymStore.getState().fetchGym(profile.gym_id),
-        useGymStore.getState().fetchStats(profile.gym_id),
-        useMembersStore.getState().fetchMembers(profile.gym_id),
-      ])
-    }
-  } catch (error) {
-    console.error('Store initialization error:', error)
-  }
-}
+/**
+ * Store Architecture Migration Complete
+ * 
+ * ✅ TanStack Query now handles all server state:
+ *    - Authentication data (user, profile)
+ *    - Gym data and analytics
+ *    - Members data and management
+ *    - Real-time subscriptions
+ * 
+ * ✅ Zustand now handles only client UI state:
+ *    - auth-store.ts: Auth UI preferences (welcome message, last login, etc.)
+ *    - ui-store.ts: Global UI state and preferences
+ *    - toast-store.ts: Toast notification queue
+ * 
+ * 🗑️ Removed legacy stores:
+ *    - auth-store-legacy-adapter.ts (migration helper)
+ *    - auth-store-new.ts (server state version)
+ *    - members-store.ts (replaced by TanStack Query)
+ *    - gym-store.ts (replaced by TanStack Query)
+ * 
+ * Benefits of new architecture:
+ * - Zero hydration issues
+ * - Automatic caching and invalidation
+ * - Background refetching
+ * - Optimistic updates
+ * - Built-in error handling
+ * - Multi-tab synchronization
+ * - Proper separation of concerns
+ */
 

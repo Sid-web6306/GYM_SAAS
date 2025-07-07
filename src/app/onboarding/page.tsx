@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useAuthStore } from '@/stores/auth-store'
-import { AuthGuard } from '@/components/auth/AuthGuard'
+import { useAuth } from '@/hooks/use-auth'
+import { RequireAuth } from '@/components/auth/AuthGuard'
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
 
@@ -38,9 +38,8 @@ const OnboardingPage = () => {
   const [emailConfirmed, setEmailConfirmed] = useState<boolean>(true)
   const [currentEmail, setCurrentEmail] = useState('')
   
-  const user = useAuthStore(state => state.user)
-  const profile = useAuthStore(state => state.profile)
-  const hasGym = !!profile?.gym_id
+  // Use TanStack Query hooks for auth state
+  const { user, profile, hasGym } = useAuth()
 
   // Use action state for server action
   const [state, formAction] = useActionState<OnboardingFormState | null, FormData>(completeOnboarding, null)
@@ -110,7 +109,7 @@ const OnboardingPage = () => {
   }
 
   return (
-    <AuthGuard requireAuth={true} requireOnboarding={true}>
+    <RequireAuth>
       <div className="flex items-center justify-center min-h-screen p-4">
         <Card className="w-full max-w-md relative">
           <CardHeader className="text-center">
@@ -166,7 +165,7 @@ const OnboardingPage = () => {
           </CardContent>
         </Card>
       </div>
-    </AuthGuard>
+    </RequireAuth>
   )
 }
 
