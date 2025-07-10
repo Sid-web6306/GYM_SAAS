@@ -39,7 +39,9 @@ export function createClient() {
           return document.cookie
             .split('; ')
             .find(row => row.startsWith(`${envName}=`))
-            ?.split('=')[1]
+            ?.split('=')
+            .slice(1)
+            .join('=')
         },
         set(name: string, value: string, options: CookieOptions) {
           // Use environment-specific cookie names
