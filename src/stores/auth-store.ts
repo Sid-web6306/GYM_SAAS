@@ -2,9 +2,7 @@
 
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-
-// This store now only handles client-side UI state
-// All server state (user, profile, authentication) is handled by TanStack Query in src/hooks/use-auth.ts
+import { getEnvironmentPrefix } from '@/utils/supabase/client' // Import the utility
 
 export interface AuthUIState {
   // Client-side UI state only
@@ -13,6 +11,7 @@ export interface AuthUIState {
   rememberEmail: string | null
   isOnboardingCompleted: boolean
   preferredLoginMethod: 'email' | 'google' | 'facebook' | null
+  isNewUser: boolean // NEW: Track if this is a brand new user
   
   // UI Actions
   setShowWelcomeMessage: (show: boolean) => void
@@ -20,22 +19,28 @@ export interface AuthUIState {
   setRememberEmail: (email: string | null) => void
   setOnboardingCompleted: (completed: boolean) => void
   setPreferredLoginMethod: (method: 'email' | 'google' | 'facebook' | null) => void
+  setIsNewUser: (isNew: boolean) => void // NEW
   
   // Utility Actions
   clearUIState: () => void
   resetOnboarding: () => void
+  markOnboardingComplete: () => void // NEW: Combined action for onboarding completion
 }
+
+// Create a prefixed name for the store
+const storeName = `${getEnvironmentPrefix()}-auth-ui-store`
 
 export const useAuthStore = create<AuthUIState>()(
   devtools(
     persist(
       (set) => ({
         // Initial UI state
-        showWelcomeMessage: true,
+        showWelcomeMessage: false, // Changed default to false
         lastLoginTime: null,
         rememberEmail: null,
         isOnboardingCompleted: false,
         preferredLoginMethod: null,
+        isNewUser: false, // NEW
 
         // UI Actions
         setShowWelcomeMessage: (showWelcomeMessage) => {
@@ -58,33 +63,47 @@ export const useAuthStore = create<AuthUIState>()(
           set({ preferredLoginMethod })
         },
 
+        setIsNewUser: (isNewUser) => {
+          set({ isNewUser })
+        },
+
+        // NEW: Mark onboarding as complete and set welcome message for new users
+        markOnboardingComplete: () => {
+          set((state) => ({
+            isOnboardingCompleted: true,
+            showWelcomeMessage: state.isNewUser, // Show welcome only for new users
+            lastLoginTime: Date.now(),
+          }))
+        },
+
         // Utility Actions
         clearUIState: () => {
           set({
-            showWelcomeMessage: true,
+            showWelcomeMessage: false, // Changed
             lastLoginTime: null,
             rememberEmail: null,
             isOnboardingCompleted: false,
             preferredLoginMethod: null,
+            isNewUser: false, // NEW
           })
         },
 
         resetOnboarding: () => {
           set({
             isOnboardingCompleted: false,
-            showWelcomeMessage: true,
+            showWelcomeMessage: false, // Changed
           })
         },
       }),
       {
-        name: 'auth-ui-store',
-        // Persist all UI state - it's safe to persist since it's client-only
+        name: storeName, // Use the dynamic, prefixed name
         partialize: (state) => ({
           showWelcomeMessage: state.showWelcomeMessage,
           lastLoginTime: state.lastLoginTime,
           rememberEmail: state.rememberEmail,
           isOnboardingCompleted: state.isOnboardingCompleted,
           preferredLoginMethod: state.preferredLoginMethod,
+          isNewUser: state.isNewUser, // NEW
         }),
       }
     ),
@@ -101,6 +120,8 @@ export const authUIActions = {
   setRememberEmail: (email: string | null) => useAuthStore.getState().setRememberEmail(email),
   setOnboardingCompleted: (completed: boolean) => useAuthStore.getState().setOnboardingCompleted(completed),
   setPreferredLoginMethod: (method: 'email' | 'google' | 'facebook' | null) => useAuthStore.getState().setPreferredLoginMethod(method),
+  setIsNewUser: (isNew: boolean) => useAuthStore.getState().setIsNewUser(isNew), // NEW
+  markOnboardingComplete: () => useAuthStore.getState().markOnboardingComplete(), // NEW
   clearUIState: () => useAuthStore.getState().clearUIState(),
   resetOnboarding: () => useAuthStore.getState().resetOnboarding(),
   
@@ -113,6 +134,7 @@ export const authUIActions = {
       rememberEmail: state.rememberEmail,
       isOnboardingCompleted: state.isOnboardingCompleted,
       preferredLoginMethod: state.preferredLoginMethod,
+      isNewUser: state.isNewUser, // NEW
     }
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { 
   useMembers, 
@@ -163,8 +163,9 @@ const MembersPage = () => {
   }, [selectedMemberId, membersResponse?.members])
 
   // Update edit form when selected member changes
-  useState(() => {
+  useEffect(() => {
     if (selectedMember) {
+      console.log('Pre-filling edit form with member data:', selectedMember)
       editForm.reset({
         first_name: selectedMember.first_name || '',
         last_name: selectedMember.last_name || '',
@@ -173,7 +174,14 @@ const MembersPage = () => {
         status: (selectedMember.status as 'active' | 'inactive' | 'pending') || 'active',
       })
     }
-  })
+  }, [selectedMember, editForm])
+
+  // Reset edit form when dialog closes
+  useEffect(() => {
+    if (!editDialogOpen) {
+      editForm.reset()
+    }
+  }, [editDialogOpen, editForm])
 
   // Handlers
   const handleAddMember = async (data: MemberFormData) => {
@@ -213,11 +221,21 @@ const MembersPage = () => {
       })
       setEditDialogOpen(false)
       setSelectedMemberId(null)
+      // Reset form after successful update
+      editForm.reset()
     } catch (error) {
       console.error('Error updating member:', error)
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Close edit dialog and cleanup
+  const handleCloseEditDialog = () => {
+    setEditDialogOpen(false)
+    setSelectedMemberId(null)
+    // Reset form when dialog is closed
+    editForm.reset()
   }
 
   const handleDeleteMember = async () => {
@@ -763,7 +781,11 @@ const MembersPage = () => {
       </Dialog>
 
       {/* Edit Member Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          handleCloseEditDialog()
+        }
+      }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader className="space-y-3">
             <DialogTitle className="flex items-center gap-2">
@@ -860,7 +882,7 @@ const MembersPage = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setEditDialogOpen(false)}
+                  onClick={handleCloseEditDialog}
                   disabled={isSubmitting}
                 >
                   Cancel

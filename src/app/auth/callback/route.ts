@@ -1,8 +1,7 @@
 // src/app/auth/callback/route.ts
 
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createClient } from '@/utils/supabase/server' // Use the shared server client
 import type { User } from '@supabase/supabase-js'
 
 export async function GET(request: Request) {
@@ -33,32 +32,7 @@ export async function GET(request: Request) {
   }
   
   try {
-    const cookieStore = await cookies() 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-          set(name: string, value: string, options: CookieOptions) {
-            try {
-              cookieStore.set({ name, value, ...options })
-            } catch (error) { 
-              console.error('Error setting cookie:', error) 
-            }
-          },
-          remove(name: string, options: CookieOptions) {
-            try {
-              cookieStore.set({ name, value: '', ...options })
-            } catch (error) { 
-              console.error('Error removing cookie:', error) 
-            }
-          },
-        },
-      }
-    )
+    const supabase = await createClient() // Use the shared, async client
 
     console.log('Exchanging code for session...')
     const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
@@ -156,12 +130,13 @@ export async function GET(request: Request) {
       
       return NextResponse.redirect(`${origin}/dashboard`)
     } else {
-      // User needs to complete onboarding
-      console.log('Auth callback: User needs onboarding, redirecting to social signup')
+      // User needs to complete onboarding - redirect to main onboarding page
+      console.log('Auth callback: User needs onboarding, redirecting to onboarding')
       
-      // For social users, redirect to signup page with social=true
-      const redirectUrl = `${origin}/signup?social=true&provider=${provider}`
-      return NextResponse.redirect(redirectUrl)
+      // For social auth users, we need to mark them as new users
+      // This will be handled in the onboarding page when they get there
+      
+      return NextResponse.redirect(`${origin}/onboarding`)
     }
     
   } catch (error) {

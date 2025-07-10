@@ -2,6 +2,7 @@
 
 'use client'
 
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -131,7 +132,7 @@ const LoginPageComponent = () => {
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   // Display auth messages from URL parameters
-  React.useEffect(() => {
+  useEffect(() => {
     displayAuthMessage(searchParams, (title, message, type) => {
       switch (type) {
         case 'success':
@@ -150,11 +151,17 @@ const LoginPageComponent = () => {
     })
   }, [searchParams])
 
-  // Redirect authenticated users to dashboard
-  React.useEffect(() => {
+  // Redirect authenticated users to dashboard with delay to prevent infinite loops
+  useEffect(() => {
     if (!isLoading && isAuthenticated) {
       console.log('Login page: User is authenticated, redirecting to dashboard')
-      router.replace('/dashboard')
+      
+      // Add a small delay to prevent immediate redirect loops
+      const timeoutId = setTimeout(() => {
+        router.replace('/dashboard')
+      }, 100)
+      
+      return () => clearTimeout(timeoutId)
     }
   }, [isLoading, isAuthenticated, router])
 

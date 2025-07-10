@@ -7,6 +7,7 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import type { User } from '@supabase/supabase-js'
+import { handleCatchError } from '@/lib/utils'
 
 // --- Types for Form State ---
 export type SignupFormState = {
@@ -42,6 +43,11 @@ export type ResetPasswordFormState = {
   success: string | null;
 }
 
+export type ChangePasswordFormState = {
+  error: string | null;
+  success: string | null;
+}
+
 // --- Zod Schemas for Validation ---
 const SignupSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address' }),
@@ -50,6 +56,11 @@ const SignupSchema = z.object({
 
 const GymNameSchema = z.object({
   gymName: z.string().min(3, { message: 'Gym name must be at least 3 characters long' }),
+})
+
+const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(6, 'New password must be at least 6 characters long'),
 })
 
 // --- HELPER FUNCTIONS ---
@@ -139,10 +150,19 @@ export const completeOnboarding = async (
   }
   
   try {
+    // Check if this is a new user (account created recently)
+    const userCreatedAt = new Date(user.created_at);
+    const now = new Date();
+    const timeDiffMinutes = (now.getTime() - userCreatedAt.getTime()) / (1000 * 60);
+    const isNewUser = timeDiffMinutes < 30; // Consider new if created within 30 minutes
+    
     // Call our RPC function to complete the user profile
     console.log('Onboarding: Calling complete_user_profile', {
       userId: user.id,
-      gymName: gymValidation.data.gymName
+      gymName: gymValidation.data.gymName,
+      isNewUser,
+      userCreatedAt: userCreatedAt.toISOString(),
+      timeDiffMinutes
     })
     
     const { error: dbError } = await supabase.rpc('complete_user_profile', {
@@ -153,6 +173,22 @@ export const completeOnboarding = async (
     if (dbError) {
       const errorMessage = handleAuthError(dbError, 'Onboarding RPC');
       return { error: { message: errorMessage } }
+    }
+    
+    // Update profile with social data if available (for social auth users)
+    const socialProfileData = extractSocialProfileData(user);
+    if (socialProfileData.full_name) {
+      const { error: profileUpdateError } = await supabase
+        .from('profiles')
+        .update({
+          full_name: socialProfileData.full_name,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+      
+      if (profileUpdateError) {
+        console.warn('Onboarding: Failed to update profile with social data', profileUpdateError)
+      }
     }
     
     console.log('Onboarding: Success, waiting for profile update before redirect')
@@ -174,23 +210,16 @@ export const completeOnboarding = async (
       return { error: { message: 'Profile update failed. Please try again.' } }
     }
     
-    console.log('Onboarding: Profile verified, redirecting to dashboard', {
-      gymId: updatedProfile.gym_id,
-      fullName: updatedProfile.full_name
-    })
+    console.log('Onboarding: Profile verified, redirecting to dashboard')
     
-    // Redirect to dashboard after successful onboarding
-    redirect('/dashboard')
+    // Redirect to dashboard with new user flag
+    const redirectUrl = isNewUser ? '/dashboard?welcome=true' : '/dashboard';
+    redirect(redirectUrl);
+    
   } catch (error) {
-    console.log('Onboarding error caught:', error, {
-      isError: error instanceof Error,
-      message: error instanceof Error ? error.message : 'No message',
-      hasDigest: error && typeof error === 'object' && 'digest' in error,
-      errorType: typeof error,
-      errorConstructor: error?.constructor?.name
-    })
+    console.error('Onboarding error:', error)
     
-    // Check if this is a Next.js redirect error (which is expected behavior)
+    // CRITICAL: Check if this is a Next.js redirect error (which is expected behavior)
     if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
       console.log('Re-throwing NEXT_REDIRECT error')
       throw error
@@ -426,6 +455,7 @@ export const signupWithEmail = async (
     // Redirect to email confirmation page
     redirect('/confirm-email');
   } catch (error) {
+    handleCatchError(error, 'Signup error');
     const errorMessage = handleAuthError(error, 'Signup');
     return { error: { message: errorMessage } }
   }
@@ -452,9 +482,16 @@ export const loginWithEmail = async (
     });
 
     if (error) {
-      // Enhanced error handling
+      // Enhanced error handling for different scenarios
       if (error.message.includes('Email not confirmed')) {
         redirect('/login?message=email-not-confirmed');
+      }
+      
+      // Provide helpful guidance for invalid credentials
+      if (error.message.includes('Invalid login credentials')) {
+        return { 
+          error: 'Invalid email or password. If you signed up with Google or Facebook, please use those login buttons instead. If you set a password after social login, there might be an account setup issue - try logging in with your social provider first.' 
+        };
       }
       
       const errorMessage = handleAuthError(error, 'Login');
@@ -483,6 +520,7 @@ export const loginWithEmail = async (
       redirect('/onboarding'); // Fallback to onboarding
     }
   } catch (error) {
+    handleCatchError(error, 'Login error');
     const errorMessage = handleAuthError(error, 'Login');
     return { error: errorMessage };
   }
@@ -565,21 +603,84 @@ export const loginWithSocialProvider = async (
   }
 }
 
-// --- LOGOUT ACTION ---
+// --- OPTIMIZED LOGOUT ACTION ---
 export const logout = async () => {
   'use server'
-  const supabase = await createClient()
   
   try {
-    // Sign out from Supabase
-    await supabase.auth.signOut()
+    const supabase = await createClient()
     
-    // Don't redirect here - let the client handle the redirect
-    // This prevents the infinite refresh loop
+    // 1. Server-side session cleanup with global scope
+    const { error: signOutError } = await supabase.auth.signOut({ 
+      scope: 'global' // Sign out from all sessions
+    })
+    
+    if (signOutError) {
+      console.warn('Server logout: Supabase signOut warning:', signOutError)
+      // Continue with cookie clearing even if signOut has issues
+    }
+    
+    // 2. Streamlined cookie clearing - focus on core patterns
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    
+    // Essential Supabase auth cookies (simplified from 15+ patterns)
+    const coreCookies = [
+      'supabase-auth-token',
+      'supabase.auth.token',
+      'sb-auth-token',
+      'sb-access-token',
+      'sb-refresh-token'
+    ]
+    
+    // Clear core cookies with standard cleanup
+    coreCookies.forEach(cookieName => {
+      try {
+        cookieStore.delete({ name: cookieName, path: '/' })
+        cookieStore.set({
+          name: cookieName,
+          value: '',
+          path: '/',
+          expires: new Date(0),
+          httpOnly: false,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax'
+        })
+      } catch (error) {
+        // Individual cookie errors are non-critical
+        console.debug(`Cookie clear warning for ${cookieName}:`, error)
+      }
+    })
+    
+    console.log('Server logout: Complete')
     return { success: true }
+    
   } catch (error) {
-    console.error('Logout error:', error)
-    return { success: false, error: 'Failed to log out' }
+    console.error('Server logout error:', error)
+    
+    // Emergency cookie clearing on complete failure
+    try {
+      const { cookies } = await import('next/headers')
+      const cookieStore = await cookies()
+      
+      // Force clear minimum essential cookies
+      const essentialCookies = ['supabase-auth-token', 'supabase.auth.token']
+      essentialCookies.forEach(cookieName => {
+        try {
+          cookieStore.delete({ name: cookieName, path: '/' })
+          cookieStore.set({ name: cookieName, value: '', expires: new Date(0) })
+        } catch {
+          // Final fallback - ignore all errors
+        }
+      })
+    } catch {
+      // Complete failure - client will handle cleanup
+    }
+    
+    return { 
+      success: false, 
+      error: 'Server logout failed - client will handle cleanup' 
+    }
   }
 }
 
@@ -616,6 +717,7 @@ export const forgotPassword = async (
       success: 'Password reset email sent. Please check your inbox.' 
     };
   } catch (error) {
+    handleCatchError(error, 'Password reset error');
     const errorMessage = handleAuthError(error, 'Password reset');
     return { error: errorMessage, success: null };
   }
@@ -664,7 +766,71 @@ export const resetPassword = async (
       success: 'Password updated successfully. Please log in with your new password.' 
     };
   } catch (error) {
+    handleCatchError(error, 'Password update error');
     const errorMessage = handleAuthError(error, 'Password update');
+    return { error: errorMessage, success: null };
+  }
+};
+
+// --- CHANGE PASSWORD ACTION ---
+export const changePassword = async (
+  prevState: ChangePasswordFormState | null,
+  formData: FormData
+): Promise<ChangePasswordFormState> => {
+  const supabase = await createClient();
+  
+  const currentPassword = formData.get('currentPassword') as string;
+  const newPassword = formData.get('newPassword') as string;
+
+  // Validate using Zod schema
+  const validation = ChangePasswordSchema.safeParse({ currentPassword, newPassword });
+  
+  if (!validation.success) {
+    const errors = validation.error.flatten().fieldErrors;
+    const errorMessage = errors.currentPassword?.[0] || errors.newPassword?.[0] || 'Invalid input';
+    return { error: errorMessage, success: null };
+  }
+
+  try {
+    // Validate session before updating password
+    const { user, error: userError } = await validateUserSession(supabase);
+    if (userError || !user) {
+      return { error: 'Session expired. Please log in again.', success: null };
+    }
+
+    // Check if user is from social auth (doesn't have a password set)
+    const provider = user.app_metadata?.provider;
+    if (provider && provider !== 'email') {
+      return { error: 'Social auth users should use "Set Password" instead of "Change Password".', success: null };
+    }
+
+    // Verify current password by attempting to sign in (only for email auth users)
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email || '',
+      password: validation.data.currentPassword,
+    });
+
+    if (signInError) {
+      return { error: 'Current password is incorrect.', success: null };
+    }
+
+    // Update password
+    const { error } = await supabase.auth.updateUser({
+      password: validation.data.newPassword
+    });
+
+    if (error) {
+      const errorMessage = handleAuthError(error, 'Password change');
+      return { error: errorMessage, success: null };
+    }
+
+    return { 
+      error: null, 
+      success: 'Password changed successfully.' 
+    };
+  } catch (error) {
+    handleCatchError(error, 'Password change error');
+    const errorMessage = handleAuthError(error, 'Password change');
     return { error: errorMessage, success: null };
   }
 };
