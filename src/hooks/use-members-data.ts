@@ -2,6 +2,46 @@ import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/re
 import { createClient } from '@/utils/supabase/client'
 import { toastActions } from '@/stores/toast-store'
 import { useEffect } from 'react'
+import { useAuth } from './use-auth'
+
+// Helper function to identify authentication and logout-related errors
+function isAuthenticationError(error: unknown): boolean {
+  if (!error) return false
+  
+  // Handle empty error objects which often occur during logout
+  if (typeof error === 'object' && error !== null) {
+    const errorObj = error as { message?: string; code?: string | number }
+    const errorMessage = errorObj.message || ''
+    const errorCode = String(errorObj.code || '')
+    
+    // Check if it's an empty object (common during logout)
+    const isEmptyObject = Object.keys(errorObj).length === 0
+    if (isEmptyObject) {
+      return true // Treat empty error objects as auth-related during logout
+    }
+    
+    // Common auth error patterns
+    const authErrorPatterns = [
+      'session_expired',
+      'jwt expired',
+      'refresh_token_not_found',
+      'invalid_jwt',
+      'JWT expired',
+      'No API key found',
+      'Invalid API key',
+      'User not found',
+      'permission denied',
+      'Invalid user',
+      'User session not found'
+    ]
+    
+    return authErrorPatterns.some(pattern => 
+      errorMessage.includes(pattern) || errorCode.includes(pattern)
+    ) || errorCode === '401'
+  }
+  
+  return false
+}
 
 // Types
 export interface Member {
@@ -60,9 +100,10 @@ export const membersKeys = {
   stats: (gymId: string) => [...membersKeys.all, 'stats', gymId] as const,
 }
 
-// Enhanced Members List Hook with pagination and real-time updates
+// Enhanced Members List Hook with pagination, real-time updates, and auth handling
 export function useMembers(gymId: string | null, filters?: MemberFilters) {
   const queryClient = useQueryClient()
+  const { isAuthenticated, user } = useAuth()
 
   const query = useQuery({
     queryKey: membersKeys.list(gymId || '', filters),
@@ -104,7 +145,21 @@ export function useMembers(gymId: string | null, filters?: MemberFilters) {
       const { data, error, count } = await query
 
       if (error) {
-        console.error('Members fetch error:', error)
+        // Enhanced error handling for logout scenarios
+        if (isAuthenticationError(error)) {
+          console.log('Members fetch: Authentication/logout error - this is expected during logout')
+          throw error
+        }
+        
+        // Log detailed error info for debugging (only for non-auth errors)
+        console.error('Members fetch error:', {
+          error,
+          errorType: typeof error,
+          errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
+          gymId,
+          isAuthenticated,
+          hasUser: !!user
+        })
         throw error
       }
 
@@ -114,14 +169,32 @@ export function useMembers(gymId: string | null, filters?: MemberFilters) {
         hasMore: filters?.limit ? (count || 0) > (filters.offset || 0) + data.length : false
       }
     },
-    enabled: !!gymId,
+    enabled: !!gymId && isAuthenticated && !!user,
     staleTime: 2 * 60 * 1000, // 2 minutes
     placeholderData: { members: [], totalCount: 0, hasMore: false },
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (isAuthenticationError(error)) {
+        return false
+      }
+      return failureCount < 3
+    },
   })
+
+  // Enhanced authentication state monitoring and cleanup
+  useEffect(() => {
+    // Cancel any ongoing queries when user logs out or loses authentication
+    if (!isAuthenticated || !user) {
+      console.log('Members data: Detected logout, cancelling member queries')
+      queryClient.cancelQueries({ queryKey: membersKeys.all })
+      return
+    }
+  }, [isAuthenticated, user, queryClient])
 
   // Set up real-time subscription for members (without toasts - mutations handle them)
   useEffect(() => {
-    if (!gymId) return
+    // Only create subscription if user is authenticated and has a gym
+    if (!gymId || !isAuthenticated || !user) return
 
     const supabase = createClient()
     
@@ -157,14 +230,15 @@ export function useMembers(gymId: string | null, filters?: MemberFilters) {
     return () => {
       subscription.unsubscribe()
     }
-  }, [gymId, queryClient])
+  }, [gymId, isAuthenticated, user, queryClient])
 
   return query
 }
 
-// Single Member Hook with real-time updates
+// Single Member Hook with real-time updates and auth handling
 export function useMember(memberId: string | null) {
   const queryClient = useQueryClient()
+  const { isAuthenticated, user } = useAuth()
 
   const query = useQuery({
     queryKey: membersKeys.detail(memberId || ''),
@@ -179,19 +253,33 @@ export function useMember(memberId: string | null) {
         .single()
       
       if (error) {
+        // Handle authentication errors gracefully
+        if (isAuthenticationError(error)) {
+          console.log('Member fetch: Authentication error during logout - this is expected')
+          throw error
+        }
+        
         console.error('Member fetch error:', error)
         throw error
       }
       
       return data as Member
     },
-    enabled: !!memberId,
+    enabled: !!memberId && isAuthenticated && !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (isAuthenticationError(error)) {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 
   // Real-time subscription for single member
   useEffect(() => {
-    if (!memberId) return
+    // Only create subscription if user is authenticated and has a member ID
+    if (!memberId || !isAuthenticated || !user) return
 
     const supabase = createClient()
     
@@ -218,13 +306,15 @@ export function useMember(memberId: string | null) {
     return () => {
       subscription.unsubscribe()
     }
-  }, [memberId, queryClient])
+  }, [memberId, isAuthenticated, user, queryClient])
 
   return query
 }
 
-// Recent Activity Hook with mock data (replace with real implementation)
+// Recent Activity Hook with mock data and auth handling (replace with real implementation)
 export function useRecentActivity(gymId: string | null) {
+  const { isAuthenticated, user } = useAuth()
+  
   return useQuery({
     queryKey: membersKeys.activity(gymId || ''),
     queryFn: async () => {
@@ -232,11 +322,22 @@ export function useRecentActivity(gymId: string | null) {
       
       // Get some recent members for mock activity
       const supabase = createClient()
-      const { data: members } = await supabase
+      const { data: members, error } = await supabase
         .from('members')
         .select('id, first_name, last_name')
         .eq('gym_id', gymId)
         .limit(10)
+      
+      if (error) {
+        // Handle authentication errors gracefully
+        if (isAuthenticationError(error)) {
+          console.log('Activity fetch: Authentication error during logout - this is expected')
+          throw error
+        }
+        
+        console.error('Activity fetch error:', error)
+        throw error
+      }
       
       // Generate mock activity data
       const mockActivity: MemberActivity[] = (members || []).slice(0, 5).map((member, index) => ({
@@ -249,13 +350,22 @@ export function useRecentActivity(gymId: string | null) {
       
       return mockActivity
     },
-    enabled: !!gymId,
+    enabled: !!gymId && isAuthenticated && !!user,
     staleTime: 1 * 60 * 1000, // 1 minute
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (isAuthenticationError(error)) {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 }
 
-// Members Stats Hook
+// Members Stats Hook with auth handling
 export function useMembersStats(gymId: string | null) {
+  const { isAuthenticated, user } = useAuth()
+  
   return useQuery({
     queryKey: membersKeys.stats(gymId || ''),
     queryFn: async () => {
@@ -268,6 +378,12 @@ export function useMembersStats(gymId: string | null) {
         .eq('gym_id', gymId)
 
       if (error) {
+        // Handle authentication errors gracefully
+        if (isAuthenticationError(error)) {
+          console.log('Members stats fetch: Authentication error during logout - this is expected')
+          throw error
+        }
+        
         console.error('Members stats fetch error:', error)
         throw error
       }
@@ -285,8 +401,15 @@ export function useMembersStats(gymId: string | null) {
         newThisWeek: members.filter(m => new Date(m.created_at) >= startOfWeek).length,
       }
     },
-    enabled: !!gymId,
+    enabled: !!gymId && isAuthenticated && !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (isAuthenticationError(error)) {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 }
 

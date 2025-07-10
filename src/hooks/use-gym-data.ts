@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/re
 import { createClient } from '@/utils/supabase/client'
 import { toastActions } from '@/stores/toast-store'
 import { useEffect } from 'react'
+import { useAuth } from './use-auth'
 
 // Types
 export interface Gym {
@@ -50,6 +51,45 @@ export interface GymAnalytics {
   }>
 }
 
+// Helper function to identify authentication and logout-related errors
+function isAuthenticationError(error: unknown): boolean {
+  if (!error) return false
+  
+  // Handle empty error objects which often occur during logout
+  if (typeof error === 'object' && error !== null) {
+    const errorObj = error as { message?: string; code?: string | number }
+    const errorMessage = errorObj.message || ''
+    const errorCode = String(errorObj.code || '')
+    
+    // Check if it's an empty object (common during logout)
+    const isEmptyObject = Object.keys(errorObj).length === 0
+    if (isEmptyObject) {
+      return true // Treat empty error objects as auth-related during logout
+    }
+    
+    // Common auth error patterns
+    const authErrorPatterns = [
+      'session_expired',
+      'jwt expired',
+      'refresh_token_not_found',
+      'invalid_jwt',
+      'JWT expired',
+      'No API key found',
+      'Invalid API key',
+      'User not found',
+      'permission denied',
+      'Invalid user',
+      'User session not found'
+    ]
+    
+    return authErrorPatterns.some(pattern => 
+      errorMessage.includes(pattern) || errorCode.includes(pattern)
+    ) || errorCode === '401'
+  }
+  
+  return false
+}
+
 // Query Keys
 export const gymKeys = {
   all: ['gym'] as const,
@@ -61,9 +101,10 @@ export const gymKeys = {
   analytics: (id: string) => [...gymKeys.all, 'analytics', id] as const,
 }
 
-// Enhanced Gym Data Hook with real-time updates
+// Enhanced Gym Data Hook with real-time updates and auth handling
 export function useGymData(gymId: string | null) {
   const queryClient = useQueryClient()
+  const { isAuthenticated, user } = useAuth()
 
   const query = useQuery({
     queryKey: gymKeys.detail(gymId || ''),
@@ -78,15 +119,33 @@ export function useGymData(gymId: string | null) {
         .single()
       
       if (error) {
-        console.error('Gym fetch error:', error)
+        // Enhanced error handling for logout scenarios
+        if (isAuthenticationError(error)) {
+          console.log('Gym fetch: Authentication/logout error - this is expected during logout')
+          throw error
+        }
+        
+        // Log detailed error info for debugging (only for non-auth errors)
+        console.error('Gym fetch error:', {
+          error,
+          errorType: typeof error,
+          errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
+          gymId,
+          isAuthenticated,
+          hasUser: !!user
+        })
         throw error
       }
       
       return data as Gym
     },
-    enabled: !!gymId,
+    enabled: !!gymId && isAuthenticated && !!user,
     staleTime: 10 * 60 * 1000, // 10 minutes
     retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (isAuthenticationError(error)) {
+        return false
+      }
       // Don't retry on not found errors
       if (error && typeof error === 'object' && 'code' in error && error.code === 'PGRST116') {
         return false
@@ -95,9 +154,20 @@ export function useGymData(gymId: string | null) {
     },
   })
 
+  // Enhanced authentication state monitoring and cleanup
+  useEffect(() => {
+    // Cancel any ongoing queries when user logs out or loses authentication
+    if (!isAuthenticated || !user) {
+      console.log('Gym data: Detected logout, cancelling gym queries')
+      queryClient.cancelQueries({ queryKey: gymKeys.all })
+      return
+    }
+  }, [isAuthenticated, user, queryClient])
+
   // Set up real-time subscription for gym updates (without toasts - mutations handle them)
   useEffect(() => {
-    if (!gymId) return
+    // Only create subscription if user is authenticated and has a gym
+    if (!gymId || !isAuthenticated || !user) return
 
     const supabase = createClient()
     
@@ -128,13 +198,15 @@ export function useGymData(gymId: string | null) {
     return () => {
       subscription.unsubscribe()
     }
-  }, [gymId, queryClient])
+  }, [gymId, isAuthenticated, user, queryClient])
 
   return query
 }
 
-// Enhanced Gym Stats Hook with comprehensive metrics
+// Enhanced Gym Stats Hook with comprehensive metrics and auth handling
 export function useGymStats(gymId: string | null) {
+  const { isAuthenticated, user } = useAuth()
+  
   return useQuery({
     queryKey: gymKeys.stats(gymId || ''),
     queryFn: async (): Promise<GymStats> => {
@@ -149,6 +221,12 @@ export function useGymStats(gymId: string | null) {
         .eq('gym_id', gymId)
 
       if (error) {
+        // Handle authentication errors gracefully
+        if (isAuthenticationError(error)) {
+          console.log('Stats fetch: Authentication error during logout - this is expected')
+          throw error
+        }
+        
         console.error('Members fetch error for stats:', error)
         throw error
       }
@@ -206,14 +284,23 @@ export function useGymStats(gymId: string | null) {
 
       return stats
     },
-    enabled: !!gymId,
+    enabled: !!gymId && isAuthenticated && !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes for live stats
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (isAuthenticationError(error)) {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 }
 
-// Gym Analytics Hook for charts and detailed insights
+// Gym Analytics Hook for charts and detailed insights with auth handling
 export function useGymAnalytics(gymId: string | null) {
+  const { isAuthenticated, user } = useAuth()
+  
   return useQuery({
     queryKey: gymKeys.analytics(gymId || ''),
     queryFn: async (): Promise<GymAnalytics> => {
@@ -228,6 +315,12 @@ export function useGymAnalytics(gymId: string | null) {
         .eq('gym_id', gymId)
 
       if (error) {
+        // Handle authentication errors gracefully
+        if (isAuthenticationError(error)) {
+          console.log('Analytics fetch: Authentication error during logout - this is expected')
+          throw error
+        }
+        
         console.error('Members fetch error for analytics:', error)
         throw error
       }
@@ -247,8 +340,15 @@ export function useGymAnalytics(gymId: string | null) {
         checkinData,
       }
     },
-    enabled: !!gymId,
+    enabled: !!gymId && isAuthenticated && !!user,
     staleTime: 15 * 60 * 1000, // 15 minutes - analytics can be slightly stale
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (isAuthenticationError(error)) {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 }
 

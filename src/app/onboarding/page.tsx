@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
+import { useRouter } from 'next/navigation'
 import { Mail, Building2, CheckCircle, Loader2, AlertCircle } from 'lucide-react'
 
 import { toastActions } from '@/stores/toast-store'
@@ -13,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/hooks/use-auth'
 import { RequireAuth } from '@/components/auth/AuthGuard'
+import { authUIActions } from '@/stores/auth-store'
 
 // Enhanced submit button with improved loading states
 const SubmitButton = ({ isValid }: { isValid: boolean }) => {
@@ -219,8 +221,19 @@ const GymSetupForm = ({ user, formAction }: {
 
 // Main onboarding page component
 const OnboardingPage = () => {
-  const { user } = useAuth()
+  const { user, hasGym, isLoading: authLoading } = useAuth()
   const [state, formAction] = useActionState<OnboardingFormState | null, FormData>(completeOnboarding, null)
+  const router = useRouter()
+
+  // Multi-tab redirect: if user already has gym (completed onboarding in another tab), redirect to dashboard
+  useEffect(() => {
+    if (!authLoading && hasGym) {
+      console.log('Onboarding: User already has gym profile, redirecting to dashboard (multi-tab sync)')
+      toastActions.success('Welcome Back!', 'You have already completed onboarding.')
+      router.replace('/dashboard')
+      return
+    }
+  }, [hasGym, authLoading, router])
 
   // Handle server-side errors with toast notifications
   useEffect(() => {
@@ -229,7 +242,47 @@ const OnboardingPage = () => {
     }
   }, [state])
 
+  // Detect and mark new users
+  useEffect(() => {
+    if (user) {
+      // Check if this is a new user (account created recently)
+      const userCreatedAt = new Date(user.created_at);
+      const now = new Date();
+      const timeDiffMinutes = (now.getTime() - userCreatedAt.getTime()) / (1000 * 60);
+      const isNewUser = timeDiffMinutes < 30; // Consider new if created within 30 minutes
+      
+      if (isNewUser) {
+        console.log('Onboarding: Detected new user, marking as new')
+        authUIActions.setIsNewUser(true)
+      }
+    }
+  }, [user])
+
   // Show loading state while auth is loading
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
+          <p className="text-gray-600">Loading your profile...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading state while redirecting if user already has gym
+  if (hasGym) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
+          <p className="text-gray-600">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading state if no user
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
