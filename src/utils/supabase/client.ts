@@ -45,25 +45,26 @@ export function createClient() {
           // Use environment-specific cookie names
           const envName = `${envPrefix}-${name}`
           let cookieString = `${envName}=${value}`
-          
-          if (options?.expires) {
-            // 'expires' in CookieOptions is 'maxAge' in seconds
-            const maxAge = options.expires;
-            cookieString += `; max-age=${maxAge}`
-          }
-          if (options?.path) {
+
+          if (options.path) {
             cookieString += `; path=${options.path}`
           }
-          if (options?.domain) {
+          if (options.domain) {
             cookieString += `; domain=${options.domain}`
           }
-          if (options?.secure) {
+          if (options.expires) {
+            cookieString += `; expires=${options.expires.toUTCString()}`
+          }
+          if (options.maxAge) {
+            cookieString += `; max-age=${options.maxAge}`
+          }
+          if (options.secure) {
             cookieString += `; secure`
           }
-          if (options?.sameSite) {
+          if (options.sameSite) {
             cookieString += `; samesite=${options.sameSite}`
           }
-          
+
           document.cookie = cookieString
           console.log(`Cookie set: ${envName} (environment: ${envPrefix})`)
         },
