@@ -58,6 +58,29 @@ export interface AuthConfig {
 
 // ========== UTILITY FUNCTIONS ==========
 
+// Get environment-specific prefix for cleanup
+const getEnvironmentPrefix = () => {
+  // Check NODE_ENV first (most reliable)
+  if (process.env.NODE_ENV === 'development') return 'dev'
+  if (process.env.NODE_ENV === 'test') return 'test'
+
+  // Check for explicit environment variable
+  const explicitEnv = process.env.NEXT_PUBLIC_APP_ENV
+  if (explicitEnv) {
+    if (explicitEnv === 'development') return 'dev'
+    if (explicitEnv === 'staging') return 'staging'
+    if (explicitEnv === 'production') return 'prod'
+  }
+
+  // Fallback to URL detection
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (url?.includes('dev') || url?.includes('localhost')) return 'dev'
+  if (url?.includes('staging')) return 'staging'
+
+  // Default to prod for production builds
+  return process.env.NODE_ENV === 'production' ? 'prod' : 'dev'
+}
+
 // Replace lodash throttle with native implementation
 function throttle<T extends (...args: Parameters<T>) => ReturnType<T>>(
   func: T,
@@ -221,8 +244,10 @@ class EnhancedTabManager {
       if (!this.isActive || typeof window === 'undefined') return
 
       try {
-        const hasAuthCookies =
-          document.cookie.includes('supabase') || document.cookie.includes('sb-')
+        const envPrefix = getEnvironmentPrefix()
+        const hasAuthCookies = document.cookie
+          .split(';')
+          .some(cookie => cookie.trim().startsWith(`${envPrefix}-`))
 
         const currentStatus = hasAuthCookies ? 'authenticated' : 'logged_out'
 
@@ -664,29 +689,6 @@ export const useAuth = (customConfig?: Partial<AuthConfig>) => {
 }
 
 // ========== SHARED LOGOUT CLEANUP ==========
-
-// Get environment-specific prefix for cleanup
-const getEnvironmentPrefix = () => {
-  // Check NODE_ENV first (most reliable)
-  if (process.env.NODE_ENV === 'development') return 'dev'
-  if (process.env.NODE_ENV === 'test') return 'test'
-
-  // Check for explicit environment variable
-  const explicitEnv = process.env.NEXT_PUBLIC_APP_ENV
-  if (explicitEnv) {
-    if (explicitEnv === 'development') return 'dev'
-    if (explicitEnv === 'staging') return 'staging'
-    if (explicitEnv === 'production') return 'prod'
-  }
-
-  // Fallback to URL detection
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (url?.includes('dev') || url?.includes('localhost')) return 'dev'
-  if (url?.includes('staging')) return 'staging'
-
-  // Default to prod for production builds
-  return process.env.NODE_ENV === 'production' ? 'prod' : 'dev'
-}
 
 const performLogoutCleanup = async (
   queryClient: ReturnType<typeof useQueryClient>,
