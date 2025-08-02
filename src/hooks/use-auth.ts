@@ -569,32 +569,35 @@ export const useAuth = (customConfig?: Partial<AuthConfig>) => {
   }, [authQuery])
 
   // Enhanced auth state change handler with improved error recovery
-  const handleAuthStateChange = useCallback(
-    debounce((event: string, session: { user?: User } | null) => {
-      console.log('Auth state change:', event, session?.user?.email || 'no user');
-    
-      if (event === 'SIGNED_OUT') {
-        const coordinator = LogoutCoordinator.getInstance();
-        coordinator.executeLogout('auth_state', async () => {
-          await performLogoutCleanup(queryClient, router, 'auth_state');
-        }).catch(error => {
-          console.error('Auth state change: Coordinated logout failed:', error);
-          router.push('/login');
-        });
-        return;
-      }
-    
-      if (event === 'SIGNED_IN') {
-        queryClient.invalidateQueries({ queryKey: authKeys.session() });
-        console.log('Auth state change: SIGNED_IN - refreshing auth data');
-      }
-    
-      if (event === 'TOKEN_REFRESHED') {
-        queryClient.invalidateQueries({ queryKey: authKeys.session() });
-        console.log('Auth state change: TOKEN_REFRESHED - session invalidated');
-      }
-    }, 300),
-    [queryClient, router]
+  const handleAuthStateChange = useCallback((event: string, session: { user?: User } | null) => {
+    console.log('Auth state change:', event, session?.user?.email || 'no user');
+  
+    if (event === 'SIGNED_OUT') {
+      const coordinator = LogoutCoordinator.getInstance();
+      coordinator.executeLogout('auth_state', async () => {
+        await performLogoutCleanup(queryClient, router, 'auth_state');
+      }).catch(error => {
+        console.error('Auth state change: Coordinated logout failed:', error);
+        router.push('/login');
+      });
+      return;
+    }
+  
+    if (event === 'SIGNED_IN') {
+      queryClient.invalidateQueries({ queryKey: authKeys.session() });
+      console.log('Auth state change: SIGNED_IN - refreshing auth data');
+    }
+  
+    if (event === 'TOKEN_REFRESHED') {
+      queryClient.invalidateQueries({ queryKey: authKeys.session() });
+      console.log('Auth state change: TOKEN_REFRESHED - session invalidated');
+    }
+  }, [queryClient, router]);
+
+  // Debounced version for actual usage
+  const debouncedHandleAuthStateChange = useMemo(
+    () => debounce(handleAuthStateChange, 300),
+    [handleAuthStateChange]
   );
 
   // Enhanced auth state subscription
@@ -615,13 +618,13 @@ export const useAuth = (customConfig?: Partial<AuthConfig>) => {
       }
       lastEventTime = now
 
-      handleAuthStateChange(event, session)
+      debouncedHandleAuthStateChange(event, session)
     })
 
     return () => {
       subscription.unsubscribe()
     }
-  }, [handleAuthStateChange])
+  }, [debouncedHandleAuthStateChange])
 
   // Enhanced multi-tab monitoring with comprehensive cleanup
   useEffect(() => {

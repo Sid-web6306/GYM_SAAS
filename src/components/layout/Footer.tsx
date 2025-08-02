@@ -80,12 +80,12 @@ export default function Footer() {
               </li>
               <li>
                 <Link href="/terms-of-service" className="hover:text-white transition-colors">
-                  Terms of Service
+                  Terms and Conditions
                 </Link>
               </li>
               <li>
                 <Link href="/refund-policy" className="hover:text-white transition-colors">
-                  Refund Policy
+                  Refund & Cancellation Policy
                 </Link>
               </li>
             </ul>

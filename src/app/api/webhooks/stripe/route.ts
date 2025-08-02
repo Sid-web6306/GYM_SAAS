@@ -4,9 +4,15 @@ import Stripe from 'stripe';
 import { createClient } from '@/utils/supabase/server';
 import { logger, performanceTracker } from '@/lib/logger';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-06-30.basil',
-});
+// Initialize Stripe client lazily to avoid build-time errors
+const getStripe = () => {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error('STRIPE_SECRET_KEY is not configured');
+  }
+  return new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2025-07-30.basil',
+  });
+};
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
@@ -33,7 +39,7 @@ export async function POST(req: NextRequest) {
   performanceTracker.start('stripe-webhook');
 
   try {
-    event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
+    event = getStripe().webhooks.constructEvent(body, sig, endpointSecret);
   } catch (err) {
     logger.error('Webhook signature verification failed', { 
       error: err instanceof Error ? err.message : String(err) 
@@ -174,13 +180,8 @@ async function handleSubscriptionCreated(
     // Method 1: Try to find user by getting customer email from Stripe
     if (!userId && typeof subscription.customer === 'string') {
       try {
-        // Initialize Stripe client
-        const stripe = new (await import('stripe')).default(process.env.STRIPE_SECRET_KEY!, {
-          apiVersion: '2025-06-30.basil',
-        });
-
         // Get customer from Stripe to get email
-        const customer = await stripe.customers.retrieve(subscription.customer as string);
+        const customer = await getStripe().customers.retrieve(subscription.customer as string);
         
         if (customer && !customer.deleted && customer.email) {
           // Get user ID by email using RPC function
@@ -581,7 +582,7 @@ async function storeInvoiceDocument(
     // If no subscription, try to find user by customer email
     if (!userId && invoice.customer) {
       try {
-        const customer = await stripe.customers.retrieve(invoice.customer as string);
+        const customer = await getStripe().customers.retrieve(invoice.customer as string);
         
         if (customer && !customer.deleted && customer.email) {
           // Get user ID by email using RPC function

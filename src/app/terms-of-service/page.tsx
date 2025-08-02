@@ -3,7 +3,7 @@ import PolicySection from '@/components/legal/PolicySection'
 
 export default function TermsOfServicePage() {
   return (
-    <LegalLayout title="Terms of Service" lastUpdated="January 15, 2024">
+    <LegalLayout title="Terms of Service">
       <PolicySection title="Agreement to Terms">
         <p>
           These Terms of Service (&ldquo;Terms&rdquo;) govern your use of the GymSaaS platform (&ldquo;Service&rdquo;) 

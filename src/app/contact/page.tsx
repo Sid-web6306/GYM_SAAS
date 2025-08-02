@@ -5,7 +5,7 @@ import { Mail, Phone, MapPin, Clock, MessageCircle } from 'lucide-react'
 
 export default function ContactPage() {
   return (
-    <LegalLayout title="Contact Us" lastUpdated="January 15, 2024">
+    <LegalLayout title="Contact Us">
       <div className="mb-8">
         <p className="text-lg text-gray-600">
           We&rsquo;re here to help! Get in touch with our team for support, questions, or feedback. 

@@ -7,10 +7,9 @@ import { Button } from '@/components/ui/button'
 interface LegalLayoutProps {
   children: React.ReactNode
   title: string
-  lastUpdated: string
 }
 
-export default function LegalLayout({ children, title, lastUpdated }: LegalLayoutProps) {
+export default function LegalLayout({ children, title }: LegalLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -40,7 +39,6 @@ export default function LegalLayout({ children, title, lastUpdated }: LegalLayou
         <div className="bg-white rounded-lg shadow-sm p-8 md:p-12">
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-4">{title}</h1>
-            <p className="text-gray-600">Last updated: {lastUpdated}</p>
           </div>
           
           <div className="prose prose-lg max-w-none">
@@ -64,10 +62,10 @@ export default function LegalLayout({ children, title, lastUpdated }: LegalLayou
                 Privacy Policy
               </Link>
               <Link href="/terms-of-service" className="text-gray-600 hover:text-purple-600 transition-colors">
-                Terms of Service
+                Terms and Conditions
               </Link>
               <Link href="/refund-policy" className="text-gray-600 hover:text-purple-600 transition-colors">
-                Refund Policy
+                Refund & Cancellation Policy
               </Link>
               <Link href="/contact" className="text-gray-600 hover:text-purple-600 transition-colors">
                 Contact

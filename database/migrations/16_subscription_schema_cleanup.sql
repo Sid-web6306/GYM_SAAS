@@ -1,12 +1,12 @@
 -- 16. SUBSCRIPTION SCHEMA CLEANUP AND DOCUMENTATION
 
 -- Document unused fields that could be removed in future versions:
--- stripe_subscription_item_id: Defined but never populated or queried
+-- razorpay_subscription_item_id: Defined for Razorpay integration but not actively used
 -- metadata: Defined with default '{}' but never used in functions
 
 -- Add comments for field purposes
-COMMENT ON COLUMN public.subscriptions.stripe_subscription_item_id 
-IS 'Stripe subscription item ID - currently unused, reserved for future Stripe integration features';
+COMMENT ON COLUMN public.subscriptions.razorpay_subscription_item_id 
+IS 'Razorpay subscription item ID - currently unused, reserved for future Razorpay integration features';
 
 COMMENT ON COLUMN public.subscriptions.metadata 
 IS 'JSON metadata for storing additional subscription information - currently unused';

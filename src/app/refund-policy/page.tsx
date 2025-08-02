@@ -3,7 +3,7 @@ import PolicySection from '@/components/legal/PolicySection'
 
 export default function RefundPolicyPage() {
   return (
-    <LegalLayout title="Refund and Cancellation Policy" lastUpdated="January 15, 2024">
+    <LegalLayout title="Refund and Cancellation Policy">
       <PolicySection title="Overview">
         <p>
           At GymSaaS, we offer a <strong>14-day free trial</strong> so you can fully evaluate our service 

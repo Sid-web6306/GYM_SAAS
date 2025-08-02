@@ -248,9 +248,9 @@ CREATE OR REPLACE FUNCTION public.create_subscription(
   p_user_id uuid,
   p_plan_id uuid,
   p_billing_cycle text,
-  p_stripe_customer_id text,
-  p_stripe_subscription_id text,
-  p_stripe_price_id text,
+  p_razorpay_customer_id text,
+  p_razorpay_subscription_id text,
+  p_razorpay_price_id text,
   p_amount integer,
   p_current_period_start timestamptz,
   p_current_period_end timestamptz
@@ -266,11 +266,11 @@ BEGIN
   -- Create the subscription with trial status handling
   INSERT INTO public.subscriptions (
     user_id, subscription_plan_id, billing_cycle,
-    stripe_customer_id, stripe_subscription_id, stripe_price_id,
+    razorpay_customer_id, razorpay_subscription_id, razorpay_price_id,
     amount, current_period_start, current_period_end, status, trial_status, trial_end_date
   ) VALUES (
     p_user_id, p_plan_id, p_billing_cycle,
-    p_stripe_customer_id, p_stripe_subscription_id, p_stripe_price_id,
+    p_razorpay_customer_id, p_razorpay_subscription_id, p_razorpay_price_id,
     p_amount, p_current_period_start, p_current_period_end, 'active', 'converted', p_current_period_end
   ) RETURNING id INTO subscription_id;
   
@@ -279,7 +279,8 @@ BEGIN
   VALUES (subscription_id, 'created', jsonb_build_object(
     'plan_id', p_plan_id,
     'billing_cycle', p_billing_cycle,
-    'amount', p_amount
+    'amount', p_amount,
+    'payment_provider', 'razorpay'
   ));
   
   RETURN subscription_id;
@@ -428,7 +429,7 @@ $$;
 DROP FUNCTION IF EXISTS public.add_payment_method(uuid, text, text, text, text, integer, integer, boolean);
 CREATE OR REPLACE FUNCTION public.add_payment_method(
   p_user_id uuid,
-  p_stripe_payment_method_id text,
+  p_razorpay_payment_method_id text,
   p_type text DEFAULT 'card',
   p_card_brand text DEFAULT NULL,
   p_card_last4 text DEFAULT NULL,
@@ -453,11 +454,11 @@ BEGIN
   
   -- Insert new payment method
   INSERT INTO public.payment_methods (
-    user_id, stripe_payment_method_id, type, 
+    user_id, razorpay_payment_method_id, type, 
     card_brand, card_last4, card_exp_month, card_exp_year,
     is_default
   ) VALUES (
-    p_user_id, p_stripe_payment_method_id, p_type,
+    p_user_id, p_razorpay_payment_method_id, p_type,
     p_card_brand, p_card_last4, p_card_exp_month, p_card_exp_year,
     p_is_default
   ) RETURNING id INTO payment_method_id;
@@ -469,7 +470,8 @@ BEGIN
     'type', p_type,
     'is_default', p_is_default,
     'card_brand', p_card_brand,
-    'card_last4', p_card_last4
+    'card_last4', p_card_last4,
+    'payment_provider', 'razorpay'
   )
   FROM public.subscriptions s 
   WHERE s.user_id = p_user_id 
@@ -512,7 +514,7 @@ BEGIN
   INSERT INTO public.subscription_events (subscription_id, event_type, event_data)
   SELECT s.id, 'payment_method_removed', jsonb_build_object(
     'payment_method_id', p_payment_method_id,
-    'stripe_payment_method_id', removed_payment_method.stripe_payment_method_id,
+    'razorpay_payment_method_id', removed_payment_method.razorpay_payment_method_id,
     'type', removed_payment_method.type,
     'was_default', removed_payment_method.is_default
   )
@@ -569,7 +571,7 @@ CREATE OR REPLACE FUNCTION public.create_document(
   p_type text,
   p_title text,
   p_description text DEFAULT NULL,
-  p_stripe_id text DEFAULT NULL,
+  p_razorpay_id text DEFAULT NULL,
   p_download_url text DEFAULT NULL,
   p_hosted_url text DEFAULT NULL,
   p_amount integer DEFAULT NULL,
@@ -588,11 +590,11 @@ DECLARE
 BEGIN
   -- Insert the document
   INSERT INTO public.documents (
-    user_id, type, title, description, stripe_id, 
+    user_id, type, title, description, razorpay_id, 
     download_url, hosted_url, amount, currency, status, 
     document_date, metadata
   ) VALUES (
-    p_user_id, p_type, p_title, p_description, p_stripe_id,
+    p_user_id, p_type, p_title, p_description, p_razorpay_id,
     p_download_url, p_hosted_url, p_amount, p_currency, p_status,
     p_document_date, p_metadata
   ) RETURNING id INTO document_id;

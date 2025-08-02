@@ -3,7 +3,7 @@ import PolicySection from '@/components/legal/PolicySection'
 
 export default function PrivacyPolicyPage() {
   return (
-    <LegalLayout title="Privacy Policy" lastUpdated="January 15, 2024">
+    <LegalLayout title="Privacy Policy">
       <PolicySection title="Introduction">
         <p>
           At GymSaaS (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;), we are committed to protecting your privacy and personal information. 
