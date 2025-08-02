@@ -83,6 +83,21 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
           </div>
         </nav>
 
+        {/* Legal Links */}
+        <div className="absolute bottom-20 w-full px-4">
+          <div className="text-xs text-gray-500 space-y-1">
+            <Link href="/privacy-policy" className="block hover:text-purple-600 transition-colors">
+              Privacy Policy
+            </Link>
+            <Link href="/terms-of-service" className="block hover:text-purple-600 transition-colors">
+              Terms of Service
+            </Link>
+            <Link href="/contact" className="block hover:text-purple-600 transition-colors">
+              Contact Us
+            </Link>
+          </div>
+        </div>
+
         {/* User section */}
         <div className="absolute bottom-0 w-full p-4 border-t">
           <div className="flex items-center mb-3">

@@ -18,6 +18,7 @@ import {
   Globe
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import Footer from "@/components/layout/Footer";
 
 function HomeComponent() {
   const [isVisible, setIsVisible] = useState(false);
@@ -376,6 +377,9 @@ function HomeComponent() {
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }
