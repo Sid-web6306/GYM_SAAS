@@ -48,6 +48,11 @@ CREATE INDEX IF NOT EXISTS idx_members_status_gym_id ON public.members(gym_id, s
 CREATE INDEX IF NOT EXISTS idx_gyms_owner_id ON public.gyms(owner_id);
 
 -- Member activities indexes
+-- Remove old activity_time indexes to prevent bloat and planner confusion
+DROP INDEX IF EXISTS public.idx_member_activities_activity_time;
+DROP INDEX IF EXISTS public.idx_member_activities_member_time_activity_time;
+DROP INDEX IF EXISTS public.idx_member_activities_type_time_activity_time;
+
 CREATE INDEX IF NOT EXISTS idx_member_activities_member_id ON public.member_activities(member_id);
 CREATE INDEX IF NOT EXISTS idx_member_activities_timestamp ON public.member_activities(timestamp);
 CREATE INDEX IF NOT EXISTS idx_member_activities_type ON public.member_activities(activity_type);

@@ -55,7 +55,7 @@ export default function LegalLayout({ children, title }: LegalLayoutProps) {
               <div className="p-1 bg-gradient-to-r from-purple-500 to-pink-500 rounded">
                 <Dumbbell className="h-4 w-4 text-white" />
               </div>
-              <span className="text-gray-600">© 2024 GymSaaS. All rights reserved.</span>
+              <span className="text-gray-600">© 2025 GymSaaS. All rights reserved.</span>
             </div>
             <div className="flex space-x-6">
               <Link href="/privacy-policy" className="text-gray-600 hover:text-purple-600 transition-colors">

@@ -46,3 +46,7 @@ next-env.d.ts
 
 # history
 .history
+
+# Claude
+.claude
+CLAUDE.md

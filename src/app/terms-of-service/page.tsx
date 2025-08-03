@@ -112,7 +112,7 @@ export default function TermsOfServicePage() {
         <p><strong>Your Data:</strong></p>
         <ul className="list-disc list-inside ml-4 space-y-2">
           <li>You retain ownership of all data you input into the Service</li>
-          <li>You grant us license to use your dPata solely to provide the Service</li>
+          <li>You grant us license to use your data solely to provide the Service</li>
           <li>You are responsible for the accuracy and legality of your data</li>
           <li>You must comply with applicable privacy laws regarding member data</li>
         </ul>

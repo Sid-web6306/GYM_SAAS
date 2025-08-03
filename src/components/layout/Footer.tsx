@@ -96,7 +96,7 @@ export default function Footer() {
         <div className="border-t border-slate-800 mt-8 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <div className="flex items-center space-x-4 text-sm text-slate-400">
-              <span>© 2024 GymSaaS. All rights reserved.</span>
+              <span>© 2025 GymSaaS. All rights reserved.</span>
             </div>
             <div className="flex items-center space-x-6 text-sm text-slate-400">
               <span>Made with ❤️ in India</span>

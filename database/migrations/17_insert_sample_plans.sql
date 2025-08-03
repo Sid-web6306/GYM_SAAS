@@ -9,10 +9,10 @@ INSERT INTO public.subscription_plans (
   tier_level, api_access_enabled, multi_gym_enabled, data_retention_months,
   priority_support, advanced_analytics, custom_reporting
 ) VALUES 
-  ('Starter Monthly', , 'monthly', 'starter', 50, 
+  ('Starter Monthly', 299900, 'monthly', 'starter', 50, 
    ARRAY['Member Management', 'Basic Check-ins', 'Simple Dashboard', 'Mobile App Access'], 
    1, false, false, 3, false, false, false),
-  ('Starter Annual', 299000, 'annual', 'starter', 50, 
+  ('Starter Annual', 2999000, 'annual', 'starter', 50, 
    ARRAY['Member Management', 'Basic Check-ins', 'Simple Dashboard', 'Mobile App Access'], 
    1, false, false, 3, false, false, false);
 
@@ -22,10 +22,10 @@ INSERT INTO public.subscription_plans (
   tier_level, api_access_enabled, multi_gym_enabled, data_retention_months,
   priority_support, advanced_analytics, custom_reporting
 ) VALUES 
-  ('Professional Monthly', 79900, 'monthly', 'professional', 200, 
+  ('Professional Monthly', 599900, 'monthly', 'professional', 200, 
    ARRAY['All Starter Features', 'Advanced Analytics', 'Member Growth Charts', 'Revenue Tracking', 'Email Notifications', 'Check-in Trends', 'Member Reports'], 
    2, false, false, 12, false, true, false),
-  ('Professional Annual', 799000, 'annual', 'professional', 200, 
+  ('Professional Annual', 5999000, 'annual', 'professional', 200, 
    ARRAY['All Starter Features', 'Advanced Analytics', 'Member Growth Charts', 'Revenue Tracking', 'Email Notifications', 'Check-in Trends', 'Member Reports'], 
    2, false, false, 12, false, true, false);
 
@@ -35,10 +35,10 @@ INSERT INTO public.subscription_plans (
   tier_level, api_access_enabled, multi_gym_enabled, data_retention_months,
   priority_support, advanced_analytics, custom_reporting
 ) VALUES 
-  ('Enterprise Monthly', 149900, 'monthly', 'enterprise', NULL, 
+  ('Enterprise Monthly', 999900, 'monthly', 'enterprise', NULL, 
    ARRAY['All Professional Features', 'API Access', 'Multi-Gym Management', 'Custom Reports', 'Priority Support', 'Advanced Retention Analytics', 'Unlimited Data Storage', 'White-label Options'], 
    3, true, true, 36, true, true, true),
-  ('Enterprise Annual', 1499000, 'annual', 'enterprise', NULL, 
+  ('Enterprise Annual', 9999000, 'annual', 'enterprise', NULL, 
    ARRAY['All Professional Features', 'API Access', 'Multi-Gym Management', 'Custom Reports', 'Priority Support', 'Advanced Retention Analytics', 'Unlimited Data Storage', 'White-label Options'], 
    3, true, true, 36, true, true, true);
 
