@@ -13,10 +13,10 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_trial_active
 ON public.subscriptions (user_id, trial_status, trial_end_date) 
 WHERE trial_status = 'active';
 
--- Index for Stripe integration lookups
-CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_subscription_id 
-ON public.subscriptions (stripe_subscription_id) 
-WHERE stripe_subscription_id IS NOT NULL;
+-- Index for Razorpay integration lookups
+CREATE INDEX IF NOT EXISTS idx_subscriptions_razorpay_subscription_id 
+ON public.subscriptions (razorpay_subscription_id) 
+WHERE razorpay_subscription_id IS NOT NULL;
 
 -- Index for subscription events foreign key
 CREATE INDEX IF NOT EXISTS idx_subscription_events_subscription_id 

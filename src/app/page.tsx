@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   Users, 
-  Calendar, 
   TrendingUp, 
   Dumbbell, 
   Star, 
@@ -18,6 +17,7 @@ import {
   Globe
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import Footer from "@/components/layout/Footer";
 
 function HomeComponent() {
   const [isVisible, setIsVisible] = useState(false);
@@ -36,7 +36,7 @@ function HomeComponent() {
 
   const stats = [
     { number: "2,500+", label: "Active Users" },
-    { number: "150+", label: "Gym Partners" },
+    { number: "150+", label: "Fitness Partners" },
     { number: "99.9%", label: "Uptime" },
     { number: "24/7", label: "Support" }
   ];
@@ -45,19 +45,19 @@ function HomeComponent() {
     {
       name: "Sarah Johnson",
       role: "Gym Owner, FitZone Studio",
-      content: "Finally, a CRM that actually understands the fitness industry! The automated member retention campaigns have been game-changing for our business.",
+      content: "Finally, a management system that actually understands the fitness industry! The member tracking and analytics have been game-changing for our business.",
       rating: 5
     },
     {
       name: "Mike Chen",
       role: "Fitness Chain Manager",
-      content: "As an early adopter, I'm impressed by how this modern CRM has streamlined our customer relationships across all locations.",
+      content: "As an early adopter, I'm impressed by how this modern system has streamlined our operations across all locations with multi-location support.",
       rating: 5
     },
     {
       name: "Lisa Rodriguez",
       role: "Personal Training Studio",
-      content: "The lead management and client communication features are exactly what we needed. Light-years ahead of our old system!",
+      content: "The member management and reporting features are exactly what we needed. The mobile app access makes everything so convenient!",
       rating: 5
     }
   ];
@@ -104,19 +104,19 @@ function HomeComponent() {
       <div className={`relative z-10 flex flex-col items-center justify-center min-h-[90vh] text-center px-4 transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
         <div className="mb-6">
           <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent text-sm font-semibold tracking-wider uppercase">
-            New Modern CRM for Fitness
+            Modern Fitness Management System
           </span>
         </div>
         
         <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
           The Future of <br />
           <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent animate-pulse">
-            Gym CRM
+            Fitness Management
           </span>
         </h1>
         
         <p className="text-xl text-slate-300 mb-8 max-w-3xl leading-relaxed">
-          Built from the ground up for modern fitness businesses. Our innovative CRM automates member relationships, streamlines lead management, and delivers powerful customer insights that traditional gym software simply can&#39;t match.
+          Built from the ground up for modern fitness businesses. Our comprehensive management system handles member tracking, analytics, multi-location support, and delivers powerful insights that traditional fitness software simply can&#39;t match.
         </p>
 
         {/* Animated Statistics */}
@@ -152,10 +152,10 @@ function HomeComponent() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-white mb-4">
-              Advanced CRM Features Built for Fitness
+              Complete Fitness Management Features
             </h2>
             <p className="text-xl text-slate-300 max-w-2xl mx-auto">
-              Modern customer relationship management tools designed specifically for the fitness industry
+              Powerful management tools designed for gyms, studios, personal trainers, and fitness centers of all sizes
             </p>
           </div>
 
@@ -165,12 +165,12 @@ function HomeComponent() {
                 <div className="p-3 bg-purple-500/20 rounded-lg inline-block mb-4">
                   <Users className="h-8 w-8 text-purple-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Intelligent Lead Management</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">Member Management & Check-ins</h3>
                 <p className="text-slate-300 mb-4">
-                  Advanced lead scoring, automated nurturing campaigns, and conversion tracking that turns prospects into loyal members with 50% higher close rates.
+                  Complete member tracking system with digital check-ins, client profiles, and mobile app access. Perfect for fitness businesses managing 50 to unlimited members.
                 </p>
                 <div className="text-sm text-purple-300">
-                  ✓ Lead scoring & tracking  •  ✓ Automated follow-ups  •  ✓ Conversion analytics
+                  ✓ Member profiles & tracking  •  ✓ Digital check-ins  •  ✓ Mobile app access
                 </div>
               </CardContent>
             </Card>
@@ -178,14 +178,14 @@ function HomeComponent() {
             <Card className="bg-slate-800/50 border-slate-700 backdrop-blur hover:bg-slate-800/70 transition-all duration-200">
               <CardContent className="p-8">
                 <div className="p-3 bg-pink-500/20 rounded-lg inline-block mb-4">
-                  <Calendar className="h-8 w-8 text-pink-400" />
+                  <TrendingUp className="h-8 w-8 text-pink-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Automated Member Retention</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">Advanced Analytics & Reporting</h3>
                 <p className="text-slate-300 mb-4">
-                  Smart retention campaigns, personalized communication workflows, and predictive analytics that identify at-risk members before they leave.
+                  Comprehensive analytics with member growth charts, revenue tracking, check-in trends, and detailed reports to optimize your fitness business performance.
                 </p>
                 <div className="text-sm text-pink-300">
-                  ✓ Retention campaigns  •  ✓ Churn prediction  •  ✓ Personalized messaging
+                  ✓ Member growth charts  •  ✓ Revenue tracking  •  ✓ Check-in analytics
                 </div>
               </CardContent>
             </Card>
@@ -193,14 +193,14 @@ function HomeComponent() {
             <Card className="bg-slate-800/50 border-slate-700 backdrop-blur hover:bg-slate-800/70 transition-all duration-200">
               <CardContent className="p-8">
                 <div className="p-3 bg-blue-500/20 rounded-lg inline-block mb-4">
-                  <TrendingUp className="h-8 w-8 text-blue-400" />
+                  <Shield className="h-8 w-8 text-blue-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Customer Journey Analytics</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">Multi-Location & Custom Reports</h3>
                 <p className="text-slate-300 mb-4">
-                  Deep insights into member behavior, lifetime value tracking, and actionable data that helps you optimize every touchpoint in the customer journey.
+                  Enterprise-level features including multi-location management, custom reporting, priority support, and white-label options for growing fitness businesses.
                 </p>
                 <div className="text-sm text-blue-300">
-                  ✓ Journey mapping  •  ✓ Lifetime value tracking  •  ✓ Behavioral insights
+                  ✓ Multi-location management  •  ✓ Custom reports  •  ✓ Priority support
                 </div>
               </CardContent>
             </Card>
@@ -210,23 +210,23 @@ function HomeComponent() {
           <div className="grid md:grid-cols-4 gap-6">
             <div className="text-center p-6 bg-slate-800/30 rounded-lg backdrop-blur">
               <Smartphone className="h-10 w-10 text-purple-400 mx-auto mb-3" />
-              <h4 className="text-white font-semibold mb-2">Mobile CRM</h4>
-              <p className="text-slate-400 text-sm">Manage relationships on-the-go with native mobile apps</p>
+              <h4 className="text-white font-semibold mb-2">Mobile App Access</h4>
+              <p className="text-slate-400 text-sm">Progressive web app that works like a native mobile app</p>
             </div>
             <div className="text-center p-6 bg-slate-800/30 rounded-lg backdrop-blur">
               <Shield className="h-10 w-10 text-pink-400 mx-auto mb-3" />
-              <h4 className="text-white font-semibold mb-2">Data Security</h4>
-              <p className="text-slate-400 text-sm">Enterprise-grade security for sensitive customer data</p>
+              <h4 className="text-white font-semibold mb-2">Data Security & Retention</h4>
+              <p className="text-slate-400 text-sm">Secure data storage with configurable retention policies</p>
             </div>
             <div className="text-center p-6 bg-slate-800/30 rounded-lg backdrop-blur">
               <Zap className="h-10 w-10 text-blue-400 mx-auto mb-3" />
-              <h4 className="text-white font-semibold mb-2">Smart Automation</h4>
-              <p className="text-slate-400 text-sm">AI-powered workflows that work while you sleep</p>
+              <h4 className="text-white font-semibold mb-2">Email Notifications</h4>
+              <p className="text-slate-400 text-sm">Automated email notifications for important events</p>
             </div>
             <div className="text-center p-6 bg-slate-800/30 rounded-lg backdrop-blur">
               <Globe className="h-10 w-10 text-green-400 mx-auto mb-3" />
-              <h4 className="text-white font-semibold mb-2">API Integration</h4>
-              <p className="text-slate-400 text-sm">Connect with your existing fitness software stack</p>
+              <h4 className="text-white font-semibold mb-2">White-label Options</h4>
+              <p className="text-slate-400 text-sm">Customize the platform with your own branding</p>
             </div>
           </div>
         </div>
@@ -238,7 +238,7 @@ function HomeComponent() {
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
               <h2 className="text-4xl font-bold text-white mb-6">
-                Why forward-thinking gyms choose GymSaaS
+                Why forward-thinking fitness businesses choose GymSaaS
               </h2>
               <div className="space-y-6">
                 <div className="flex items-start space-x-4">
@@ -246,7 +246,7 @@ function HomeComponent() {
                     <Check className="h-6 w-6 text-green-400" />
                   </div>
                   <div>
-                    <h4 className="text-white font-semibold mb-2">Modern CRM Technology</h4>
+                    <h4 className="text-white font-semibold mb-2">Modern Management Technology</h4>
                     <p className="text-slate-300">Built with today&#39;s best practices - cloud-native, mobile-first, and designed for the modern fitness landscape.</p>
                   </div>
                 </div>
@@ -255,8 +255,8 @@ function HomeComponent() {
                     <Check className="h-6 w-6 text-green-400" />
                   </div>
                   <div>
-                    <h4 className="text-white font-semibold mb-2">Intelligent Automation</h4>
-                    <p className="text-slate-300">AI-powered workflows that learn from your business patterns and automate repetitive tasks without complex setup.</p>
+                    <h4 className="text-white font-semibold mb-2">Smart Analytics</h4>
+                    <p className="text-slate-300">Advanced analytics that track member growth, revenue trends, and check-in patterns to optimize your business performance.</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-4">
@@ -272,19 +272,19 @@ function HomeComponent() {
             </div>
             <div className="grid grid-cols-2 gap-6">
               <div className="bg-slate-800/50 p-6 rounded-lg backdrop-blur">
-                <div className="text-3xl font-bold text-white mb-2">50%</div>
-                <div className="text-slate-300">Higher Lead Conversion</div>
+                <div className="text-3xl font-bold text-white mb-2">50+</div>
+                <div className="text-slate-300">Members (Starter Plan)</div>
               </div>
               <div className="bg-slate-800/50 p-6 rounded-lg backdrop-blur">
-                <div className="text-3xl font-bold text-white mb-2">10hrs</div>
-                <div className="text-slate-300">Saved Weekly</div>
+                <div className="text-3xl font-bold text-white mb-2">200+</div>
+                <div className="text-slate-300">Members (Professional)</div>
               </div>
               <div className="bg-slate-800/50 p-6 rounded-lg backdrop-blur">
-                <div className="text-3xl font-bold text-white mb-2">30%</div>
-                <div className="text-slate-300">Better Retention</div>
+                <div className="text-3xl font-bold text-white mb-2">∞</div>
+                <div className="text-slate-300">Members (Enterprise)</div>
               </div>
               <div className="bg-slate-800/50 p-6 rounded-lg backdrop-blur">
-                <div className="text-3xl font-bold text-white mb-2">2024</div>
+                <div className="text-3xl font-bold text-white mb-2">2025</div>
                 <div className="text-slate-300">Launched</div>
               </div>
             </div>
@@ -354,10 +354,10 @@ function HomeComponent() {
       <div className="relative z-10 py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold text-white mb-6">
-            Ready to modernize your gym&#39;s CRM?
+            Ready to modernize your fitness business management?
           </h2>
           <p className="text-xl text-slate-300 mb-8">
-            Join forward-thinking gym owners who are transforming their customer relationships. Experience the future of fitness CRM with our 14-day free trial.
+            Join forward-thinking fitness business owners who are transforming their operations. Experience the future of fitness management with our 14-day free trial.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
             <Link href="/signup">
@@ -372,10 +372,13 @@ function HomeComponent() {
           </div>
           <div className="text-slate-400">
             <p className="mb-2">✓ No credit card required  •  ✓ 14-day free trial  •  ✓ Cancel anytime</p>
-            <p className="text-sm">Join the 2,500+ fitness professionals already transforming their customer relationships</p>
+            <p className="text-sm">Join the 2,500+ fitness professionals already transforming their business operations</p>
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

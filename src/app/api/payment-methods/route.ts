@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger'
 // Initialize Stripe
 const stripe = serverConfig.stripeSecretKey 
   ? new Stripe(serverConfig.stripeSecretKey, {
-      apiVersion: '2025-06-30.basil',
+      apiVersion: '2025-07-30.basil',
     })
   : null
 

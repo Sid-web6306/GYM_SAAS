@@ -6,10 +6,10 @@ CREATE TABLE IF NOT EXISTS public.documents (
   type text NOT NULL CHECK (type IN ('invoice', 'receipt', 'statement', 'contract')),
   title text NOT NULL,
   description text NULL,
-  -- Stripe integration
-  stripe_id text NULL, -- Invoice ID, Payment Intent ID, etc.
+  -- Razorpay integration
+  razorpay_id text NULL, -- Invoice ID, Payment ID, etc.
   download_url text NULL, -- Direct PDF download URL
-  hosted_url text NULL, -- Stripe hosted page URL
+  hosted_url text NULL, -- Razorpay hosted page URL
   -- Financial details
   amount integer NULL, -- Amount in paise
   currency text DEFAULT 'INR',
@@ -24,5 +24,5 @@ CREATE TABLE IF NOT EXISTS public.documents (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT documents_pkey PRIMARY KEY (id),
-  CONSTRAINT documents_stripe_id_unique UNIQUE (stripe_id)
+  CONSTRAINT documents_razorpay_id_unique UNIQUE (razorpay_id)
 ); 

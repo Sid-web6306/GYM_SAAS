@@ -1,27 +1,59 @@
 -- 13. ADD CONSTRAINTS
 
--- Unique constraints
-ALTER TABLE public.subscription_plans ADD CONSTRAINT IF NOT EXISTS subscription_plans_name_unique UNIQUE (name);
-ALTER TABLE public.subscription_plans ADD CONSTRAINT IF NOT EXISTS subscription_plans_stripe_product_id_unique UNIQUE (stripe_product_id);
+DO $$
+BEGIN
+    -- Unique constraints for subscription_plans
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscription_plans_name_unique') THEN
+        ALTER TABLE public.subscription_plans ADD CONSTRAINT subscription_plans_name_unique UNIQUE (name);
+    END IF;
 
--- Foreign key constraints
-ALTER TABLE public.profiles ADD CONSTRAINT IF NOT EXISTS profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users (id) ON DELETE CASCADE;
-ALTER TABLE public.profiles ADD CONSTRAINT IF NOT EXISTS profiles_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id) ON DELETE SET NULL;
-ALTER TABLE public.members ADD CONSTRAINT IF NOT EXISTS members_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id) ON DELETE CASCADE;
-ALTER TABLE public.member_activities ADD CONSTRAINT IF NOT EXISTS member_activities_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id) ON DELETE CASCADE;
-ALTER TABLE public.gym_metrics ADD CONSTRAINT IF NOT EXISTS gym_metrics_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id) ON DELETE CASCADE;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscription_plans_razorpay_plan_id_unique') THEN
+        ALTER TABLE public.subscription_plans ADD CONSTRAINT subscription_plans_razorpay_plan_id_unique UNIQUE (razorpay_plan_id);
+    END IF;
 
--- Status and type check constraints
-ALTER TABLE public.members ADD CONSTRAINT IF NOT EXISTS members_status_check CHECK (status IN ('active', 'inactive', 'pending'));
-ALTER TABLE public.member_activities ADD CONSTRAINT IF NOT EXISTS member_activities_activity_type_check CHECK (activity_type IN ('check_in', 'check_out', 'visit', 'class_attended'));
+    -- Foreign key constraints
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_id_fkey') THEN
+        ALTER TABLE public.profiles ADD CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users (id) ON DELETE CASCADE;
+    END IF;
 
--- Subscription events event_type check constraint
-ALTER TABLE public.subscription_events ADD CONSTRAINT IF NOT EXISTS subscription_events_event_type_check CHECK (event_type IN (
-  'created', 'activated', 'paused', 'resumed', 'canceled', 
-  'plan_changed', 'payment_succeeded', 'payment_failed',
-  'trial_started', 'trial_extended', 'trial_converted', 'trial_expired',
-  'payment_method_added', 'payment_method_removed', 'payment_method_updated'
-));
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_gym_id_fkey') THEN
+        ALTER TABLE public.profiles ADD CONSTRAINT profiles_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id) ON DELETE SET NULL;
+    END IF;
 
--- Feedback unique constraint
-ALTER TABLE public.feedback ADD CONSTRAINT IF NOT EXISTS feedback_unique UNIQUE (subscription_id); 
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'members_gym_id_fkey') THEN
+        ALTER TABLE public.members ADD CONSTRAINT members_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id) ON DELETE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'member_activities_member_id_fkey') THEN
+        ALTER TABLE public.member_activities ADD CONSTRAINT member_activities_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id) ON DELETE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'gym_metrics_gym_id_fkey') THEN
+        ALTER TABLE public.gym_metrics ADD CONSTRAINT gym_metrics_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id) ON DELETE CASCADE;
+    END IF;
+
+    -- Status and type check constraints
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'members_status_check') THEN
+        ALTER TABLE public.members ADD CONSTRAINT members_status_check CHECK (status IN ('active', 'inactive', 'pending'));
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'member_activities_activity_type_check') THEN
+        ALTER TABLE public.member_activities ADD CONSTRAINT member_activities_activity_type_check CHECK (activity_type IN ('check_in', 'check_out', 'visit', 'class_attended'));
+    END IF;
+
+    -- Subscription events event_type check constraint
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscription_events_event_type_check') THEN
+        ALTER TABLE public.subscription_events ADD CONSTRAINT subscription_events_event_type_check CHECK (event_type IN (
+          'created', 'activated', 'paused', 'resumed', 'canceled', 
+          'plan_changed', 'payment_succeeded', 'payment_failed',
+          'trial_started', 'trial_extended', 'trial_converted', 'trial_expired',
+          'payment_method_added', 'payment_method_removed', 'payment_method_updated'
+        ));
+    END IF;
+
+    -- Feedback unique constraint
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'feedback_unique') THEN
+        ALTER TABLE public.feedback ADD CONSTRAINT feedback_unique UNIQUE (subscription_id);
+    END IF;
+
+END $$; 

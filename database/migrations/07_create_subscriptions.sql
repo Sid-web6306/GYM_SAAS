@@ -26,11 +26,11 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
   scheduled_change_effective_date timestamptz NULL,
   scheduled_change_data jsonb NULL, -- Store details about the scheduled change
   
-  -- Stripe integration
-  stripe_customer_id text NULL,
-  stripe_subscription_id text NULL,
-  stripe_subscription_item_id text NULL,
-  stripe_price_id text NULL,
+  -- Razorpay integration
+  razorpay_customer_id text NULL,
+  razorpay_subscription_id text NULL,
+  razorpay_subscription_item_id text NULL,
+  razorpay_price_id text NULL,
   
   -- Pricing (store actual amounts for this subscription)
   amount integer NOT NULL, -- Amount in paise
