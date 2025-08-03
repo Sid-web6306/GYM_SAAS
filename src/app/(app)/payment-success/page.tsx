@@ -33,9 +33,12 @@ function PaymentSuccessContent() {
 
   const sessionId = searchParams?.get('session_id')
   const paymentIntentId = searchParams?.get('payment_intent')
+  const subscriptionId = searchParams?.get('subscription_id')
+  const razorpayPaymentId = searchParams?.get('razorpay_payment_id')
+  const razorpayPaymentLinkId = searchParams?.get('razorpay_payment_link_id')
 
   useEffect(() => {
-    if (!sessionId && !paymentIntentId) {
+    if (!sessionId && !paymentIntentId && !subscriptionId && !razorpayPaymentId && !razorpayPaymentLinkId) {
       // Redirect to dashboard if no session information
       router.replace('/dashboard')
       return
@@ -45,13 +48,16 @@ function PaymentSuccessContent() {
       try {
         setIsVerifying(true)
         
-        // Fetch payment session details from Stripe
+        // Fetch payment session details from Razorpay
         const response = await fetch('/api/verify-payment-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             sessionId, 
-            paymentIntentId 
+            paymentIntentId,
+            subscriptionId,
+            paymentId: razorpayPaymentId,
+            paymentLinkId: razorpayPaymentLinkId
           }),
         })
 
@@ -79,7 +85,7 @@ function PaymentSuccessContent() {
     
     // Note: Removed explicit refresh() call as webhook processing and real-time 
     // subscriptions will automatically update the data when payment succeeds
-  }, [sessionId, paymentIntentId, router])
+  }, [sessionId, paymentIntentId, subscriptionId, razorpayPaymentId, razorpayPaymentLinkId, router])
 
   const downloadInvoice = async () => {
     if (!paymentData?.invoiceId && !paymentData?.subscriptionId) {
@@ -177,7 +183,10 @@ function PaymentSuccessContent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             sessionId, 
-            paymentIntentId 
+            paymentIntentId,
+            subscriptionId,
+            paymentId: razorpayPaymentId,
+            paymentLinkId: razorpayPaymentLinkId
           }),
         })
 
@@ -280,7 +289,7 @@ function PaymentSuccessContent() {
                   <div>
                     <h4 className="font-medium">Check Your Email</h4>
                     <p className="text-sm text-muted-foreground">
-                      Look for a payment confirmation email from Stripe or our system.
+                      Look for a payment confirmation email from Razorpay or our system.
                     </p>
                   </div>
                 </div>

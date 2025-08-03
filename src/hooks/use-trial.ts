@@ -13,7 +13,7 @@ export interface SubscriptionPlan {
   member_limit: number | null
   features: string[]
   is_active: boolean
-  stripe_product_id: string | null
+  razorpay_plan_id: string | null
 }
 
 export interface TrialInfo {
@@ -27,18 +27,21 @@ export interface SubscriptionInfo {
   id: string
   user_id: string
   subscription_plan_id: string
-  status: 'active' | 'canceled' | 'past_due' | 'incomplete' | 'scheduled'
+  status: 'active' | 'canceled' | 'past_due' | 'incomplete' | 'scheduled' | 'paused' | 'pending' | 'completed'
   billing_cycle: 'monthly' | 'annual'
   starts_at: string
   current_period_start: string
   current_period_end: string
   ends_at: string | null
   canceled_at: string | null
+  paused_at: string | null
   scheduled_change_type: string | null
   scheduled_change_effective_date: string | null
   scheduled_change_data: Record<string, unknown> | null
-  stripe_customer_id: string | null
-  stripe_subscription_id: string | null
+  razorpay_customer_id: string | null
+  razorpay_subscription_id: string | null
+  razorpay_subscription_item_id: string | null
+  razorpay_price_id: string | null
   amount: number
   currency: string
   created_at: string
@@ -63,8 +66,9 @@ export function useTrialInfo() {
       const supabase = createClient()
       
       // First try to get trial data from subscriptions table
-      const { data: subscription } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { order: (column: string, options: { ascending: boolean }) => { limit: (count: number) => { single: () => Promise<{ data: unknown, error: unknown }> } } } } } }).from('subscriptions')
-        .select('trial_start_date, trial_end_date, trial_status, status, stripe_subscription_id')
+      const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('trial_start_date, trial_end_date, trial_status, status, razorpay_subscription_id')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -80,7 +84,7 @@ export function useTrialInfo() {
         let trial_status: 'active' | 'expired' | 'converted' = 'active'
         if (subscriptionData.status === 'canceled' || days_remaining <= 0) {
           trial_status = 'expired'
-        } else if (subscriptionData.stripe_subscription_id) {
+        } else if (subscriptionData.razorpay_subscription_id) {
           trial_status = 'converted'
         }
         
@@ -271,27 +275,27 @@ export function useTrialInitialization() {
       logger.info('Initializing trial subscription', { userId: user.id })
 
       // Call the RPC function to initialize trial subscription
-      const { data: subscriptionId, error } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('initialize_trial_subscription', {
+      const { data: subscriptionId, error } = await supabase.rpc('initialize_trial_subscription', {
         p_user_id: user.id
       })
 
       if (error) {
-        const errorData = error as Record<string, unknown>
+        const errorMessage = error.message || 'Unknown error'
         logger.error('Trial initialization failed', { 
-          error: errorData.message as string, 
+          error: errorMessage, 
           userId: user.id 
         })
         
         // Handle specific error cases
-        if ((errorData.message as string).includes('already has a trial subscription')) {
+        if (errorMessage.includes('already has a trial subscription')) {
           throw { message: 'You already have an active trial subscription', code: 'TRIAL_EXISTS' }
         }
         
-        if ((errorData.message as string).includes('No active subscription plan found')) {
+        if (errorMessage.includes('No active subscription plan found')) {
           throw { message: 'No subscription plans available at the moment', code: 'NO_PLANS' }
         }
         
-        throw { message: errorData.message as string || 'Failed to initialize trial subscription' }
+        throw { message: errorMessage || 'Failed to initialize trial subscription' }
       }
 
       if (!subscriptionId) {

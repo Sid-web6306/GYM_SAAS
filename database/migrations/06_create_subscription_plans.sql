@@ -4,9 +4,6 @@ CREATE TABLE IF NOT EXISTS public.subscription_plans (
   name text NOT NULL,
   price_inr integer NOT NULL CHECK (price_inr > 0), -- Price in paise (single price per plan)
   billing_cycle text NOT NULL CHECK (billing_cycle IN ('monthly', 'annual')),
-  -- UNIQUE (plan_type, billing_cycle)
-  price_inr integer NOT NULL, -- Price in paise (single price per plan)
-  billing_cycle text NOT NULL CHECK (billing_cycle IN ('monthly', 'annual')),
   plan_type text NOT NULL CHECK (plan_type IN ('starter', 'professional', 'enterprise')),
   
   -- Razorpay Integration
@@ -26,7 +23,6 @@ CREATE TABLE IF NOT EXISTS public.subscription_plans (
   is_active boolean NOT NULL DEFAULT true,
   
   -- Status and Metadata
-  is_active boolean DEFAULT true, 
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 ); 

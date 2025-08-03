@@ -88,10 +88,10 @@ export default function RefundPolicyPage() {
       </PolicySection>
 
       <PolicySection title="Payment Processing & Disputes">
-        <p><strong>Payment Processors:</strong></p>
+        <p><strong>Payment Processor:</strong></p>
         <p>
-          We use Razorpay and Stripe to process payments securely. All transactions are subject to 
-          their respective terms and conditions.
+          We use Razorpay to process payments securely. All transactions are subject to 
+          their terms and conditions.
         </p>
 
         <p><strong>Billing Disputes:</strong></p>

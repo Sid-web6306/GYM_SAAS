@@ -243,16 +243,16 @@ const DashboardPage = () => {
 
       {/* Welcome Message */}
       {showWelcomeMessage && (
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="border-primary/20 bg-primary/5">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="p-2 bg-blue-100 rounded-full">
-                  <Dumbbell className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-primary/10 rounded-full">
+                  <Dumbbell className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-blue-900">🎉 Welcome to your gym dashboard!</h3>
-                  <p className="text-sm text-blue-700">
+                  <h3 className="font-semibold text-primary">🎉 Welcome to your gym dashboard!</h3>
+                  <p className="text-sm text-primary/80">
                     Congratulations on setting up your gym! Start by adding members, setting up schedules, and tracking your business growth.
                   </p>
                 </div>
@@ -264,7 +264,7 @@ const DashboardPage = () => {
                   useAuthStore.getState().setShowWelcomeMessage(false)
                   useAuthStore.getState().setIsNewUser(false) // Clear new user status
                 }}
-                className="text-blue-600 hover:text-blue-800"
+                className="text-primary hover:text-primary/80"
               >
                 Dismiss
               </Button>
@@ -293,10 +293,10 @@ const DashboardPage = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-600" />
+            <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-primary">
               {isLoading ? '...' : `$${(stats?.monthlyRevenue || 0).toLocaleString()}`}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -308,10 +308,10 @@ const DashboardPage = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <CardTitle className="text-sm font-medium">Today&apos;s Check-ins</CardTitle>
-            <Activity className="h-4 w-4 text-blue-600" />
+            <Activity className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-blue-600">
+            <div className="text-2xl font-bold text-primary">
               {isLoading ? '...' : (stats?.todayCheckins || 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -323,10 +323,10 @@ const DashboardPage = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <CardTitle className="text-sm font-medium">Session Health</CardTitle>
-            <Database className="h-4 w-4 text-purple-600" />
+            <Database className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-purple-600">
+            <div className="text-2xl font-bold text-primary">
               {getSessionHealthScore().toFixed(0)}%
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -338,7 +338,7 @@ const DashboardPage = () => {
 
       {/* Session Information (Development Only) */}
       {process.env.NODE_ENV === 'development' && (
-        <Card className="border-yellow-200 bg-yellow-50">
+        <Card className="border-secondary/50 bg-secondary/20">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               <Timer className="h-4 w-4" />
@@ -435,7 +435,7 @@ const DashboardPage = () => {
               {recentActivity.map((activity, index) => (
                 <div key={index} className="flex items-center justify-between py-2">
                   <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <div className="w-2 h-2 bg-primary rounded-full"></div>
                     <div>
                       <p className="font-medium">
                         {activity.member?.first_name} {activity.member?.last_name}
@@ -474,25 +474,25 @@ const DashboardPage = () => {
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <div className="text-center p-4 rounded-lg bg-muted/50">
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-primary">
                   {stats.memberRetentionRate.toFixed(1)}%
                 </div>
                 <div className="text-sm text-muted-foreground">Retention Rate</div>
               </div>
               <div className="text-center p-4 rounded-lg bg-muted/50">
-                <div className="text-2xl font-bold text-blue-600">
+                <div className="text-2xl font-bold text-primary">
                   {stats.averageMembershipLength.toFixed(1)}
                 </div>
                 <div className="text-sm text-muted-foreground">Avg. Membership (months)</div>
               </div>
               <div className="text-center p-4 rounded-lg bg-muted/50">
-                <div className="text-2xl font-bold text-purple-600">
+                <div className="text-2xl font-bold text-primary">
                   {stats.newMembersThisWeek}
                 </div>
                 <div className="text-sm text-muted-foreground">New This Week</div>
               </div>
               <div className="text-center p-4 rounded-lg bg-muted/50">
-                <div className="text-2xl font-bold text-orange-600">
+                <div className="text-2xl font-bold text-primary">
                   {Math.round((stats.todayCheckins / Math.max(stats.activeMembers, 1)) * 100)}%
                 </div>
                 <div className="text-sm text-muted-foreground">Today&apos;s Check-in Rate</div>

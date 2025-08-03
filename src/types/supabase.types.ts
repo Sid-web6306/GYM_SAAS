@@ -125,6 +125,385 @@ export type Database = {
           },
         ]
       }
+      subscription_plans: {
+        Row: {
+          id: string
+          name: string
+          price_inr: number
+          billing_cycle: string
+          plan_type: string
+          razorpay_plan_id: string | null
+          member_limit: number | null
+          features: string[]
+          tier_level: number
+          api_access_enabled: boolean
+          multi_gym_enabled: boolean
+          data_retention_months: number
+          priority_support: boolean
+          advanced_analytics: boolean
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          price_inr: number
+          billing_cycle: string
+          plan_type: string
+          razorpay_plan_id?: string | null
+          member_limit?: number | null
+          features?: string[]
+          tier_level?: number
+          api_access_enabled?: boolean
+          multi_gym_enabled?: boolean
+          data_retention_months?: number
+          priority_support?: boolean
+          advanced_analytics?: boolean
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          price_inr?: number
+          billing_cycle?: string
+          plan_type?: string
+          razorpay_plan_id?: string | null
+          member_limit?: number | null
+          features?: string[]
+          tier_level?: number
+          api_access_enabled?: boolean
+          multi_gym_enabled?: boolean
+          data_retention_months?: number
+          priority_support?: boolean
+          advanced_analytics?: boolean
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          subscription_plan_id: string
+          status: string
+          billing_cycle: string
+          starts_at: string
+          current_period_start: string
+          current_period_end: string
+          ends_at: string | null
+          canceled_at: string | null
+          paused_at: string | null
+          trial_start_date: string | null
+          trial_end_date: string | null
+          trial_status: string | null
+          scheduled_change_type: string | null
+          scheduled_change_effective_date: string | null
+          scheduled_change_data: Json | null
+          razorpay_customer_id: string | null
+          razorpay_subscription_id: string | null
+          razorpay_subscription_item_id: string | null
+          razorpay_price_id: string | null
+          amount: number
+          currency: string
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          subscription_plan_id: string
+          status?: string
+          billing_cycle?: string
+          starts_at?: string
+          current_period_start?: string
+          current_period_end: string
+          ends_at?: string | null
+          canceled_at?: string | null
+          paused_at?: string | null
+          trial_start_date?: string | null
+          trial_end_date?: string | null
+          trial_status?: string | null
+          scheduled_change_type?: string | null
+          scheduled_change_effective_date?: string | null
+          scheduled_change_data?: Json | null
+          razorpay_customer_id?: string | null
+          razorpay_subscription_id?: string | null
+          razorpay_price_id?: string | null
+          amount: number
+          currency?: string
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          subscription_plan_id?: string
+          status?: string
+          billing_cycle?: string
+          starts_at?: string
+          current_period_start?: string
+          current_period_end?: string
+          ends_at?: string | null
+          canceled_at?: string | null
+          paused_at?: string | null
+          trial_start_date?: string | null
+          trial_end_date?: string | null
+          trial_status?: string | null
+          scheduled_change_type?: string | null
+          scheduled_change_effective_date?: string | null
+          scheduled_change_data?: Json | null
+          razorpay_customer_id?: string | null
+          razorpay_subscription_id?: string | null
+          razorpay_price_id?: string | null
+          amount?: number
+          currency?: string
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_subscription_plan_id_fkey"
+            columns: ["subscription_plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_methods: {
+        Row: {
+          id: string
+          user_id: string
+          razorpay_payment_method_id: string
+          type: string
+          card_brand: string | null
+          card_last4: string | null
+          card_exp_month: number | null
+          card_exp_year: number | null
+          is_default: boolean
+          is_active: boolean
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          razorpay_payment_method_id: string
+          type: string
+          card_brand?: string | null
+          card_last4?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          is_default?: boolean
+          is_active?: boolean
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          razorpay_payment_method_id?: string
+          type?: string
+          card_brand?: string | null
+          card_last4?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          is_default?: boolean
+          is_active?: boolean
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_methods_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_events: {
+        Row: {
+          id: string
+          subscription_id: string
+          event_type: string
+          event_data: Json
+          webhook_id: string
+          processing_duration_ms: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          subscription_id: string
+          event_type: string
+          event_data: Json
+          webhook_id: string
+          processing_duration_ms: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          subscription_id?: string
+          event_type?: string
+          event_data?: Json
+          webhook_id?: string
+          processing_duration_ms?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedback: {
+        Row: {
+          id: string
+          user_id: string
+          subscription_id: string | null
+          reason: string
+          feedback_text: string | null
+          rating: number | null
+          would_recommend: boolean | null
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          subscription_id?: string | null
+          reason: string
+          feedback_text?: string | null
+          rating?: number | null
+          would_recommend?: boolean | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          subscription_id?: string | null
+          reason?: string
+          feedback_text?: string | null
+          rating?: number | null
+          would_recommend?: boolean | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          id: string
+          user_id: string
+          type: string
+          title: string
+          description: string | null
+          razorpay_id: string | null
+          download_url: string | null
+          hosted_url: string | null
+          amount: number | null
+          currency: string
+          status: string | null
+          document_date: string
+          tags: string[]
+          metadata: Json
+          file_size_bytes: number | null
+          mime_type: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type: string
+          title: string
+          description?: string | null
+          razorpay_id?: string | null
+          download_url?: string | null
+          hosted_url?: string | null
+          amount?: number | null
+          currency?: string
+          status?: string | null
+          document_date?: string
+          tags?: string[]
+          metadata?: Json
+          file_size_bytes?: number | null
+          mime_type?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          type?: string
+          title?: string
+          description?: string | null
+          razorpay_id?: string | null
+          download_url?: string | null
+          hosted_url?: string | null
+          amount?: number | null
+          currency?: string
+          status?: string | null
+          document_date?: string
+          tags?: string[]
+          metadata?: Json
+          file_size_bytes?: number | null
+          mime_type?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -137,6 +516,70 @@ export type Database = {
       create_gym_and_profile: {
         Args: { user_id: string; gym_name: string; user_email: string }
         Returns: undefined
+      }
+      check_subscription_access: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
+      create_subscription: {
+        Args: { 
+          p_user_id: string
+          p_plan_id: string
+          p_billing_cycle: string
+          p_razorpay_customer_id: string
+          p_razorpay_subscription_id: string
+          p_razorpay_price_id: string
+          p_amount: number
+          p_current_period_start: string
+          p_current_period_end: string
+        }
+        Returns: string
+      }
+      get_user_id_by_email: {
+        Args: { p_email: string }
+        Returns: string
+      }
+      pause_subscription: {
+        Args: { p_subscription_id: string }
+        Returns: undefined
+      }
+      resume_subscription: {
+        Args: { p_subscription_id: string }
+        Returns: undefined
+      }
+      cancel_subscription: {
+        Args: { p_subscription_id: string; p_cancel_at_period_end: boolean }
+        Returns: undefined
+      }
+      schedule_subscription_change: {
+        Args: { 
+          p_subscription_id: string
+          p_change_type: string
+          p_effective_date: string
+          p_change_data: Json
+        }
+        Returns: undefined
+      }
+      create_document: {
+        Args: {
+          p_user_id: string
+          p_type: string
+          p_title: string
+          p_description: string
+          p_razorpay_id?: string
+          p_download_url?: string
+          p_hosted_url?: string
+          p_amount?: number
+          p_currency?: string
+          p_status?: string
+          p_document_date?: string
+          p_metadata?: Json
+        }
+        Returns: string
+      }
+      initialize_trial_subscription: {
+        Args: { p_user_id: string }
+        Returns: string
       }
     }
     Enums: {

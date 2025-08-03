@@ -1,28 +1,62 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { serverConfig } from '@/lib/config'
+import { getRazorpay } from '@/lib/razorpay'
 import { logger } from '@/lib/logger'
-import Stripe from 'stripe'
 
-// Initialize Stripe
-const stripe = serverConfig.stripeSecretKey 
-  ? new Stripe(serverConfig.stripeSecretKey, {
-      apiVersion: '2025-07-30.basil',
-    })
-  : null
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>
 
-// POST /api/verify-payment-session - Verify checkout session or payment intent
+interface RazorpayPayment {
+  id: string
+  amount: number
+  currency: string
+  status: string
+  method: string
+  captured: boolean
+  created_at: number
+  email?: string
+  notes?: Record<string, string>
+}
+
+interface RazorpaySubscription {
+  id: string
+  plan_id: string
+  customer_id: string
+  status: string
+  current_start: number
+  current_end: number
+  charge_at: number
+  total_count: number | string
+  paid_count: number | string
+  remaining_count: number | string
+  notes?: Record<string, string>
+}
+
+interface RazorpayPaymentLink {
+  id: string
+  amount: number
+  currency: string
+  status: string
+  short_url: string
+  created_at: string | number
+  accept_partial: boolean
+  description: string
+  customer?: {
+    email?: string
+  }
+}
+
+// POST /api/verify-payment-session - Verify Razorpay payment/subscription
 export async function POST(request: NextRequest) {
   try {
-    if (!stripe) {
+    const razorpay = getRazorpay()
+    if (!razorpay) {
       return NextResponse.json({ error: 'Payment system not configured' }, { status: 500 })
     }
 
-    const { sessionId, paymentIntentId } = await request.json()
+    const { paymentId, subscriptionId, paymentLinkId } = await request.json()
 
-    if (!sessionId && !paymentIntentId) {
-      return NextResponse.json({ error: 'Session ID or Payment Intent ID required' }, { status: 400 })
+    if (!paymentId && !subscriptionId && !paymentLinkId) {
+      return NextResponse.json({ error: 'Payment ID, Subscription ID, or Payment Link ID required' }, { status: 400 })
     }
 
     // Get authenticated user
@@ -33,139 +67,155 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    let sessionData: any = null
+    let verificationData: Record<string, unknown> | null = null
 
-    // Handle checkout session verification
-    if (sessionId) {
+    // Handle payment verification
+    if (paymentId) {
       try {
-        const session = await stripe.checkout.sessions.retrieve(sessionId, {
-          expand: ['subscription', 'payment_intent', 'line_items.data.price.product']
-        })
-
-        // Verify this session belongs to the current user
-        if (session.metadata?.userId !== user.id) {
-          return NextResponse.json({ error: 'Session not found or unauthorized' }, { status: 404 })
-        }
+        const payment = await razorpay.payments.fetch(paymentId) as RazorpayPayment
 
         // Check if payment was successful
-        if (session.payment_status !== 'paid') {
+        if (payment.status !== 'captured') {
           return NextResponse.json({ 
             error: 'Payment not completed', 
-            payment_status: session.payment_status 
+            payment_status: payment.status 
           }, { status: 400 })
         }
 
-        let planName = 'Subscription'
-        let billingCycle = 'monthly'
-        const amount = session.amount_total || 0
-
-        // Extract plan details from line items
-        if (session.line_items?.data && session.line_items.data.length > 0) {
-          const lineItem = session.line_items.data[0]
-          const price = lineItem.price
-          const product = price?.product as Stripe.Product
-          
-          if (product) {
-            planName = product.name
-          }
-          
-          if (price?.recurring) {
-            billingCycle = price.recurring.interval === 'year' ? 'annual' : 'monthly'
-          }
+        // Verify this payment belongs to the current user (check notes)
+        if (payment.notes?.userId !== user.id) {
+          return NextResponse.json({ error: 'Payment not found or unauthorized' }, { status: 404 })
         }
 
-        sessionData = {
-          sessionId: session.id,
-          subscriptionId: typeof session.subscription === 'string' ? session.subscription : session.subscription?.id,
-          amount,
-          planName,
-          billingCycle,
-          paymentStatus: session.payment_status,
-          customerEmail: session.customer_email,
+        verificationData = {
+          type: 'payment',
+          paymentId: payment.id,
+          amount: payment.amount,
+          currency: payment.currency,
+          paymentStatus: payment.status,
+          method: payment.method,
+          captured: payment.captured,
+          createdAt: payment.created_at,
+          customerEmail: payment.email,
+          subscriptionId: payment.notes?.subscriptionId || null,
         }
 
-        // Try to get the invoice ID if it's a subscription
-        if (sessionData.subscriptionId) {
-          try {
-            const subscription = await stripe.subscriptions.retrieve(sessionData.subscriptionId)
-            const latestInvoiceId = typeof subscription.latest_invoice === 'string' 
-              ? subscription.latest_invoice 
-              : subscription.latest_invoice?.id
-
-            if (latestInvoiceId) {
-              sessionData.invoiceId = latestInvoiceId
-            }
-          } catch (error) {
-            logger.warn('Could not retrieve subscription invoice:', { error: error instanceof Error ? error.message : String(error) })
+        // Get plan details if available
+        if (payment.notes?.planId) {
+          const planDetails = await getPlanDetails(supabase, payment.notes.planId as string)
+          if (planDetails) {
+            verificationData.planName = planDetails.name
+            verificationData.billingCycle = payment.notes.billingCycle || 'monthly'
           }
         }
 
       } catch (error) {
-        logger.error('Checkout session verification error:', { 
-          sessionId, 
+        logger.error('Payment verification error:', { 
+          paymentId, 
           error: error instanceof Error ? error.message : String(error) 
         })
         
-        if (error instanceof Stripe.errors.StripeError) {
-          if (error.type === 'StripeInvalidRequestError' && error.message.includes('No such checkout session')) {
-            return NextResponse.json({ error: 'Invalid or expired session' }, { status: 404 })
-          }
-          return NextResponse.json({ error: error.message }, { status: 400 })
-        }
-        
-        return NextResponse.json({ error: 'Failed to verify session' }, { status: 500 })
+        return NextResponse.json({ error: 'Failed to verify payment' }, { status: 500 })
       }
     }
 
-    // Handle payment intent verification (if provided)
-    if (paymentIntentId && !sessionData) {
+    // Handle subscription verification
+    if (subscriptionId && !verificationData) {
       try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+        const subscription = await razorpay.subscriptions.fetch(subscriptionId) as RazorpaySubscription
 
-        // Basic verification - you might want to add more checks here
-        if (paymentIntent.status !== 'succeeded') {
-          return NextResponse.json({ 
-            error: 'Payment not completed', 
-            payment_status: paymentIntent.status 
-          }, { status: 400 })
+        // Verify this subscription belongs to the current user
+        if (subscription.notes?.userId !== user.id) {
+          return NextResponse.json({ error: 'Subscription not found or unauthorized' }, { status: 404 })
         }
 
-        sessionData = {
-          paymentIntentId: paymentIntent.id,
-          amount: paymentIntent.amount,
-          paymentStatus: paymentIntent.status,
-          customerEmail: paymentIntent.receipt_email,
+        verificationData = {
+          type: 'subscription',
+          subscriptionId: subscription.id,
+          customerId: subscription.customer_id,
+          planId: subscription.plan_id,
+          status: subscription.status,
+          currentStart: subscription.current_start,
+          currentEnd: subscription.current_end,
+          chargeAt: subscription.charge_at,
+          totalCount: subscription.total_count,
+          paidCount: subscription.paid_count,
+          remainingCount: subscription.remaining_count,
+        }
+
+        // Get plan details
+        if (subscription.notes?.planId) {
+          const planDetails = await getPlanDetails(supabase, subscription.notes.planId as string)
+          if (planDetails) {
+            verificationData.planName = planDetails.name
+            verificationData.amount = planDetails.price_inr
+            verificationData.billingCycle = subscription.notes.billingCycle || 'monthly'
+          }
         }
 
       } catch (error) {
-        logger.error('Payment intent verification error:', { 
-          paymentIntentId, 
+        logger.error('Subscription verification error:', { 
+          subscriptionId, 
           error: error instanceof Error ? error.message : String(error) 
         })
         
-        if (error instanceof Stripe.errors.StripeError) {
-          if (error.type === 'StripeInvalidRequestError' && error.message.includes('No such payment_intent')) {
-            return NextResponse.json({ error: 'Invalid or expired payment intent' }, { status: 404 })
-          }
-          return NextResponse.json({ error: error.message }, { status: 400 })
-        }
-        
-        return NextResponse.json({ error: 'Failed to verify payment intent' }, { status: 500 })
+        return NextResponse.json({ error: 'Failed to verify subscription' }, { status: 500 })
       }
     }
 
-    if (!sessionData) {
+    // Handle payment link verification
+    if (paymentLinkId && !verificationData) {
+      try {
+        const paymentLink = await razorpay.paymentLink.fetch(paymentLinkId) as RazorpayPaymentLink
+
+        verificationData = {
+          type: 'payment_link',
+          paymentLinkId: paymentLink.id,
+          amount: paymentLink.amount,
+          currency: paymentLink.currency,
+          status: paymentLink.status,
+          shortUrl: paymentLink.short_url,
+          createdAt: paymentLink.created_at,
+          acceptPartial: paymentLink.accept_partial,
+          description: paymentLink.description,
+          customerEmail: paymentLink.customer?.email,
+        }
+
+        // Get associated payments if link is paid
+        if (paymentLink.status === 'paid') {
+          try {
+            // For Razorpay, we'll need to fetch payments separately using the payment link ID
+            // This is a simplified approach - in practice, you might store payment IDs when they're created
+            logger.info('Payment link is paid, payment details available in webhook', { paymentLinkId })
+          } catch (error) {
+            logger.warn('Could not fetch payment link payments:', { error: error instanceof Error ? error.message : String(error) })
+          }
+        }
+
+      } catch (error) {
+        logger.error('Payment link verification error:', { 
+          paymentLinkId, 
+          error: error instanceof Error ? error.message : String(error) 
+        })
+        
+        return NextResponse.json({ error: 'Failed to verify payment link' }, { status: 500 })
+      }
+    }
+
+    if (!verificationData) {
       return NextResponse.json({ error: 'No valid payment data found' }, { status: 404 })
     }
 
     logger.info('Payment verification successful:', {
       userId: user.id,
-      sessionId,
-      paymentIntentId,
-      paymentStatus: sessionData.paymentStatus
+      type: verificationData.type,
+      paymentId,
+      subscriptionId,
+      paymentLinkId,
+      status: verificationData.status || verificationData.paymentStatus
     })
 
-    return NextResponse.json(sessionData)
+    return NextResponse.json(verificationData)
 
   } catch (error) {
     logger.error('Payment verification API error:', { error: error instanceof Error ? error.message : String(error) })
@@ -173,5 +223,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       error: 'Internal server error' 
     }, { status: 500 })
+  }
+}
+
+// Helper function to get plan details
+async function getPlanDetails(supabase: SupabaseClient, planId: string) {
+  try {
+    const { data: plan } = await supabase
+      .from('subscription_plans')
+      .select('id, name, price_inr, billing_cycle')
+      .eq('id', planId)
+      .single()
+
+    return plan
+  } catch (error) {
+    logger.warn('Could not fetch plan details:', { planId, error: error instanceof Error ? error.message : String(error) })
+    return null
   }
 }

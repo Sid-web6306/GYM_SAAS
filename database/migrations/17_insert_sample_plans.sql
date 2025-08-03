@@ -7,40 +7,40 @@ BEGIN;
 INSERT INTO public.subscription_plans (
   name, price_inr, billing_cycle, plan_type, member_limit, features,
   tier_level, api_access_enabled, multi_gym_enabled, data_retention_months,
-  priority_support, advanced_analytics, custom_reporting
+  priority_support, advanced_analytics
 ) VALUES 
   ('Starter Monthly', 299900, 'monthly', 'starter', 50, 
    ARRAY['Member Management', 'Basic Check-ins', 'Simple Dashboard', 'Mobile App Access'], 
-   1, false, false, 3, false, false, false),
+   1, false, false, 3, false, false),
   ('Starter Annual', 2999000, 'annual', 'starter', 50, 
    ARRAY['Member Management', 'Basic Check-ins', 'Simple Dashboard', 'Mobile App Access'], 
-   1, false, false, 3, false, false, false);
+   1, false, false, 3, false, false);
 
 -- Insert Professional Plans  
 INSERT INTO public.subscription_plans (
   name, price_inr, billing_cycle, plan_type, member_limit, features,
   tier_level, api_access_enabled, multi_gym_enabled, data_retention_months,
-  priority_support, advanced_analytics, custom_reporting
+  priority_support, advanced_analytics
 ) VALUES 
   ('Professional Monthly', 599900, 'monthly', 'professional', 200, 
    ARRAY['All Starter Features', 'Advanced Analytics', 'Member Growth Charts', 'Revenue Tracking', 'Email Notifications', 'Check-in Trends', 'Member Reports'], 
-   2, false, false, 12, false, true, false),
+   2, false, false, 12, false, true),
   ('Professional Annual', 5999000, 'annual', 'professional', 200, 
    ARRAY['All Starter Features', 'Advanced Analytics', 'Member Growth Charts', 'Revenue Tracking', 'Email Notifications', 'Check-in Trends', 'Member Reports'], 
-   2, false, false, 12, false, true, false);
+   2, false, false, 12, false, true);
 
 -- Insert Enterprise Plans
 INSERT INTO public.subscription_plans (
   name, price_inr, billing_cycle, plan_type, member_limit, features,
   tier_level, api_access_enabled, multi_gym_enabled, data_retention_months,
-  priority_support, advanced_analytics, custom_reporting
+  priority_support, advanced_analytics
 ) VALUES 
   ('Enterprise Monthly', 999900, 'monthly', 'enterprise', NULL, 
    ARRAY['All Professional Features', 'API Access', 'Multi-Gym Management', 'Custom Reports', 'Priority Support', 'Advanced Retention Analytics', 'Unlimited Data Storage', 'White-label Options'], 
-   3, true, true, 36, true, true, true),
+   3, true, true, 36, true, true),
   ('Enterprise Annual', 9999000, 'annual', 'enterprise', NULL, 
    ARRAY['All Professional Features', 'API Access', 'Multi-Gym Management', 'Custom Reports', 'Priority Support', 'Advanced Retention Analytics', 'Unlimited Data Storage', 'White-label Options'], 
-   3, true, true, 36, true, true, true);
+   3, true, true, 36, true, true);
 
 -- Note: Indexes for subscription_plans are already created in 12_create_indexes.sql
 
@@ -66,4 +66,4 @@ COMMIT;
 -- - Data retention policies (3/12/36 months)
 -- - Priority support (Enterprise only)
 -- - Advanced analytics (Professional+)
--- - Custom reporting (Enterprise only)
+-- - Custom reporting features (Enterprise via advanced analytics)

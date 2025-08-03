@@ -1,20 +1,14 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { serverConfig } from '@/lib/config'
-import Stripe from 'stripe'
+import { getRazorpay } from '@/lib/razorpay'
 import { logger } from '@/lib/logger'
-
-// Initialize Stripe
-const stripe = serverConfig.stripeSecretKey 
-  ? new Stripe(serverConfig.stripeSecretKey, {
-      apiVersion: '2025-07-30.basil',
-    })
-  : null
 
 export async function GET() {
   try {
-    if (!stripe) {
-      return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 })
+    const razorpay = getRazorpay()
+    if (!razorpay) {
+      return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
     // Get authenticated user
@@ -26,7 +20,8 @@ export async function GET() {
     }
 
     // Get user's payment methods from database
-    const { data: paymentMethods, error: dbError } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { eq: (column: string, value: boolean) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: unknown, error: unknown }> } } } } }).from('payment_methods')
+    const { data: paymentMethods, error: dbError } = await supabase
+      .from('payment_methods')
       .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
@@ -47,14 +42,19 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!stripe) {
-      return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 })
+    const razorpay = getRazorpay()
+    if (!razorpay) {
+      return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
-    const { paymentMethodId, setAsDefault = false } = await request.json()
+    const { 
+      paymentMethodToken, 
+      setAsDefault = false,
+      cardDetails // For Razorpay, card details come from frontend
+    } = await request.json()
     
-    if (!paymentMethodId) {
-      return NextResponse.json({ error: 'Payment method ID is required' }, { status: 400 })
+    if (!paymentMethodToken) {
+      return NextResponse.json({ error: 'Payment method token is required' }, { status: 400 })
     }
 
     // Get authenticated user
@@ -65,104 +65,93 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get payment method details from Stripe
-    const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId)
+    // For Razorpay, payment methods are typically handled differently
+    // We'll store the token and card details directly in our database
+    // Note: Razorpay doesn't have the same payment method concept as Stripe
     
-    if (!paymentMethod) {
-      return NextResponse.json({ error: 'Payment method not found' }, { status: 404 })
-    }
-
-    // Extract card details if it's a card
-    let cardDetails = {}
-    if (paymentMethod.type === 'card' && paymentMethod.card) {
-      cardDetails = {
-        card_brand: paymentMethod.card.brand,
-        card_last4: paymentMethod.card.last4,
-        card_exp_month: paymentMethod.card.exp_month,
-        card_exp_year: paymentMethod.card.exp_year,
-      }
-    }
-
-    // Save payment method to database
-    const { data: savedPaymentMethod, error: saveError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('add_payment_method', {
-      p_user_id: user.id,
-      p_stripe_payment_method_id: paymentMethod.id,
-      p_type: paymentMethod.type,
-      p_is_default: setAsDefault,
-      ...cardDetails
-    })
-
-    if (saveError) {
-      logger.error('Error saving payment method:', { error: saveError, userId: user.id, paymentMethodId })
-      return NextResponse.json({ error: 'Failed to save payment method' }, { status: 500 })
-    }
-
-    // If this is set as default, also need to update Stripe customer's default payment method
-    if (setAsDefault) {
-      try {
-        // Get or create Stripe customer
-        const existingCustomers = await stripe.customers.list({
-          email: user.email,
-          limit: 1,
-        })
-
-        let customer: Stripe.Customer
-        if (existingCustomers.data.length > 0) {
-          customer = existingCustomers.data[0]
-        } else {
-          // Create new customer
-          customer = await stripe.customers.create({
-            email: user.email,
-            name: user.user_metadata?.full_name || undefined,
-            metadata: {
-              userId: user.id,
-            },
-          })
+    try {
+      // Create or get Razorpay customer first
+      const customerData = {
+        name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Customer',
+        email: user.email || '',
+        contact: cardDetails?.phone || '',
+        notes: {
+          userId: user.id,
         }
-
-        // Attach payment method to customer and set as default
-        await stripe.paymentMethods.attach(paymentMethodId, {
-          customer: customer.id,
-        })
-
-        await stripe.customers.update(customer.id, {
-          invoice_settings: {
-            default_payment_method: paymentMethodId,
-          },
-        })
-      } catch (stripeError) {
-        logger.error('Error updating Stripe customer default payment method:', { 
-          error: stripeError, 
-          userId: user.id, 
-          paymentMethodId 
-        })
-        // Don't fail the request if Stripe update fails, as we've already saved to DB
       }
+
+      // Try to find existing customer
+      const customers = await razorpay.customers.all({ count: 10 })
+      let customer = customers.items.find((c: any) => c.email === user.email)
+      
+      if (!customer) {
+        customer = await razorpay.customers.create(customerData)
+      }
+
+      // Save payment method to database
+      const { data: savedPaymentMethod, error: saveError } = await supabase
+        .from('payment_methods')
+        .insert({
+          user_id: user.id,
+          razorpay_payment_method_id: paymentMethodToken,
+          type: cardDetails?.type || 'card',
+          card_brand: cardDetails?.brand || null,
+          card_last4: cardDetails?.last4 || null,
+          card_exp_month: cardDetails?.exp_month || null,
+          card_exp_year: cardDetails?.exp_year || null,
+          is_default: setAsDefault,
+          is_active: true,
+          metadata: {
+            razorpay_customer_id: customer.id,
+            ...cardDetails
+          }
+        })
+        .select()
+        .single()
+
+      if (saveError) {
+        logger.error('Error saving payment method:', { error: saveError, userId: user.id, paymentMethodToken })
+        return NextResponse.json({ error: 'Failed to save payment method' }, { status: 500 })
+      }
+
+      // If this is set as default, update other payment methods
+      if (setAsDefault) {
+        const { error: updateError } = await supabase
+          .from('payment_methods')
+          .update({ is_default: false })
+          .eq('user_id', user.id)
+          .neq('id', savedPaymentMethod.id)
+
+        if (updateError) {
+          logger.error('Error updating other payment methods default status:', { error: updateError })
+        }
+      }
+
+      logger.info('Payment method added successfully:', {
+        userId: user.id,
+        paymentMethodToken,
+        type: cardDetails?.type || 'card',
+        setAsDefault,
+        savedPaymentMethodId: savedPaymentMethod.id
+      })
+
+      return NextResponse.json({ 
+        success: true, 
+        paymentMethodId: savedPaymentMethod.id,
+        message: 'Payment method added successfully' 
+      })
+
+    } catch (razorpayError) {
+      logger.error('Error with Razorpay payment method:', { 
+        error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError),
+        userId: user.id, 
+        paymentMethodToken 
+      })
+      return NextResponse.json({ error: 'Failed to process payment method' }, { status: 500 })
     }
-
-    logger.info('Payment method added successfully:', {
-      userId: user.id,
-      paymentMethodId,
-      type: paymentMethod.type,
-      setAsDefault,
-      savedPaymentMethodId: savedPaymentMethod
-    })
-
-    return NextResponse.json({ 
-      success: true, 
-      paymentMethodId: savedPaymentMethod,
-      message: 'Payment method added successfully' 
-    })
 
   } catch (error) {
     logger.error('Payment methods POST error:', { error: error instanceof Error ? error.message : String(error) })
-    
-    if (error instanceof Stripe.errors.StripeError) {
-      return NextResponse.json({ 
-        error: error.message 
-      }, { status: 400 })
-    }
-    
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -183,11 +172,24 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Update default payment method in database
-    const { error: updateError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('set_default_payment_method', {
-      p_user_id: user.id,
-      p_payment_method_id: paymentMethodId
-    })
+    // First, unset all other payment methods as default
+    if (setAsDefault) {
+      const { error: unsetError } = await supabase
+        .from('payment_methods')
+        .update({ is_default: false })
+        .eq('user_id', user.id)
+
+      if (unsetError) {
+        logger.error('Error unsetting other default payment methods:', { error: unsetError })
+      }
+    }
+
+    // Update the specified payment method as default
+    const { error: updateError } = await supabase
+      .from('payment_methods')
+      .update({ is_default: setAsDefault })
+      .eq('id', paymentMethodId)
+      .eq('user_id', user.id)
 
     if (updateError) {
       logger.error('Error updating default payment method:', { 
@@ -198,46 +200,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to update payment method' }, { status: 500 })
     }
 
-    // Also update in Stripe if configured
-    if (stripe && setAsDefault) {
-      try {
-        // Get the Stripe payment method ID from our database
-        const { data: paymentMethod } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { eq: (column: string, value: string) => { single: () => Promise<{ data: unknown, error: unknown }> } } } } }).from('payment_methods')
-          .select('stripe_payment_method_id')
-          .eq('id', paymentMethodId)
-          .eq('user_id', user.id)
-          .single()
-
-        if ((paymentMethod as Record<string, unknown>)?.stripe_payment_method_id) {
-          // Find customer
-          const existingCustomers = await stripe.customers.list({
-            email: user.email,
-            limit: 1,
-          })
-
-          if (existingCustomers.data.length > 0) {
-            const customer = existingCustomers.data[0]
-            
-            await stripe.customers.update(customer.id, {
-              invoice_settings: {
-                default_payment_method: (paymentMethod as Record<string, unknown>).stripe_payment_method_id as string,
-              },
-            })
-          }
-        }
-      } catch (stripeError) {
-        logger.error('Error updating Stripe customer default payment method:', { 
-          error: stripeError, 
-          userId: user.id, 
-          paymentMethodId 
-        })
-        // Don't fail the request if Stripe update fails
-      }
-    }
-
     logger.info('Default payment method updated successfully:', {
       userId: user.id,
-      paymentMethodId
+      paymentMethodId,
+      setAsDefault
     })
 
     return NextResponse.json({ 
@@ -246,7 +212,7 @@ export async function PUT(request: NextRequest) {
     })
 
   } catch (error) {
-    logger.error('Payment methods PUT error:',  {error})
+    logger.error('Payment methods PUT error:', { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -269,8 +235,9 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Get the payment method details before removal
-    const { data: paymentMethod } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { eq: (column: string, value: string) => { single: () => Promise<{ data: unknown, error: unknown }> } } } } }).from('payment_methods')
-      .select('stripe_payment_method_id, is_default')
+    const { data: paymentMethod } = await supabase
+      .from('payment_methods')
+      .select('razorpay_payment_method_id, is_default')
       .eq('id', paymentMethodId)
       .eq('user_id', user.id)
       .single()
@@ -280,14 +247,15 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Don't allow deletion of the default payment method if there are other active methods
-    if ((paymentMethod as Record<string, unknown>).is_default) {
-      const { data: otherMethods } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { eq: (column: string, value: boolean) => { neq: (column: string, value: string) => Promise<{ data: unknown, error: unknown }> } } } } }).from('payment_methods')
+    if (paymentMethod.is_default) {
+      const { data: otherMethods } = await supabase
+        .from('payment_methods')
         .select('id')
         .eq('user_id', user.id)
         .eq('is_active', true)
         .neq('id', paymentMethodId)
 
-      if ((otherMethods as unknown[]) && (otherMethods as unknown[]).length > 0) {
+      if (otherMethods && otherMethods.length > 0) {
         return NextResponse.json({ 
           error: 'Cannot delete default payment method. Please set another method as default first.' 
         }, { status: 400 })
@@ -295,10 +263,11 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Remove payment method from database (soft delete)
-    const { error: removeError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('remove_payment_method', {
-      p_user_id: user.id,
-      p_payment_method_id: paymentMethodId
-    })
+    const { error: removeError } = await supabase
+      .from('payment_methods')
+      .update({ is_active: false })
+      .eq('id', paymentMethodId)
+      .eq('user_id', user.id)
 
     if (removeError) {
       logger.error('Error removing payment method:', { 
@@ -309,24 +278,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to remove payment method' }, { status: 500 })
     }
 
-    // Also detach from Stripe if configured
-    if (stripe && (paymentMethod as Record<string, unknown>).stripe_payment_method_id) {
-      try {
-        await stripe.paymentMethods.detach((paymentMethod as Record<string, unknown>).stripe_payment_method_id as string)
-      } catch (stripeError) {
-        logger.error('Error detaching payment method from Stripe:', { 
-          error: stripeError, 
-          userId: user.id, 
-          stripePaymentMethodId: (paymentMethod as Record<string, unknown>).stripe_payment_method_id as string
-        })
-        // Don't fail the request if Stripe detach fails
-      }
-    }
-
     logger.info('Payment method removed successfully:', {
       userId: user.id,
       paymentMethodId,
-      stripePaymentMethodId: (paymentMethod as Record<string, unknown>).stripe_payment_method_id as string
+      razorpayPaymentMethodId: paymentMethod.razorpay_payment_method_id
     })
 
     return NextResponse.json({ 

@@ -5,6 +5,8 @@ import "./globals.css";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { RazorpayProvider } from "@/components/providers/razorpay-provider";
+import { PWAWrapper } from "@/components/pwa/PWAWrapper";
 import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -12,6 +14,18 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Gym SaaS MVP",
   description: "A comprehensive gym management system",
+  manifest: "/manifest.json",
+  themeColor: "#000000",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "GymSaaS",
+  },
+  icons: [
+    { rel: "icon", url: "/icon.svg" },
+    { rel: "apple-touch-icon", url: "/icon-192x192.png" },
+  ],
 };
 
 export default function RootLayout({
@@ -29,12 +43,15 @@ export default function RootLayout({
           disableTransitionOnChange={false}
           themes={['light', 'blue', 'green', 'purple', 'rose']}
         >
-          <QueryProvider>
-            <SessionProvider>
-              {children}
-            </SessionProvider>
-            <Toaster />
-          </QueryProvider>
+          <RazorpayProvider>
+            <QueryProvider>
+              <SessionProvider>
+                {children}
+                <PWAWrapper />
+              </SessionProvider>
+              <Toaster />
+            </QueryProvider>
+          </RazorpayProvider>
         </ThemeProvider>
       </body>
     </html>

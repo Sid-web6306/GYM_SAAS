@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.subscription_events (
   )),
   event_data jsonb DEFAULT '{}',
   created_at timestamptz NOT NULL DEFAULT now(),
-  webhook_id text NULL, -- Store Stripe webhook ID for correlation
+  webhook_id text NULL, -- Store webhook ID for correlation
   processing_duration_ms integer NULL, -- For webhook performance monitoring
   retry_count integer DEFAULT 0,
   CONSTRAINT subscription_events_pkey PRIMARY KEY (id)

@@ -9,7 +9,7 @@ interface Document {
   type: 'invoice' | 'receipt' | 'statement' | 'contract'
   title: string
   description: string | null
-  stripe_id: string | null
+  razorpay_id: string | null
   download_url: string | null
   hosted_url: string | null
   amount: number | null
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
       documentId: document.id,
       type: document.type,
       amount: document.amount,
-      stripeId: document.stripe_id
+      razorpayId: document.razorpay_id
     })
 
     // Return download information (compatible with old format)
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
         type: document.type,
         title: document.title,
         description: document.description,
-        stripe_id: document.stripe_id,
+        razorpay_id: document.razorpay_id,
         amount: document.amount,
         currency: document.currency,
         status: document.status,
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
       title: doc.title,
       description: doc.description,
       
-      // For backward compatibility with old Stripe format
+      // For backward compatibility with old format
       number: (doc.metadata as Record<string, unknown>)?.number || null,
       amount: doc.amount,
       currency: doc.currency,
@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
       hosted_url: doc.hosted_url,
       
       // Additional fields
-      stripe_id: doc.stripe_id,
+      razorpay_id: doc.razorpay_id,
       tags: doc.tags,
       metadata: doc.metadata,
     })) || []
