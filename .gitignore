@@ -6,6 +6,7 @@
 /.supabase
 
 # Ignore database files
+database/
 database/*.db
 database/*.sqlite
 *.tsbuildinfo
