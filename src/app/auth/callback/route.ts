@@ -1,8 +1,28 @@
 // src/app/auth/callback/route.ts
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server' // Use the shared server client
-import type { User } from '@supabase/supabase-js'
+import { createClient } from '@/utils/supabase/server'
+import type { User, SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/database.types'
+
+// Types for better type safety
+interface SocialProfileData {
+  provider: string
+  full_name: string
+  avatar_url: string
+  email: string
+  email_verified: boolean
+}
+
+interface ProfileData {
+  id: string
+  gym_id: string | null
+  full_name: string | null
+  email: string
+  default_role: string
+  is_gym_owner: boolean
+  avatar_url: string | null
+}
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -67,77 +87,26 @@ export async function GET(request: Request) {
       profileData: socialProfileData
     })
     
-    // Add a delay to allow for any database triggers to complete
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    // Wait for database trigger to create profile with retry logic
+    const profile = await waitForProfileCreation(supabase, user.id)
     
-    // Check user's profile and onboarding status
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('gym_id, full_name')
-      .eq('id', user.id)
-      .single()
+    if (!profile) {
+      console.error('Auth callback: Profile creation failed after retries')
+      return NextResponse.redirect(`${origin}/login?message=profile-creation-failed`)
+    }
 
-    console.log('Auth callback: Profile check', { 
+    console.log('Auth callback: Profile found', { 
       profile, 
-      profileError: profileError?.message,
-      hasGym: !!profile?.gym_id 
+      hasGym: !!profile.gym_id,
+      role: profile.default_role,
+      isOwner: profile.is_gym_owner
     })
 
-    // Handle different scenarios based on profile state
-    if (profileError && profileError.code === 'PGRST116') {
-      // Profile doesn't exist - this shouldn't happen with proper triggers
-      console.warn('Auth callback: Profile not found, creating basic profile')
-      
-      const { error: createProfileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: user.id,
-          full_name: socialProfileData.full_name || user.email?.split('@')[0] || 'User',
-          created_at: new Date().toISOString()
-        })
-      
-      if (createProfileError) {
-        console.error('Failed to create profile:', createProfileError)
-        return NextResponse.redirect(`${origin}/onboarding?message=profile-creation-failed`)
-      }
-      
-      // Redirect to onboarding for social users
-      console.log('Auth callback: New profile created, redirecting to social onboarding')
-      return NextResponse.redirect(`${origin}/signup?social=true&provider=${provider}`)
-    }
-    
-    if (profileError && profileError.code !== 'PGRST116') {
-      // Other profile errors
-      console.error('Auth callback: Profile fetch error:', profileError)
-      return NextResponse.redirect(`${origin}/login?message=profile-fetch-error`)
-    }
+    // Enrich profile with social data if missing
+    await enrichProfileWithSocialData(supabase, user.id, profile, socialProfileData)
 
-    if (profile && profile.gym_id) {
-      // User has completed onboarding, redirect to dashboard
-      console.log('Auth callback: User has gym, redirecting to dashboard')
-      
-      // Update profile with fresh social data if available and if it's missing
-      if (socialProfileData.full_name && !profile.full_name) {
-        console.log('Updating profile with social data...')
-        await supabase
-          .from('profiles')
-          .update({
-            full_name: socialProfileData.full_name,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', user.id)
-      }
-      
-      return NextResponse.redirect(`${origin}/dashboard`)
-    } else {
-      // User needs to complete onboarding - redirect to main onboarding page
-      console.log('Auth callback: User needs onboarding, redirecting to onboarding')
-      
-      // For social auth users, we need to mark them as new users
-      // This will be handled in the onboarding page when they get there
-      
-      return NextResponse.redirect(`${origin}/onboarding`)
-    }
+    // Route user based on RBAC-aware profile state
+    return routeUserBasedOnProfile(origin, profile, provider, isNewUser)
     
   } catch (error) {
     console.error('Auth callback unexpected error:', error)
@@ -154,38 +123,158 @@ export async function GET(request: Request) {
   }
 }
 
-// Helper function to extract social profile data
-function extractSocialProfileData(user: User) {
-  const userMetadata = user.user_metadata || {};
-  const appMetadata = user.app_metadata || {};
+// Helper function to wait for profile creation with exponential backoff
+async function waitForProfileCreation(supabase: SupabaseClient<Database>, userId: string): Promise<ProfileData | null> {
+  const maxRetries = 5
+  const baseDelay = 100 // Start with 100ms
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    console.log(`Auth callback: Checking for profile (attempt ${attempt + 1}/${maxRetries})`)
+    
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('id, gym_id, full_name, email, default_role, is_gym_owner, avatar_url')
+      .eq('id', userId)
+      .single()
+    
+    if (profile) {
+      console.log('Auth callback: Profile found after', attempt + 1, 'attempts')
+      return profile as ProfileData
+    }
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Auth callback: Unexpected profile error:', error)
+      return null
+    }
+    
+    // If not the last attempt, wait before retrying
+    if (attempt < maxRetries - 1) {
+      const delay = baseDelay * Math.pow(2, attempt) // Exponential backoff
+      console.log(`Auth callback: Profile not found, retrying in ${delay}ms...`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+  
+  console.error('Auth callback: Profile not found after', maxRetries, 'attempts')
+  return null
+}
+
+// Helper function to enrich profile with social data
+async function enrichProfileWithSocialData(
+  supabase: SupabaseClient<Database>, 
+  userId: string, 
+  profile: ProfileData, 
+  socialData: SocialProfileData
+) {
+  const updates: Partial<ProfileData> = {}
+  
+  // Update missing profile data with social data
+  if (socialData.full_name && !profile.full_name) {
+    updates.full_name = socialData.full_name
+  }
+  
+  if (socialData.avatar_url && !profile.avatar_url) {
+    updates.avatar_url = socialData.avatar_url
+  }
+  
+  // Always update email if it's different (social auth might have more recent email)
+  if (socialData.email && socialData.email !== profile.email) {
+    updates.email = socialData.email
+  }
+  
+  if (Object.keys(updates).length > 0) {
+    console.log('Auth callback: Enriching profile with social data:', updates)
+    
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+    
+    if (updateError) {
+      console.error('Auth callback: Failed to update profile with social data:', updateError)
+      // Don't fail the auth flow for profile enrichment errors
+    }
+  }
+}
+
+// Helper function to route user based on RBAC-aware profile state
+function routeUserBasedOnProfile(
+  origin: string, 
+  profile: ProfileData, 
+  provider: string | undefined,
+  isNewUser: boolean
+): NextResponse {
+  // User has completed onboarding and has a gym
+  if (profile.gym_id) {
+    console.log('Auth callback: User has gym, redirecting to dashboard', {
+      gymId: profile.gym_id,
+      role: profile.default_role,
+      isOwner: profile.is_gym_owner
+    })
+    return NextResponse.redirect(`${origin}/dashboard`)
+  }
+  
+  // User needs onboarding
+  console.log('Auth callback: User needs onboarding', {
+    isNewUser,
+    provider,
+    role: profile.default_role,
+    hasProfile: !!profile.id
+  })
+  
+  // For social auth users, provide context to onboarding
+  if (provider && isNewUser) {
+    return NextResponse.redirect(`${origin}/onboarding?social=true&provider=${provider}`)
+  }
+  
+  return NextResponse.redirect(`${origin}/onboarding`)
+}
+
+// Enhanced helper function to extract social profile data
+function extractSocialProfileData(user: User): SocialProfileData {
+  const userMetadata = user.user_metadata || {}
+  const appMetadata = user.app_metadata || {}
   
   // Extract profile data based on provider
-  const provider = appMetadata.provider || 'unknown';
-  let full_name = '';
-  let avatar_url = '';
+  const provider = appMetadata.provider || 'unknown'
+  let full_name = ''
+  let avatar_url = ''
   
   switch (provider) {
     case 'google':
-      full_name = userMetadata.full_name || userMetadata.name || '';
-      avatar_url = userMetadata.avatar_url || userMetadata.picture || '';
-      break;
+      full_name = userMetadata.full_name || userMetadata.name || ''
+      avatar_url = userMetadata.avatar_url || userMetadata.picture || ''
+      break
       
     case 'facebook':
-      full_name = userMetadata.full_name || userMetadata.name || '';
-      avatar_url = userMetadata.avatar_url || userMetadata.picture?.data?.url || '';
-      break;
+      full_name = userMetadata.full_name || userMetadata.name || ''
+      avatar_url = userMetadata.avatar_url || userMetadata.picture?.data?.url || ''
+      break
+      
+    case 'github':
+      full_name = userMetadata.full_name || userMetadata.name || ''
+      avatar_url = userMetadata.avatar_url || ''
+      break
+      
+    case 'twitter':
+      full_name = userMetadata.full_name || userMetadata.name || ''
+      avatar_url = userMetadata.avatar_url || ''
+      break
       
     default:
       // Fallback for other providers
-      full_name = userMetadata.full_name || userMetadata.name || userMetadata.display_name || '';
-      avatar_url = userMetadata.avatar_url || userMetadata.picture || '';
+      full_name = userMetadata.full_name || userMetadata.name || userMetadata.display_name || ''
+      avatar_url = userMetadata.avatar_url || userMetadata.picture || ''
   }
   
   return {
     provider,
     full_name: full_name.trim(),
-    avatar_url: avatar_url,
+    avatar_url: avatar_url.trim(),
     email: user.email || '',
-    email_verified: user.email_confirmed_at ? true : false,
-  };
+    email_verified: !!user.email_confirmed_at,
+  }
 }

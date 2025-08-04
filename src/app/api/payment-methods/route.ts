@@ -53,6 +53,30 @@ export async function POST(request: NextRequest) {
       cardDetails // For Razorpay, card details come from frontend
     } = await request.json()
     
+    // Validate card details structure if provided
+    if (cardDetails) {
+      const requiredFields = ['type', 'last4'];
+      const missingFields = requiredFields.filter(field => !cardDetails[field]);
+      if (missingFields.length > 0) {
+        return NextResponse.json({ 
+          error: `Missing required card details: ${missingFields.join(', ')}` 
+        }, { status: 400 })
+      }
+      
+      // Validate card expiry if provided
+      if (cardDetails.exp_month || cardDetails.exp_year) {
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+        
+        if (cardDetails.exp_year < currentYear || 
+            (cardDetails.exp_year === currentYear && cardDetails.exp_month < currentMonth)) {
+          return NextResponse.json({ 
+            error: 'Card has expired' 
+          }, { status: 400 })
+        }
+      }
+    }
+    
     if (!paymentMethodToken) {
       return NextResponse.json({ error: 'Payment method token is required' }, { status: 400 })
     }
@@ -81,13 +105,32 @@ export async function POST(request: NextRequest) {
       }
 
       // Try to find existing customer
-      const customers = await razorpay.customers.all({ count: 10 })
-      let customer = customers.items.find((c: any) => c.email === user.email)
+      let customer;
+      try {
+        // Search for customer by email - Razorpay supports email-based search
+        const customers = await razorpay.customers.all()
+        customer = customers.items.find((c: any) => 
+          c.email?.toLowerCase() === user.email?.toLowerCase()
+        )
+      } catch (searchError) {
+        logger.error('Failed to search for existing customer:', { 
+          error: searchError,
+          email: user.email 
+        })
+        // Continue to create new customer
+      }
       
       if (!customer) {
-        customer = await razorpay.customers.create(customerData)
+        try {
+          customer = await razorpay.customers.create(customerData)
+        } catch (createError) {
+          logger.error('Failed to create Razorpay customer:', { 
+            error: createError,
+            userId: user.id 
+          })
+          throw createError;
+        }
       }
-
       // Save payment method to database
       const { data: savedPaymentMethod, error: saveError } = await supabase
         .from('payment_methods')
@@ -103,7 +146,10 @@ export async function POST(request: NextRequest) {
           is_active: true,
           metadata: {
             razorpay_customer_id: customer.id,
-            ...cardDetails
+            // Only store non-sensitive card metadata
+            card_network: cardDetails?.network,
+            card_type:    cardDetails?.type,
+            // Avoid storing full card details
           }
         })
         .select()
@@ -172,32 +218,37 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // First, unset all other payment methods as default
+    // Use atomic RPC function to set default payment method
     if (setAsDefault) {
-      const { error: unsetError } = await supabase
+      const { error: rpcError } = await supabase.rpc('set_default_payment_method', {
+        p_user_id: user.id,
+        p_payment_method_id: paymentMethodId
+      })
+
+      if (rpcError) {
+        logger.error('Error setting default payment method:', { 
+          error: rpcError, 
+          userId: user.id, 
+          paymentMethodId 
+        })
+        return NextResponse.json({ error: 'Failed to update payment method' }, { status: 500 })
+      }
+    } else {
+      // If not setting as default, just update the specified payment method
+      const { error: updateError } = await supabase
         .from('payment_methods')
         .update({ is_default: false })
+        .eq('id', paymentMethodId)
         .eq('user_id', user.id)
 
-      if (unsetError) {
-        logger.error('Error unsetting other default payment methods:', { error: unsetError })
+      if (updateError) {
+        logger.error('Error updating payment method:', { 
+          error: updateError, 
+          userId: user.id, 
+          paymentMethodId 
+        })
+        return NextResponse.json({ error: 'Failed to update payment method' }, { status: 500 })
       }
-    }
-
-    // Update the specified payment method as default
-    const { error: updateError } = await supabase
-      .from('payment_methods')
-      .update({ is_default: setAsDefault })
-      .eq('id', paymentMethodId)
-      .eq('user_id', user.id)
-
-    if (updateError) {
-      logger.error('Error updating default payment method:', { 
-        error: updateError, 
-        userId: user.id, 
-        paymentMethodId 
-      })
-      return NextResponse.json({ error: 'Failed to update payment method' }, { status: 500 })
     }
 
     logger.info('Default payment method updated successfully:', {

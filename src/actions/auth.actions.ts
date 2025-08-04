@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import type { User } from '@supabase/supabase-js'
 import { handleCatchError } from '@/lib/utils'
+import { logger } from '@/lib/logger'
 
 // --- Types for Form State ---
 export type SignupFormState = {
@@ -571,7 +572,7 @@ export const loginWithSocialProvider = async (
     const { data, error } = await supabase.auth.signInWithOAuth(authOptions)
 
     if (error) { 
-      console.error(`${provider} OAuth error:`, error)
+      logger.error(`${provider} OAuth error:`, { error })
       
       // Handle specific OAuth errors
       if (error.message.includes('access_denied')) {
@@ -584,10 +585,10 @@ export const loginWithSocialProvider = async (
     }
     
     if (data.url) { 
-      console.log(`Redirecting to ${provider} OAuth URL:`, data.url)
+      logger.info(`Redirecting to ${provider} OAuth URL:`, { url: data.url })
       redirect(data.url)
     } else { 
-      console.error(`${provider} OAuth: No redirect URL received`)
+      logger.error(`${provider} OAuth: No redirect URL received`)
       redirect('/login?message=social-auth-error')
     }
   } catch (error) {

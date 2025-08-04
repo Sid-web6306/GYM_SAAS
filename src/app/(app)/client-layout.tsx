@@ -16,6 +16,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAuth, useLogout } from '@/hooks/use-auth'
 import { RequireAuth } from '@/components/auth/AuthGuard'
+import { RealtimeDebug } from '@/components/debug/RealtimeDebug'
+import { RealtimeProvider } from '@/components/providers/realtime-provider-simple'
 
 interface ClientLayoutProps {
   children: React.ReactNode
@@ -83,7 +85,7 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
           </div>
         </nav>
 
-        {/* Legal Links */}
+        {/* Legal Links
         <div className="absolute bottom-20 w-full px-4">
           <div className="text-xs text-muted-foreground space-y-1">
             <Link href="/privacy-policy" className="block hover:text-primary transition-colors">
@@ -96,7 +98,7 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
               Contact Us
             </Link>
           </div>
-        </div>
+        </div> */}
 
         {/* User section */}
         <div className="absolute bottom-0 w-full p-4 border-t border-border">
@@ -157,6 +159,9 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
           onClick={() => setSidebarOpen(false)}
         />
       )}
+
+      {/* Debug Component */}
+      <RealtimeDebug debugVisibleProp={false} />
     </div>
   )
 }
@@ -164,9 +169,11 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
 export default function ClientLayout({ children }: ClientLayoutProps) {
   return (
     <RequireAuth>
-      <ClientLayoutContent>
-        {children}
-      </ClientLayoutContent>
+      <RealtimeProvider>
+        <ClientLayoutContent>
+          {children}
+        </ClientLayoutContent>
+      </RealtimeProvider>
     </RequireAuth>
   )
 } 

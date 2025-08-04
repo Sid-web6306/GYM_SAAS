@@ -475,7 +475,7 @@ const DashboardPage = () => {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <div className="text-center p-4 rounded-lg bg-muted/50">
                 <div className="text-2xl font-bold text-primary">
-                  {stats.memberRetentionRate.toFixed(1)}%
+                {(stats?.memberRetentionRate ?? 0).toFixed(1)}%
                 </div>
                 <div className="text-sm text-muted-foreground">Retention Rate</div>
               </div>

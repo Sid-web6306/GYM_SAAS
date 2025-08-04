@@ -289,7 +289,7 @@ function PaymentSuccessContent() {
                   <div>
                     <h4 className="font-medium">Check Your Email</h4>
                     <p className="text-sm text-muted-foreground">
-                      Look for a payment confirmation email from Razorpay or our system.
+                      Look for a payment confirmation email from your payment provider or our system.
                     </p>
                   </div>
                 </div>

@@ -39,18 +39,29 @@ export type Database = {
           created_at: string
           id: string
           name: string | null
+          owner_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           name?: string | null
+          owner_id: string
         }
         Update: {
           created_at?: string
           id?: string
           name?: string | null
+          owner_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gyms_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       members: {
         Row: {
@@ -96,24 +107,127 @@ export type Database = {
           },
         ]
       }
+      member_activities: {
+        Row: {
+          id: string
+          member_id: string
+          activity_type: string
+          activity_date: string
+          duration_minutes: number | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          member_id: string
+          activity_type: string
+          activity_date?: string
+          duration_minutes?: number | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          member_id?: string
+          activity_type?: string
+          activity_date?: string
+          duration_minutes?: number | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_activities_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_metrics: {
+        Row: {
+          id: string
+          gym_id: string
+          metric_type: string
+          metric_value: number
+          metric_date: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          gym_id: string
+          metric_type: string
+          metric_value: number
+          metric_date?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          gym_id?: string
+          metric_type?: string
+          metric_value?: number
+          metric_date?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_metrics_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
           full_name: string | null
           gym_id: string | null
           id: string
+          updated_at: string | null
+          email: string
+          avatar_url: string | null
+          preferences: Json
+          default_role: string
+          custom_permissions: Json
+          is_gym_owner: boolean
+          last_role_sync: string
         }
         Insert: {
           created_at?: string
           full_name?: string | null
           gym_id?: string | null
           id: string
+          updated_at?: string | null
+          email: string
+          avatar_url?: string | null
+          preferences?: Json
+          default_role?: string
+          custom_permissions?: Json
+          is_gym_owner?: boolean
+          last_role_sync?: string
         }
         Update: {
           created_at?: string
           full_name?: string | null
           gym_id?: string | null
           id?: string
+          updated_at?: string | null
+          email?: string
+          avatar_url?: string | null
+          preferences?: Json
+          default_role?: string
+          custom_permissions?: Json
+          is_gym_owner?: boolean
+          last_role_sync?: string
         }
         Relationships: [
           {
@@ -121,6 +235,173 @@ export type Database = {
             columns: ["gym_id"]
             isOneToOne: false
             referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          id: string
+          name: string
+          display_name: string
+          description: string | null
+          level: number
+          is_system_role: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          display_name: string
+          description?: string | null
+          level?: number
+          is_system_role?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          display_name?: string
+          description?: string | null
+          level?: number
+          is_system_role?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      permissions: {
+        Row: {
+          id: string
+          name: string
+          display_name: string
+          description: string | null
+          resource: string
+          action: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          display_name: string
+          description?: string | null
+          resource: string
+          action: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          display_name?: string
+          description?: string | null
+          resource?: string
+          action?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      role_permissions: {
+        Row: {
+          id: string
+          role_id: string
+          permission_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          role_id: string
+          permission_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          role_id?: string
+          permission_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          user_id: string
+          role_id: string
+          gym_id: string
+          assigned_by: string | null
+          assigned_at: string
+          expires_at: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          role_id: string
+          gym_id: string
+          assigned_by?: string | null
+          assigned_at?: string
+          expires_at?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          role_id?: string
+          gym_id?: string
+          assigned_by?: string | null
+          assigned_at?: string
+          expires_at?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -580,6 +861,26 @@ export type Database = {
       initialize_trial_subscription: {
         Args: { p_user_id: string }
         Returns: string
+      }
+      set_default_payment_method: {
+        Args: { p_user_id: string; p_payment_method_id: string }
+        Returns: boolean
+      }
+      has_permission: {
+        Args: { user_uuid: string; gym_uuid: string; permission_name: string }
+        Returns: boolean
+      }
+      get_user_role: {
+        Args: { user_uuid: string; gym_uuid: string }
+        Returns: string
+      }
+      get_user_permissions: {
+        Args: { user_uuid: string; gym_uuid: string }
+        Returns: string[]
+      }
+      has_role_level: {
+        Args: { user_uuid: string; gym_uuid: string; required_level: number }
+        Returns: boolean
       }
     }
     Enums: {

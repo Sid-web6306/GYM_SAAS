@@ -68,12 +68,14 @@ export async function POST(request: NextRequest) {
 
     let customer
     try {
-      // Try to find existing customer by email - using search instead of filter
-      const customers = await razorpay.customers.all({
-        count: 10
-      })
-      
-      const existingCustomer = customers.items.find((c: any) => c.email === user.email)
+      // Search for existing customer by email
+      let existingCustomer = null;
+      if (user.email) {
+        const customers = await razorpay.customers.all({
+          count: 100  // Increase count or implement pagination
+        });
+        existingCustomer = customers.items.find((c: any) => c.email === user.email);
+      }
       
       if (existingCustomer) {
         customer = existingCustomer
@@ -198,7 +200,7 @@ export async function GET(request: NextRequest) {
           customerId: subscription.customer_id,
           planId: subscription.plan_id,
           status: subscription.status,
-          amount: subscription.plan_id ? 0 : 0, // Will be fetched from plan
+          amount: 0, // Will be fetched from plan
           billingCycle: subscription.notes?.billingCycle || 'monthly',
           currentStart: subscription.current_start,
           currentEnd: subscription.current_end,
@@ -229,6 +231,11 @@ export async function GET(request: NextRequest) {
       // Retrieve payment details
       try {
         const payment = await razorpay.payments.fetch(paymentId)
+        
+        // Verify payment belongs to current user
+        if (payment.notes?.userId && payment.notes.userId !== user.id) {
+          return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
+        }
         
         paymentData = {
           type: 'payment',
