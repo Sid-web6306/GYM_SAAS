@@ -5,8 +5,10 @@
 /supabase
 /.supabase
 
-#database
-/database
+# Ignore database files
+database/*.db
+database/*.sqlite
+*.tsbuildinfo
 # dependencies
 /node_modules
 /.pnp
