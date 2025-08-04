@@ -72,33 +72,56 @@ CREATE OR REPLACE FUNCTION has_permission(
   permission_name text
 ) RETURNS boolean AS $$
 DECLARE
-  has_perm boolean := false;
+  user_role text;
+  is_owner boolean := false;
+  role_level integer := 0;
 BEGIN
-  -- Check if user has the permission through their role
+  -- First, safely check if user is gym owner using user_roles table
   SELECT EXISTS (
     SELECT 1
     FROM public.user_roles ur
-    JOIN public.role_permissions rp ON ur.role_id = rp.role_id
-    JOIN public.permissions p ON rp.permission_id = p.id
+    JOIN public.roles r ON ur.role_id = r.id
     WHERE ur.user_id = user_uuid
       AND ur.gym_id = gym_uuid
       AND ur.is_active = true
-      AND p.name = permission_name
-  ) INTO has_perm;
-  
-  -- If not found through role, check custom permissions in profile
-  IF NOT has_perm THEN
-    SELECT EXISTS (
-      SELECT 1
-      FROM public.profiles prof
-      WHERE prof.id = user_uuid
-        AND prof.gym_id = gym_uuid
-        AND prof.custom_permissions ? permission_name
-        AND (prof.custom_permissions->permission_name)::boolean = true
-    ) INTO has_perm;
+      AND r.name = 'owner'
+  ) INTO is_owner;
+
+  -- Gym owners have all permissions
+  IF is_owner THEN
+    RETURN true;
   END IF;
-  
-  RETURN has_perm;
+
+  -- Get user's highest role level in this gym
+  SELECT COALESCE(MAX(r.level), 0), MAX(r.name)
+  INTO role_level, user_role
+  FROM public.user_roles ur
+  JOIN public.roles r ON ur.role_id = r.id
+  WHERE ur.user_id = user_uuid
+    AND ur.gym_id = gym_uuid
+    AND ur.is_active = true;
+
+  -- Permission checks based on role level and specific permissions
+  CASE permission_name
+    WHEN 'gym.read', 'gym.update' THEN
+      RETURN role_level >= 75; -- Manager level (75) and above
+    WHEN 'members.read', 'members.create', 'members.update' THEN
+      RETURN role_level >= 50; -- Staff level (50) and above
+    WHEN 'members.delete' THEN
+      RETURN role_level >= 75; -- Manager level and above
+    WHEN 'activities.read', 'activities.create', 'activities.update' THEN
+      RETURN role_level >= 50; -- Staff level and above
+    WHEN 'activities.delete' THEN
+      RETURN role_level >= 75; -- Manager level and above
+    WHEN 'analytics.read' THEN
+      RETURN role_level >= 75; -- Manager level and above
+    WHEN 'billing.read', 'billing.update' THEN
+      RETURN role_level >= 75; -- Manager level and above
+    WHEN 'staff.create', 'staff.read', 'staff.update', 'staff.delete' THEN
+      RETURN role_level >= 75; -- Manager level and above
+    ELSE
+      RETURN false; -- Unknown permission denied
+  END CASE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -110,12 +133,20 @@ CREATE OR REPLACE FUNCTION get_user_role(
 DECLARE
   role_name text;
 BEGIN
-  SELECT r.name INTO role_name
-  FROM public.user_roles ur
-  JOIN public.roles r ON ur.role_id = r.id
-  WHERE ur.user_id = user_uuid
-    AND ur.gym_id = gym_uuid
-    AND ur.is_active = true;
+  -- First check profile default_role to avoid circular dependency
+  SELECT default_role INTO role_name
+  FROM public.profiles 
+  WHERE id = user_uuid AND gym_id = gym_uuid;
+  
+  -- If not found in profile, fall back to user_roles table
+  IF role_name IS NULL THEN
+    SELECT r.name INTO role_name
+    FROM public.user_roles ur
+    JOIN public.roles r ON ur.role_id = r.id
+    WHERE ur.user_id = user_uuid
+      AND ur.gym_id = gym_uuid
+      AND ur.is_active = true;
+  END IF;
     
   RETURN COALESCE(role_name, 'member'); -- Default to member if no role found
 END;

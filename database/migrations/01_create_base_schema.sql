@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS public.gyms (
   logo_url text,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
-  owner_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   settings jsonb DEFAULT '{}',
   is_active boolean DEFAULT true
 );
@@ -79,7 +78,6 @@ ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
 
 -- ========== INITIAL INDEXES FOR PERFORMANCE ==========
-CREATE INDEX IF NOT EXISTS idx_gyms_owner ON public.gyms(owner_id);
 CREATE INDEX IF NOT EXISTS idx_gyms_active ON public.gyms(is_active) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_profiles_gym ON public.profiles(gym_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_gym_owner ON public.profiles(gym_id) WHERE is_gym_owner = true;

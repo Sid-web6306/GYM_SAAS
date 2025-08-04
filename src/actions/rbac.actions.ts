@@ -113,7 +113,8 @@ export async function getUserPermissions(
 
 // ========== ROLE MANAGEMENT ACTIONS ==========
 
-export async function assignUserRole(formData: FormData) {
+// Core role assignment function that accepts RoleAssignmentRequest
+export async function assignRoleToUser(request: RoleAssignmentRequest) {
   try {
     const supabase = await createClient()
     
@@ -123,35 +124,40 @@ export async function assignUserRole(formData: FormData) {
       return { success: false, error: 'Authentication required' }
     }
 
-    // Validate form data
-    const validatedData = assignRoleSchema.parse({
-      user_email: formData.get('user_email'),
-      role: formData.get('role'),
-      gym_id: formData.get('gym_id'),
-      expires_at: formData.get('expires_at') || undefined,
-      notify_user: formData.get('notify_user') === 'true'
-    })
+    // Validate request - either user_id or user_email must be provided
+    if (!request.user_id && !request.user_email) {
+      return { success: false, error: 'Either user_id or user_email must be provided' }
+    }
 
     // Check if assigner has permission to assign roles
-    const canAssignRoles = await checkUserPermission(user.id, validatedData.gym_id, 'staff.create')
+    const canAssignRoles = await checkUserPermission(user.id, request.gym_id, 'staff.create')
     if (!canAssignRoles) {
       return { success: false, error: 'Insufficient permissions to assign roles' }
     }
 
-    // Get the target user by email
-    const { data: targetUser, error: userError } = await supabase.rpc('get_user_id_by_email', {
-      p_email: validatedData.user_email
-    })
+    let targetUserId = request.user_id
 
-    if (userError || !targetUser) {
-      return { success: false, error: 'User not found with that email address' }
+    // If email provided, get user ID
+    if (request.user_email && !targetUserId) {
+      const { data: targetUser, error: userError } = await supabase.rpc('get_user_id_by_email', {
+        p_email: request.user_email
+      })
+
+      if (userError || !targetUser) {
+        return { success: false, error: 'User not found with that email address' }
+      }
+      targetUserId = targetUser
+    }
+
+    if (!targetUserId) {
+      return { success: false, error: 'Unable to identify target user' }
     }
 
     // Get role ID
     const { data: roleData, error: roleError } = await supabase
       .from('roles')
       .select('id, level')
-      .eq('name', validatedData.role)
+      .eq('name', request.role)
       .single()
 
     if (roleError || !roleData) {
@@ -159,7 +165,11 @@ export async function assignUserRole(formData: FormData) {
     }
 
     // Check if assigner can assign this role level
-    const assignerRole = await getUserRole(user.id, validatedData.gym_id)
+    const assignerRole = await getUserRole(user.id, request.gym_id)
+    if (!assignerRole) {
+      return { success: false, error: 'No role assigned to assigner' }
+    }
+    
     const { data: assignerRoleData } = await supabase
       .from('roles')
       .select('level')
@@ -175,11 +185,11 @@ export async function assignUserRole(formData: FormData) {
     const { error: assignError } = await supabase
       .from('user_roles')
       .upsert({
-        user_id: targetUser,
+        user_id: targetUserId,
         role_id: roleData.id,
-        gym_id: validatedData.gym_id,
+        gym_id: request.gym_id,
         assigned_by: user.id,
-        expires_at: validatedData.expires_at || null,
+        expires_at: request.expires_at || null,
         is_active: true
       }, {
         onConflict: 'user_id,gym_id'
@@ -194,18 +204,48 @@ export async function assignUserRole(formData: FormData) {
     await supabase
       .from('profiles')
       .update({ 
-        default_role: validatedData.role,
+        default_role: request.role,
         last_role_sync: new Date().toISOString()
       })
-      .eq('id', targetUser)
+      .eq('id', targetUserId)
 
     revalidatePath('/dashboard')
     revalidatePath('/settings')
 
+    const userIdentifier = request.user_email || targetUserId
     return { 
       success: true, 
-      message: `Successfully assigned ${validatedData.role} role to ${validatedData.user_email}` 
+      message: `Successfully assigned ${request.role} role to ${userIdentifier}` 
     }
+
+  } catch (error) {
+    console.error('Error in assignRoleToUser:', error)
+    return { success: false, error: 'Failed to assign role' }
+  }
+}
+
+// FormData wrapper for backward compatibility
+export async function assignUserRole(formData: FormData) {
+  try {
+    // Validate form data
+    const validatedData = assignRoleSchema.parse({
+      user_email: formData.get('user_email'),
+      role: formData.get('role'),
+      gym_id: formData.get('gym_id'),
+      expires_at: formData.get('expires_at') || undefined,
+      notify_user: formData.get('notify_user') === 'true'
+    })
+
+    // Convert to RoleAssignmentRequest and call core function
+    const request: RoleAssignmentRequest = {
+      user_email: validatedData.user_email,
+      role: validatedData.role,
+      gym_id: validatedData.gym_id,
+      expires_at: validatedData.expires_at || undefined,
+      notify_user: validatedData.notify_user
+    }
+
+    return await assignRoleToUser(request)
 
   } catch (error) {
     console.error('Error in assignUserRole:', error)
@@ -457,7 +497,7 @@ export async function requirePermission(
         .eq('id', user.id)
         .single()
       
-      targetGymId = profile?.gym_id
+      targetGymId = profile?.gym_id || ''
     }
 
     if (!targetGymId) {
@@ -497,7 +537,7 @@ export async function requireRole(
         .eq('id', user.id)
         .single()
       
-      targetGymId = profile?.gym_id
+      targetGymId = profile?.gym_id || ''
     }
 
     if (!targetGymId) {

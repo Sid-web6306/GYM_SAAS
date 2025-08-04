@@ -226,10 +226,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<GymRole, Permission[]> = {
 
 // Utility types
 export type RoleAssignmentRequest = {
-  user_id: string;
+  user_id?: string;
+  user_email?: string;
   role: GymRole;
   gym_id: string;
   expires_at?: string;
+  notify_user?: boolean;
 };
 
 export type PermissionCheckRequest = {

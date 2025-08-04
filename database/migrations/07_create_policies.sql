@@ -22,50 +22,69 @@ CREATE POLICY "Authenticated users can view role permissions" ON public.role_per
 CREATE POLICY "Users can view own roles and gym roles they manage" ON public.user_roles
   FOR SELECT USING (
     auth.uid() = user_id OR
-    -- Gym owners and managers can view roles within their gym
+    -- Gym owners can view roles within their gym (using profile check to avoid recursion)
     gym_id IN (
-      SELECT ur.gym_id 
-      FROM public.user_roles ur
-      JOIN public.roles r ON ur.role_id = r.id
-      WHERE ur.user_id = auth.uid() 
-        AND ur.is_active = true
-        AND r.name IN ('owner', 'manager')
+      SELECT p.gym_id 
+      FROM public.profiles p
+      WHERE p.id = auth.uid() 
+        AND p.is_gym_owner = true
+    ) OR
+    -- Managers can view roles within their gym (using direct role level check)
+    gym_id IN (
+      SELECT g.id 
+      FROM public.gyms g
+      JOIN public.profiles p ON p.gym_id = g.id
+      WHERE p.id = auth.uid()
+        AND (p.default_role IN ('owner', 'manager') OR p.is_gym_owner = true)
     )
   );
 
 -- Gym owners and managers can manage user roles within their gym
 CREATE POLICY "Gym owners and managers can manage user roles" ON public.user_roles
   FOR ALL USING (
+    -- Gym owners can manage roles in their gym
     gym_id IN (
-      SELECT ur.gym_id 
-      FROM public.user_roles ur
-      JOIN public.roles r ON ur.role_id = r.id
-      WHERE ur.user_id = auth.uid() 
-        AND ur.is_active = true
-        AND r.name IN ('owner', 'manager')
+      SELECT p.gym_id 
+      FROM public.profiles p
+      WHERE p.id = auth.uid() 
+        AND p.is_gym_owner = true
+    ) OR
+    -- Managers can manage roles in their gym
+    gym_id IN (
+      SELECT g.id 
+      FROM public.gyms g
+      JOIN public.profiles p ON p.gym_id = g.id
+      WHERE p.id = auth.uid()
+        AND p.default_role IN ('owner', 'manager')
     )
   )
   WITH CHECK (
     -- Can only assign roles within gyms they manage
-    gym_id IN (
-      SELECT ur.gym_id 
-      FROM public.user_roles ur
-      JOIN public.roles r ON ur.role_id = r.id
-      WHERE ur.user_id = auth.uid() 
-        AND ur.is_active = true
-        AND r.name IN ('owner', 'manager')
+    (
+      gym_id IN (
+        SELECT p.gym_id 
+        FROM public.profiles p
+        WHERE p.id = auth.uid() 
+          AND p.is_gym_owner = true
+      ) OR
+      gym_id IN (
+        SELECT g.id 
+        FROM public.gyms g
+        JOIN public.profiles p ON p.gym_id = g.id
+        WHERE p.id = auth.uid()
+          AND p.default_role IN ('owner', 'manager')
+      )
     )
     AND
-    -- Cannot assign roles higher than their own
-    role_id IN (
-      SELECT r.id FROM public.roles r
-      WHERE r.level <= (
-        SELECT MAX(r2.level)
-        FROM public.user_roles ur2
-        JOIN public.roles r2 ON ur2.role_id = r2.id
-        WHERE ur2.user_id = auth.uid() 
-          AND ur2.gym_id = user_roles.gym_id
-          AND ur2.is_active = true
+    -- Cannot assign owner role unless you are the gym owner
+    (
+      role_id NOT IN (SELECT id FROM public.roles WHERE name = 'owner')
+      OR 
+      gym_id IN (
+        SELECT p.gym_id 
+        FROM public.profiles p
+        WHERE p.id = auth.uid() 
+          AND p.is_gym_owner = true
       )
     )
   );
@@ -82,41 +101,36 @@ CREATE POLICY "System can manage user roles during profile operations" ON public
 -- Anyone with gym access can view basic gym info
 CREATE POLICY "RBAC: View gym with access" ON public.gyms
   FOR SELECT USING (
-    has_permission(auth.uid(), id, 'gym.read') OR
-    -- Allow if user has any role in the gym
+    -- Allow if user has profile in this gym (avoids circular dependency)
     id IN (
-      SELECT ur.gym_id 
-      FROM public.user_roles ur 
-      WHERE ur.user_id = auth.uid() AND ur.is_active = true
+      SELECT p.gym_id 
+      FROM public.profiles p 
+      WHERE p.id = auth.uid()
     )
   );
 
 -- Only owners and managers can update gym settings
 CREATE POLICY "RBAC: Update gym with permission" ON public.gyms
   FOR UPDATE USING (
-    has_permission(auth.uid(), id, 'gym.update')
+    -- Allow if user is manager or owner in profile
+    id IN (
+      SELECT p.gym_id 
+      FROM public.profiles p 
+      WHERE p.id = auth.uid() 
+        AND (p.is_gym_owner = true OR p.default_role IN ('owner', 'manager'))
+    )
   );
 
 -- Users can create gyms (during onboarding)
 CREATE POLICY "Users can create gyms" ON public.gyms
-  FOR INSERT WITH CHECK (auth.uid() = owner_id);
+  FOR INSERT WITH CHECK (true); -- Any authenticated user can create a gym
 
 -- ========== PROFILES TABLE POLICIES ==========
 
 -- Users can view own profile and staff can view member profiles
 CREATE POLICY "RBAC: View profiles with access" ON public.profiles
   FOR SELECT USING (
-    auth.uid() = id OR -- Own profile
-    (
-      gym_id IN (
-        SELECT ur.gym_id 
-        FROM public.user_roles ur
-        JOIN public.roles r ON ur.role_id = r.id
-        WHERE ur.user_id = auth.uid() 
-          AND ur.is_active = true 
-          AND r.level >= 50 -- Staff level and above
-      )
-    )
+    auth.uid() = id
   );
 
 -- Users can update own profile and managers can update member profiles
@@ -124,13 +138,13 @@ CREATE POLICY "RBAC: Update profiles with permission" ON public.profiles
   FOR UPDATE USING (
     auth.uid() = id OR -- Own profile
     (
+      -- Check if user has manager+ level role in the same gym (using profile default_role)
       gym_id IN (
-        SELECT ur.gym_id 
-        FROM public.user_roles ur
-        JOIN public.roles r ON ur.role_id = r.id
-        WHERE ur.user_id = auth.uid() 
-          AND ur.is_active = true 
-          AND r.level >= 75 -- Manager level and above
+        SELECT p2.gym_id 
+        FROM public.profiles p2
+        WHERE p2.id = auth.uid() 
+          AND p2.gym_id = profiles.gym_id
+          AND p2.default_role IN ('owner', 'manager')
       )
     )
   );
@@ -348,3 +362,16 @@ CREATE POLICY "Users can update own feedback" ON public.feedback
 -- Users can delete their own feedback
 CREATE POLICY "Users can delete own feedback" ON public.feedback
   FOR DELETE USING (auth.uid() = user_id);
+
+
+  CREATE POLICY "Staff can view gym member profiles" ON public.profiles                    
+  FOR SELECT USING (                                                                     
+    auth.uid() IN (                                                                      
+      SELECT ur.user_id                                                                  
+      FROM public.user_roles ur                                                          
+      JOIN public.roles r ON ur.role_id = r.id                                           
+      WHERE ur.gym_id = profiles.gym_id                                                  
+      AND ur.is_active = true                                                          
+      AND r.name IN ('owner', 'manager', 'staff', 'trainer')                           
+      )                                                                                    
+   );                                                                                     

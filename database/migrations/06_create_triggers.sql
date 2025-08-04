@@ -67,41 +67,8 @@ CREATE TRIGGER on_auth_user_created
 
 -- ========== RBAC SYNC TRIGGERS ==========
 
--- Function to automatically assign owner role when gym is created
-CREATE OR REPLACE FUNCTION assign_gym_owner_role()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- Update profile to mark as gym owner
-  UPDATE public.profiles 
-  SET is_gym_owner = true, 
-      default_role = 'owner',
-      last_role_sync = now()
-  WHERE id = NEW.owner_id;
-  
-  -- Insert owner role in user_roles table
-  INSERT INTO public.user_roles (user_id, role_id, gym_id, assigned_by, assigned_at)
-  SELECT 
-    NEW.owner_id,
-    r.id,
-    NEW.id,
-    NEW.owner_id, -- Self-assigned
-    now()
-  FROM public.roles r
-  WHERE r.name = 'owner'
-  ON CONFLICT (user_id, gym_id) DO UPDATE SET
-    role_id = EXCLUDED.role_id,
-    updated_at = now(),
-    is_active = true;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger to automatically assign owner role when gym is created
-CREATE TRIGGER trigger_assign_gym_owner_role
-  AFTER INSERT ON public.gyms
-  FOR EACH ROW
-  EXECUTE FUNCTION assign_gym_owner_role();
+-- Note: Gym owner role assignment is now handled in complete_user_profile function
+-- No automatic trigger needed since ownership is managed through profiles
 
 -- Function to sync user roles when profile is updated
 CREATE OR REPLACE FUNCTION sync_user_role_on_profile_update()

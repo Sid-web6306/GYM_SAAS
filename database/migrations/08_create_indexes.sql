@@ -99,7 +99,7 @@ CREATE INDEX IF NOT EXISTS idx_subscription_events_data ON public.subscription_e
 -- ========== PARTIAL INDEXES FOR COMMON FILTERS ==========
 
 -- Active records only
-CREATE INDEX IF NOT EXISTS idx_gyms_active_only ON public.gyms(id, name, owner_id) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_gyms_active_only ON public.gyms(id, name) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_members_active_only ON public.members(id, gym_id, full_name) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_subscriptions_active_only ON public.subscriptions(id, user_id, current_period_end) WHERE status = 'active';
 

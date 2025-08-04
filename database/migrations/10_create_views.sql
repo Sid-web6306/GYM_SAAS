@@ -57,7 +57,9 @@ SELECT
   g.email,
   g.website,
   g.logo_url,
-  g.owner_id,
+  -- Owner information retrieved from profiles
+  owner_profile.id as owner_id,
+  owner_profile.full_name as owner_name,
   g.is_active,
   g.created_at,
   -- Member counts
@@ -104,7 +106,7 @@ LEFT JOIN (
     AND r.name IN ('manager', 'staff', 'trainer')
   GROUP BY ur.gym_id
 ) staff_stats ON g.id = staff_stats.gym_id
-LEFT JOIN public.profiles owner_profile ON g.owner_id = owner_profile.id
+LEFT JOIN public.profiles owner_profile ON g.id = owner_profile.gym_id AND owner_profile.is_gym_owner = true
 LEFT JOIN public.subscriptions sub ON owner_profile.id = sub.user_id AND sub.status = 'active'
 LEFT JOIN public.subscription_plans sp ON sub.subscription_plan_id = sp.id;
 

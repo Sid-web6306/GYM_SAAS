@@ -1,5 +1,5 @@
 import type { User } from '@supabase/supabase-js'
-import type { Profile } from '@/hooks/use-auth'
+import type { ProfileWithRBAC } from '@/types/rbac.types'
 
 /**
  * Type guards for runtime type checking and improved type safety
@@ -20,18 +20,18 @@ export const isAuthenticatedUser = (user: unknown): user is User => {
 }
 
 // Profile type guards
-export const isValidProfile = (profile: unknown): profile is Profile => {
+export const isValidProfile = (profile: unknown): profile is ProfileWithRBAC => {
   return typeof profile === 'object' &&
          profile !== null &&
          'id' in profile &&
-         typeof (profile as Profile).id === 'string'
+         typeof (profile as ProfileWithRBAC).id === 'string'
 }
 
-export const isCompleteProfile = (profile: unknown): profile is Profile & { gym_id: string } => {
+export const isCompleteProfile = (profile: unknown): profile is ProfileWithRBAC & { gym_id: string } => {
   return isValidProfile(profile) &&
          'gym_id' in profile &&
-         typeof (profile as Profile).gym_id === 'string' &&
-         (profile as Profile).gym_id !== null
+         typeof (profile as ProfileWithRBAC).gym_id === 'string' &&
+         (profile as ProfileWithRBAC).gym_id !== null
 }
 
 // Session type guards

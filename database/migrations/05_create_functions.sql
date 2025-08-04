@@ -83,8 +83,8 @@ BEGIN
   END IF;
 
   -- Insert the gym and return the ID
-  INSERT INTO public.gyms (name, owner_id, created_at, updated_at)
-  VALUES (trim(gym_name), user_id, NOW(), NOW())
+  INSERT INTO public.gyms (name, created_at, updated_at)
+  VALUES (trim(gym_name), NOW(), NOW())
   RETURNING id INTO new_gym_id;
 
   -- Update the profile with the gym ID and mark as gym owner

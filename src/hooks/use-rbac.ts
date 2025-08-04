@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
 import { useCallback, useMemo } from 'react'
 import { useAuth } from './use-auth'
+import { assignRoleToUser } from '@/actions/rbac.actions'
 import type { 
   GymRole, 
   Permission, 
@@ -226,43 +227,42 @@ export const useAssignRole = () => {
   const { profile } = useAuth()
 
   return useMutation({
-    mutationFn: async ({ user_id, role, gym_id }: RoleAssignmentRequest) => {
-      const supabase = createClient()
+    mutationFn: async (request: RoleAssignmentRequest) => {
+      // Ensure gym_id is provided
+      const finalRequest = {
+        ...request,
+        gym_id: request.gym_id || profile?.gym_id || ''
+      }
+
+      if (!finalRequest.gym_id) {
+        throw new Error('No gym ID available')
+      }
+
+      // Use the server action for secure role assignment
+      const result = await assignRoleToUser(finalRequest)
       
-      // Get role ID
-      const { data: roleData, error: roleError } = await supabase
-        .from('roles')
-        .select('id')
-        .eq('name', role)
-        .single()
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to assign role')
+      }
 
-      if (roleError) throw new Error(`Invalid role: ${role}`)
-
-      // Assign role
-      const { data, error } = await supabase
-        .from('user_roles')
-        .upsert({
-          user_id,
-          role_id: roleData.id,
-          gym_id: gym_id || profile?.gym_id || '',
-          assigned_by: profile?.id || null,
-          is_active: true,
-        }, {
-          onConflict: 'user_id,gym_id'
-        })
-        .select()
-
-      if (error) throw error
-      return data
+      return result
     },
     onSuccess: (_, variables) => {
+      const gymId = variables.gym_id || profile?.gym_id || ''
+      const userId = variables.user_id || ''
+      
       // Invalidate relevant queries
-      queryClient.invalidateQueries({ 
-        queryKey: rbacKeys.gymRoles(variables.gym_id || profile?.gym_id || '') 
-      })
-      queryClient.invalidateQueries({ 
-        queryKey: rbacKeys.userPermissions(variables.user_id, variables.gym_id || profile?.gym_id || '') 
-      })
+      if (gymId) {
+        queryClient.invalidateQueries({ 
+          queryKey: rbacKeys.gymRoles(gymId) 
+        })
+      }
+      
+      if (userId && gymId) {
+        queryClient.invalidateQueries({ 
+          queryKey: rbacKeys.userPermissions(userId, gymId) 
+        })
+      }
     },
   })
 }
