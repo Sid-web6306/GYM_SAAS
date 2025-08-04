@@ -4,6 +4,9 @@
 # Supabase local development files
 /supabase
 /.supabase
+
+#database
+/database
 # dependencies
 /node_modules
 /.pnp
