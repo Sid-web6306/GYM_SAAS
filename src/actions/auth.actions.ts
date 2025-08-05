@@ -167,7 +167,7 @@ export const completeOnboarding = async (
     })
     
     const { error: dbError } = await supabase.rpc('complete_user_profile', {
-      user_id: user.id,
+      p_user_id: user.id,
       gym_name: gymValidation.data.gymName,
     });
 
@@ -193,10 +193,6 @@ export const completeOnboarding = async (
     }
     
     console.log('Onboarding: Success, waiting for profile update before redirect')
-    
-    // Add a longer delay to ensure the database update is complete
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
     // Verify the profile was updated AFTER the RPC call
     const { data: updatedProfile, error: profileError } = await supabase
       .from('profiles')
@@ -278,7 +274,7 @@ export const completeSocialOnboarding = async (
     
     // Call enhanced RPC function with social profile data
     const { error: dbError } = await supabase.rpc('complete_user_profile', {
-      user_id: user.id,
+      p_user_id: user.id,
       gym_name: gymValidation.data.gymName,
     });
 

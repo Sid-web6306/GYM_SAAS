@@ -791,7 +791,7 @@ export type Database = {
     }
     Functions: {
       complete_user_profile: {
-        Args: { user_id: string; gym_name: string }
+        Args: { p_user_id: string; gym_name: string }
         Returns: undefined
       }
       create_gym_and_profile: {
