@@ -270,12 +270,12 @@ const LoginPageComponent = () => {
               isLoading={socialLoading.google}
               disabled={isSocialButtonDisabled}
             />
-            <SocialButton
+            {/* <SocialButton
               provider="facebook"
               onClick={() => handleSocialLogin('facebook')}
               isLoading={socialLoading.facebook}
               disabled={isSocialButtonDisabled}
-            />
+            /> */}
           </div>
 
           <div className="relative my-6">

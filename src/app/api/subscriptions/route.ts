@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
         
         return NextResponse.json({
           plans: plansData.plans || [],
+          groupedPlans: plansData.groupedPlans || {},
           currentSubscription: currentData.subscription || null,
           hasAccess: currentData.hasAccess || false
         })
@@ -135,7 +136,7 @@ async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: st
       .from('subscriptions')
       .select(`
         *,
-        subscription_plans!inner(*)
+        subscription_plans(*)
       `)
       .eq('user_id', userId)
       .eq('status', 'active')
@@ -158,6 +159,8 @@ async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: st
         trialStatus = subscription.trial_status
       }
     }
+
+    logger.info('Subscription:', { subscription })
 
     return NextResponse.json({ 
       subscription: subscription || null,

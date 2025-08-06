@@ -115,11 +115,12 @@ export async function POST(request: NextRequest) {
       })
 
       // Create payment link for the subscription
+      // Enhanced payment link with Razorpay hosted success handling
       const paymentLinkData = {
         amount: plan.price_inr,
         currency: 'INR',
         accept_partial: false,
-        description: `${plan.name} subscription`,
+        description: `${plan.name} - ${billingCycle} subscription`,
         customer: {
           name: customerData.name,
           email: customerData.email,
@@ -129,9 +130,27 @@ export async function POST(request: NextRequest) {
           email: true,
         },
         reminder_enable: true,
-        notes: subscriptionData.notes,
-        callback_url: `${request.headers.get('origin')}/payment-success?subscription_id=${subscription.id}`,
+        notes: {
+          ...subscriptionData.notes,
+          subscription_id: subscription.id,
+          plan_name: plan.name,
+          billing_cycle: billingCycle,
+        },
+        // Redirect to dashboard after successful payment
+        callback_url: `${request.headers.get('origin')}/dashboard?payment_success=true&subscription_id=${subscription.id}`,
         callback_method: 'get',
+        
+        // Optional: Add success message configuration
+        options: {
+          checkout: {
+            name: 'Gym SaaS Pro',
+            description: `${plan.name} Subscription`,
+            image: `${request.headers.get('origin')}/icon.svg`,
+            theme: {
+              color: '#3B82F6'
+            }
+          }
+        }
       }
 
       const paymentLink = await razorpay.paymentLink.create(paymentLinkData)
@@ -158,124 +177,5 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET /api/payments?subscription_id=xxx - Verify Razorpay subscription/payment
-export async function GET(request: NextRequest) {
-  try {
-    const razorpay = getRazorpay()
-    if (!razorpay) {
-      return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const subscriptionId = searchParams.get('subscription_id')
-    const paymentId = searchParams.get('payment_id')
-
-    if (!subscriptionId && !paymentId) {
-      return NextResponse.json({ error: 'Subscription ID or Payment ID required' }, { status: 400 })
-    }
-
-    // Get authenticated user
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    let paymentData: any = {}
-
-    if (subscriptionId) {
-      // Retrieve subscription details
-      try {
-        const subscription = await razorpay.subscriptions.fetch(subscriptionId)
-        
-        // Verify this subscription belongs to the current user
-        if (subscription.notes?.userId !== user.id) {
-          return NextResponse.json({ error: 'Subscription not found' }, { status: 404 })
-        }
-
-        paymentData = {
-          type: 'subscription',
-          subscriptionId: subscription.id,
-          customerId: subscription.customer_id,
-          planId: subscription.plan_id,
-          status: subscription.status,
-          amount: 0, // Will be fetched from plan
-          billingCycle: subscription.notes?.billingCycle || 'monthly',
-          currentStart: subscription.current_start,
-          currentEnd: subscription.current_end,
-          chargeAt: subscription.charge_at,
-        }
-
-        // Get plan details for amount
-        if (subscription.notes?.planId) {
-          const { data: plan } = await supabase
-            .from('subscription_plans')
-            .select('name, price_inr')
-            .eq('id', String(subscription.notes.planId))
-            .single()
-
-          if (plan) {
-            paymentData.planName = plan.name
-            paymentData.amount = plan.price_inr
-          }
-        }
-
-      } catch (error) {
-        logger.error('Error fetching Razorpay subscription:', { error: error instanceof Error ? error.message : String(error) })
-        return NextResponse.json({ error: 'Subscription not found' }, { status: 404 })
-      }
-    }
-
-    if (paymentId) {
-      // Retrieve payment details
-      try {
-        const payment = await razorpay.payments.fetch(paymentId)
-        
-        // Verify payment belongs to current user
-        if (payment.notes?.userId && payment.notes.userId !== user.id) {
-          return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
-        }
-        
-        paymentData = {
-          type: 'payment',
-          paymentId: payment.id,
-          amount: payment.amount,
-          currency: payment.currency,
-          status: payment.status,
-          method: payment.method,
-          captured: payment.captured,
-          createdAt: payment.created_at,
-        }
-
-        // If payment has subscription info
-        if (payment.notes?.subscriptionId) {
-          paymentData.subscriptionId = payment.notes.subscriptionId
-        }
-
-      } catch (error) {
-        logger.error('Error fetching Razorpay payment:', { error: error instanceof Error ? error.message : String(error) })
-        return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
-      }
-    }
-
-    logger.info('Payment verification successful:', {
-      userId: user.id,
-      subscriptionId,
-      paymentId,
-      status: paymentData.status
-    })
-
-    return NextResponse.json({ 
-      success: true, 
-      payment: paymentData 
-    })
-
-  } catch (error) {
-    logger.error('Payment verification error:', { error: error instanceof Error ? error.message : String(error) })
-    
-    return NextResponse.json({ 
-      error: 'Failed to verify payment' 
-    }, { status: 500 })
-  }
-} 
+// Note: Payment verification is now handled entirely by Razorpay and webhooks
+// The hosted checkout flow doesn't require custom verification endpoints 

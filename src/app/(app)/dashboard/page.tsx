@@ -25,6 +25,7 @@ import { RevenueChart } from '@/components/charts/revenue-chart';
 import { CheckinTrendsChart } from '@/components/charts/checkin-trends-chart';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
 import React from 'react';
 
 const DashboardPage = () => {
@@ -45,6 +46,10 @@ const DashboardPage = () => {
   // Check if this is a welcome redirect from onboarding
   const isWelcomeRedirect = searchParams?.get('welcome') === 'true'
   const [isRefreshing, setIsRefreshing] = React.useState(false)
+  
+  // Check for payment success callback from Razorpay
+  const paymentSuccess = searchParams?.get('payment_success') === 'true'
+  const subscriptionId = searchParams?.get('subscription_id')
 
   // Enhanced auth error handling
   React.useEffect(() => {
@@ -66,6 +71,25 @@ const DashboardPage = () => {
       }
     }
   }, [isWelcomeRedirect, isNewUser])
+
+  // Handle payment success notification
+  React.useEffect(() => {
+    if (paymentSuccess && subscriptionId) {
+      toast.success(
+        'Payment Successful! 🎉',
+        {
+          description: 'Your subscription has been activated. Welcome to premium!',
+          duration: 5000,
+        }
+      )
+      
+      // Clean up URL parameters
+      const url = new URL(window.location.href)
+      url.searchParams.delete('payment_success')
+      url.searchParams.delete('subscription_id')
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [paymentSuccess, subscriptionId])
 
   // CRITICAL: Force complete auth sync when coming from onboarding
   React.useEffect(() => {
