@@ -61,27 +61,27 @@ export async function POST(req: NextRequest) {
   const body = await req.text();
   const headersList = await headers();
   const razorpaySignature = headersList.get('x-razorpay-signature');
-  const webhookId = headersList.get('x-razorpay-webhook-id') || `webhook_${Date.now()}`;
+  // const webhookId = headersList.get('x-razorpay-webhook-id') || `webhook_${Date.now()}`;
   
   const processingStart = Date.now();
   performanceTracker.start('razorpay-webhook');
 
   // Check for duplicate webhook processing
   const supabase = await createClient();
-  const { data: existingWebhook } = await supabase
-    .from('webhook_events')
-    .select('id')
-    .eq('webhook_id', webhookId)
-    .single();
+  // const { data: existingWebhook } = await supabase
+  //   .from('webhook_events')
+  //   .select('id')
+  //   .eq('webhook_id', webhookId)
+  //   .single();
 
-  if (existingWebhook) {
-    logger.info('Webhook already processed, skipping', { webhookId });
-    return NextResponse.json({ 
-      received: true, 
-      status: 'already_processed',
-      webhook_id: webhookId 
-    });
-  }
+  // if (existingWebhook) {
+  //   logger.info('Webhook already processed, skipping', { webhookId });
+  //   return NextResponse.json({ 
+  //     received: true, 
+  //     status: 'already_processed',
+  //     webhook_id: webhookId 
+  //   });
+  // }
 
   // Verify webhook signature
   if (!serverConfig.razorpayWebhookSecret) {

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { getRazorpay } from '@/lib/razorpay'
 import { logger } from '@/lib/logger'
+import { serverConfig } from '@/lib/config'
 
 
 // POST /api/payments - Create Razorpay subscription
@@ -114,55 +115,31 @@ export async function POST(request: NextRequest) {
         amount: plan.price_inr,
       })
 
-      // Create payment link for the subscription
-      // Enhanced payment link with Razorpay hosted success handling
-      const paymentLinkData = {
-        amount: plan.price_inr,
-        currency: 'INR',
-        accept_partial: false,
-        description: `${plan.name} - ${billingCycle} subscription`,
-        customer: {
-          name: customerData.name,
-          email: customerData.email,
-        },
-        notify: {
-          sms: true,
-          email: true,
-        },
-        reminder_enable: true,
-        notes: {
-          ...subscriptionData.notes,
+      // Return data required to open Razorpay Checkout on frontend
+      return NextResponse.json({
+        subscriptionId: subscription.id,
+        customerId: customer.id,
+        checkout: {
+          key: serverConfig.razorpayKeyId,
           subscription_id: subscription.id,
-          plan_name: plan.name,
-          billing_cycle: billingCycle,
-        },
-        // Redirect to dashboard after successful payment
-        callback_url: `${request.headers.get('origin')}/dashboard?payment_success=true&subscription_id=${subscription.id}`,
-        callback_method: 'get',
-        
-        // Optional: Add success message configuration
-        options: {
-          checkout: {
-            name: 'Gym SaaS Pro',
-            description: `${plan.name} Subscription`,
-            image: `${request.headers.get('origin')}/icon.svg`,
-            theme: {
-              color: '#3B82F6'
+          name: 'Gym SaaS Pro',
+          description: `${plan.name} - ${billingCycle} Subscription`,
+          image: `${request.headers.get('origin')}/icon.svg`,
+          webview_intent: true,
+          prefill: {
+            name: customerData.name,
+            email: customerData.email,
+          },
+          theme: {
+            color: '#3B82F6',
+          },
+          modal: {
+            ondismiss: function() {
+              console.log('Payment modal dismissed');
             }
           }
         }
-      }
-
-      const paymentLink = await razorpay.paymentLink.create(paymentLinkData)
-
-      return NextResponse.json({
-        subscriptionId: subscription.id,
-        paymentLinkId: paymentLink.id,
-        paymentLinkUrl: paymentLink.short_url,
-        checkoutUrl: paymentLink.short_url, // For compatibility with upgrade page
-        customerId: customer.id,
       })
-
     } catch (error) {
       logger.error('Error creating Razorpay subscription:', { error: error instanceof Error ? error.message : String(error) })
       return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 })

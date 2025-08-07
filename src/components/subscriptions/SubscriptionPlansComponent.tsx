@@ -19,6 +19,18 @@ import {
 import { useSimplifiedPaymentSystem } from '@/hooks/use-simplified-payments'
 import { OdometerNumber } from '@/components/ui/animated-number'
 import { useTrialInfo, isTrialActive, hasActiveSubscription } from '@/hooks/use-trial'
+import { logger } from '@/lib/logger'
+
+// Declare global Razorpay type for browser usage
+declare global {
+  interface Window {
+    Razorpay: {
+      new (options: Record<string, unknown>): {
+        open(): void
+      }
+    }
+  }
+}
 
 interface SubscriptionPlan {
   id: string
@@ -118,9 +130,33 @@ export function SubscriptionPlansComponent({
         planId,
         billingCycle
       })
-      
-      if (result.checkoutUrl) {
-        window.location.href = result.checkoutUrl
+      logger.info('Razorpay checkout result:', {result})
+      if (result.checkout) {
+        // Check if Razorpay is available
+        if (typeof window.Razorpay === 'undefined') {
+          throw new Error('Razorpay SDK not loaded. Please refresh the page and try again.')
+        }
+        
+        const razorpayOptions = {
+          ...result.checkout,
+          handler: function(response: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) {
+            console.log('Payment successful:', response)
+            alert('Payment successful: ' + JSON.stringify(response))
+          },
+          modal: {
+            ondismiss: function() {
+              console.log('Payment modal dismissed by user')
+              setSelectedPlan(null)
+            }
+          }
+        }
+        
+        const razorpayCheckout = new window.Razorpay(razorpayOptions)
+        if (typeof razorpayCheckout.open === 'function') {
+          razorpayCheckout.open()
+        } else {
+          throw new Error('Razorpay checkout initialization failed')
+        }
       }
     } catch (error) {
       console.error('Plan selection error:', error)

@@ -20,6 +20,24 @@ export interface PaymentResponse {
   customerId?: string
   sessionId?: string
   checkoutUrl?: string
+  subscriptionId?: string
+  checkout?: {
+    key: string
+    subscription_id: string
+    name: string
+    description: string
+    image: string
+    prefill: {
+      name: string
+      email: string
+    }
+    theme: {
+      color: string
+    }
+    modal?: {
+      ondismiss?: () => void
+    }
+  }
 }
 
 export interface SubscriptionAction {
