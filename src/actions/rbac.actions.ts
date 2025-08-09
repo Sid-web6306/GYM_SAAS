@@ -11,6 +11,7 @@ import type {
   Role,
   PermissionDefinition 
 } from '@/types/rbac.types'
+import { logger } from '@/lib/logger'
 
 // ========== VALIDATION SCHEMAS ==========
 
@@ -43,12 +44,13 @@ export async function checkUserPermission(
   permission: Permission
 ): Promise<boolean> {
   try {
+    logger.info('checkUserPermission', { user_id, gym_id, permission })
     const supabase = await createClient()
     
     const { data, error } = await supabase.rpc('has_permission', {
-      user_uuid: user_id,
-      gym_uuid: gym_id,
-      permission_name: permission
+      p_user_id: user_id,
+      p_gym_id: gym_id,
+      p_permission_name: permission
     })
 
     if (error) {
@@ -56,9 +58,10 @@ export async function checkUserPermission(
       return false
     }
 
+    logger.info('checkUserPermission', { data })
     return data || false
   } catch (error) {
-    console.error('Error in checkUserPermission:', error)
+    logger.error('Error in checkUserPermission:', { error })
     return false
   }
 }

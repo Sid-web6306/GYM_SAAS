@@ -30,12 +30,27 @@ import { TrialStatus } from './TrialStatus'
 import { SubscriptionFeedbackForm } from './SubscriptionFeedbackForm'
 import { ExpiredSubscriptionModal } from './ExpiredSubscriptionModal'
 import { toast } from 'sonner'
+import { BillingGuard, AccessDenied } from '@/components/rbac/rbac-guards'
 
 // Helper functions
 const formatPrice = (amount: number) => formatCurrency(amount)
 const formatSubscriptionDate = (dateString: string) => new Date(dateString).toLocaleDateString()
 
 export function SubscriptionManagement() {
+  return (
+    <BillingGuard action="read" fallback={
+      <div className="p-8">
+        <AccessDenied 
+          message="Subscription management is only available to staff members and above. Contact your gym manager for billing and subscription changes." 
+        />
+      </div>
+    }>
+      <SubscriptionManagementContent />
+    </BillingGuard>
+  )
+}
+
+function SubscriptionManagementContent() {
   const { isLoading: trialLoading } = useTrialInfo()
   const { currentSubscription: subscriptionInfo, plans, subscriptionAction, createBillingPortal, isLoading } = useSimplifiedPaymentSystem()
 
@@ -259,30 +274,56 @@ export function SubscriptionManagement() {
                     Upgrade Plan
                   </DynamicButton>
                   
-                  <DynamicButton 
-                    variant="destructive" 
-                    size="sm"
-                    onClick={handleCancelSubscription}
-                    disabled={subscriptionAction.isPending}
-                    className="flex-1"
-                  >
-                    <DynamicX className="h-4 w-4 mr-2" />
-                    Cancel Subscription
-                  </DynamicButton>
+                  <BillingGuard action="update" fallback={
+                    <DynamicButton 
+                      variant="destructive" 
+                      size="sm"
+                      disabled
+                      className="flex-1"
+                      title="Subscription cancellation requires billing management privileges"
+                    >
+                      <DynamicX className="h-4 w-4 mr-2" />
+                      Cancel Subscription (Staff Only)
+                    </DynamicButton>
+                  }>
+                    <DynamicButton 
+                      variant="destructive" 
+                      size="sm"
+                      onClick={handleCancelSubscription}
+                      disabled={subscriptionAction.isPending}
+                      className="flex-1"
+                    >
+                      <DynamicX className="h-4 w-4 mr-2" />
+                      Cancel Subscription
+                    </DynamicButton>
+                  </BillingGuard>
                 </div>
 
                 {/* Secondary Action */}
                 <div className="text-center">
-                  <DynamicButton 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => createBillingPortal.mutate()}
-                    disabled={createBillingPortal.isPending}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <DynamicSettings className="h-4 w-4 mr-2" />
-                    {createBillingPortal.isPending ? 'Loading...' : 'Manage Payment Methods'}
-                  </DynamicButton>
+                  <BillingGuard action="update" fallback={
+                    <DynamicButton 
+                      variant="ghost" 
+                      size="sm"
+                      disabled
+                      className="text-muted-foreground"
+                      title="Payment method management requires billing privileges"
+                    >
+                      <DynamicSettings className="h-4 w-4 mr-2" />
+                      Manage Payment Methods (Staff Only)
+                    </DynamicButton>
+                  }>
+                    <DynamicButton 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => createBillingPortal.mutate()}
+                      disabled={createBillingPortal.isPending}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <DynamicSettings className="h-4 w-4 mr-2" />
+                      {createBillingPortal.isPending ? 'Loading...' : 'Manage Payment Methods'}
+                    </DynamicButton>
+                  </BillingGuard>
                 </div>
               </div>
             )}

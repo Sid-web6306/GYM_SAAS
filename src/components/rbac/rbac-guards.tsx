@@ -1,6 +1,7 @@
 import React from 'react'
 import { useRBAC, useCanAccess, useHasRole, useHasMinimumRole } from '@/hooks/use-rbac'
 import type { GymRole, Permission } from '@/types/rbac.types'
+import { ShieldX, Lock } from 'lucide-react'
 
 // ========== COMPONENT PROPS ==========
 
@@ -283,23 +284,18 @@ export const AccessDenied: React.FC<{
   onRetry 
 }) => (
   <div className="flex flex-col items-center justify-center p-8 text-center">
-    <div className="mb-4">
-      <svg
-        className="w-16 h-16 text-gray-400 mx-auto"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M12 15v2m0 0v2m0-2h2m-2 0H8m13-9a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
+    <div className="mb-6 relative">
+      {/* Background circle with gradient */}
+      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-red-100 to-orange-100 flex items-center justify-center mx-auto border-2 border-red-200">
+        <ShieldX className="w-10 h-10 text-red-500" strokeWidth={1.5} />
+      </div>
+      {/* Small lock indicator */}
+      <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-gray-600 rounded-full flex items-center justify-center border-2 border-white">
+        <Lock className="w-3.5 h-3.5 text-white" strokeWidth={2} />
+      </div>
     </div>
-    <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
-    <p className="text-gray-600 mb-4 max-w-md">{message}</p>
+    <h3 className="text-lg font-semibold text-gray-900 mb-2">Access Denied</h3>
+    <p className="text-gray-600 mb-4 max-w-md leading-relaxed">{message}</p>
     {showRetry && onRetry && (
       <button
         onClick={onRetry}

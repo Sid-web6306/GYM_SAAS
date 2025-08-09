@@ -29,6 +29,7 @@ export async function GET(request: Request) {
   const code = searchParams.get('code')
   const error = searchParams.get('error')
   const errorDescription = searchParams.get('error_description')
+  const inviteToken = searchParams.get('invite')
   
   console.log('Auth callback received:', { code: !!code, error, errorDescription })
   
@@ -105,8 +106,54 @@ export async function GET(request: Request) {
     // Enrich profile with social data if missing
     await enrichProfileWithSocialData(supabase, user.id, profile, socialProfileData)
 
+    // Get invite token from URL params or user metadata
+    const userInviteToken = inviteToken || user.user_metadata?.pendingInviteToken
+
+    // If user has an invitation token and is newly confirmed, try to accept the invitation
+    if (userInviteToken && isNewUser && user.email) {
+      console.log('Auth callback: Attempting to auto-accept invitation', { 
+        token: userInviteToken.substring(0, 10) + '...', 
+        userEmail: user.email 
+      })
+      
+      try {
+        // Call our invitation acceptance API
+        const response = await fetch(`${origin}/api/invites/verify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.session?.access_token}`
+          },
+          body: JSON.stringify({
+            inviteToken: userInviteToken,
+            userEmail: user.email
+          })
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success) {
+            console.log('Auth callback: Invitation accepted successfully', result)
+            // Clear the pending invitation token
+            await supabase.auth.updateUser({
+              data: { pendingInviteToken: null }
+            })
+            // Redirect to dashboard since they're now part of a gym
+            return NextResponse.redirect(`${origin}/dashboard?welcome=true`)
+          } else {
+            console.log('Auth callback: Invitation acceptance failed', result.error)
+          }
+        } else {
+          console.log('Auth callback: Invitation acceptance request failed', response.status)
+        }
+      } catch (error) {
+        console.error('Auth callback: Error accepting invitation:', error)
+        // Continue with normal flow if invitation acceptance fails
+      }
+    }
+
     // Route user based on RBAC-aware profile state
-    return routeUserBasedOnProfile(origin, profile, provider, isNewUser)
+    return routeUserBasedOnProfile(origin, profile, provider, isNewUser, userInviteToken)
     
   } catch (error) {
     console.error('Auth callback unexpected error:', error)
@@ -205,7 +252,8 @@ function routeUserBasedOnProfile(
   origin: string, 
   profile: ProfileData, 
   provider: string | undefined,
-  isNewUser: boolean
+  isNewUser: boolean,
+  inviteToken?: string | null
 ): NextResponse {
   // User has completed onboarding and has a gym
   if (profile.gym_id) {
@@ -214,6 +262,10 @@ function routeUserBasedOnProfile(
       role: profile.default_role,
       isOwner: profile.is_gym_owner
     })
+    // If there's an invite token, try to handle it even if user has a gym
+    if (inviteToken) {
+      return NextResponse.redirect(`${origin}/dashboard?invite=${inviteToken}`)
+    }
     return NextResponse.redirect(`${origin}/dashboard`)
   }
   
@@ -227,7 +279,14 @@ function routeUserBasedOnProfile(
   
   // For social auth users, provide context to onboarding
   if (provider && isNewUser) {
-    return NextResponse.redirect(`${origin}/onboarding?social=true&provider=${provider}`)
+    const params = new URLSearchParams({ social: 'true', provider })
+    if (inviteToken) params.set('invite', inviteToken)
+    return NextResponse.redirect(`${origin}/onboarding?${params.toString()}`)
+  }
+  
+  // Include invite token in onboarding URL if present
+  if (inviteToken) {
+    return NextResponse.redirect(`${origin}/onboarding?invite=${inviteToken}`)
   }
   
   return NextResponse.redirect(`${origin}/onboarding`)
