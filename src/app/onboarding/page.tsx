@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useAuth } from '@/hooks/use-auth'
 import { RequireAuth } from '@/components/auth/AuthGuard'
 import { authUIActions } from '@/stores/auth-store'
+import { useTrialInitialization } from '@/hooks/use-trial'
 
 // Enhanced submit button with improved loading states
 const SubmitButton = ({ isValid }: { isValid: boolean }) => {
@@ -224,6 +225,7 @@ const OnboardingPage = () => {
   const { user, hasGym, isLoading: authLoading } = useAuth()
   const [state, formAction] = useActionState<OnboardingFormState | null, FormData>(completeOnboarding, null)
   const router = useRouter()
+  const { mutateAsync: initializeTrial, isIdle: trialNotStarted } = useTrialInitialization();
 
   // Multi-tab redirect: if user already has gym (completed onboarding in another tab), redirect to dashboard
   useEffect(() => {
@@ -242,9 +244,9 @@ const OnboardingPage = () => {
     }
   }, [state])
 
-  // Detect and mark new users
+  // Detect and mark new users, initialize trial for new users
   useEffect(() => {
-    if (user) {
+    if (user && trialNotStarted) {
       // Check if this is a new user (account created recently)
       const userCreatedAt = new Date(user.created_at);
       const now = new Date();
@@ -254,9 +256,16 @@ const OnboardingPage = () => {
       if (isNewUser) {
         console.log('Onboarding: Detected new user, marking as new')
         authUIActions.setIsNewUser(true)
+        
+        // Initialize trial subscription for new users
+        console.log('Onboarding: Initializing trial subscription for new user')
+        initializeTrial().catch((error) => {
+          console.error('Onboarding: Failed to initialize trial:', error)
+          // Don't block onboarding if trial initialization fails
+        })
       }
     }
-  }, [user])
+  }, [user, trialNotStarted, initializeTrial])
 
   // Show loading state while auth is loading
   if (authLoading) {

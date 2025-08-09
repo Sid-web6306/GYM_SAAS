@@ -161,6 +161,10 @@ export const DynamicCrown = dynamic(() => import('lucide-react').then(mod => ({ 
   ssr: false
 })
 
+export const DynamicCheck = dynamic(() => import('lucide-react').then(mod => ({ default: mod.Check })), {
+  ssr: false
+})
+
 export const DynamicCheckCircle = dynamic(() => import('lucide-react').then(mod => ({ default: mod.CheckCircle })), {
   ssr: false
 })
@@ -174,6 +178,10 @@ export const DynamicAlertTriangle = dynamic(() => import('lucide-react').then(mo
 })
 
 export const DynamicArrowRight = dynamic(() => import('lucide-react').then(mod => ({ default: mod.ArrowRight })), {
+  ssr: false
+})
+
+export const DynamicArrowUpRight = dynamic(() => import('lucide-react').then(mod => ({ default: mod.ArrowUpRight })), {
   ssr: false
 })
 

@@ -141,7 +141,7 @@ export function SubscriptionManagement() {
   }
 
   const hasSubscription = hasActiveSubscription(subscriptionInfo || null)
-  const currentPlan = subscriptionInfo?.plan || plans?.find((plan: {id: string}) => plan.id === subscriptionInfo?.subscription_plan_id)
+  const currentPlan = subscriptionInfo?.plan || plans?.plans?.find((plan: {id: string}) => plan.id === subscriptionInfo?.subscription_plan_id)
 
   const renderPlanCard = (plan: {id: string, name: string, price_monthly_inr: number, price_annual_inr: number, features?: string[], member_limit?: number}) => (
     <DynamicCard key={plan.id} className={`relative ${currentPlan?.id === plan.id ? 'ring-2 ring-primary bg-primary/5' : ''}`}>
@@ -295,7 +295,7 @@ export function SubscriptionManagement() {
         <div>
           <h3 className="text-lg font-semibold mb-4">Available Plans</h3>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {plans?.map(renderPlanCard)}
+            {plans?.plans?.map(renderPlanCard)}
           </div>
         </div>
       )}
@@ -343,7 +343,7 @@ export function SubscriptionManagement() {
         onClose={() => setShowExpiredModal(false)}
         onCancelSubscription={handleCancelAccount}
         onUpdateSubscription={handleUpdateSubscription}
-        plans={plans}
+        plans={plans?.plans || []}
         isLoading={subscriptionAction.isPending}
       />
     </div>

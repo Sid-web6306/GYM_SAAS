@@ -1,18 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { serverConfig } from '@/lib/config'
+import { getRazorpay } from '@/lib/razorpay'
 import { logger } from '@/lib/logger'
-import Stripe from 'stripe'
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
-
-// Initialize Stripe
-const stripe = serverConfig.stripeSecretKey 
-  ? new Stripe(serverConfig.stripeSecretKey, {
-      apiVersion: '2025-07-30.basil',
-    })
-  : null
 
 // GET /api/subscriptions - Get subscription plans and user's current subscription
 export async function GET(request: NextRequest) {
@@ -51,6 +43,7 @@ export async function GET(request: NextRequest) {
         
         return NextResponse.json({
           plans: plansData.plans || [],
+          groupedPlans: plansData.groupedPlans || {},
           currentSubscription: currentData.subscription || null,
           hasAccess: currentData.hasAccess || false
         })
@@ -101,26 +94,25 @@ export async function POST(request: NextRequest) {
 // Helper function to get subscription plans
 async function handleGetPlans(supabase: SupabaseClient) {
   try {
-    const { data: plans, error } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: boolean) => { order: (column: string) => Promise<{ data: unknown, error: unknown }> } } } }).from('subscription_plans')
-      .select('id, name, price_monthly_inr, price_annual_inr, member_limit, features, is_active, stripe_product_id')
+    const { data: plans, error } = await supabase
+      .from('subscription_plans')
+      .select('id, name, price_inr, billing_cycle, plan_type, member_limit, features, is_active, razorpay_plan_id, tier_level, api_access_enabled, multi_gym_enabled, priority_support, advanced_analytics')
       .eq('is_active', true)
-      .order('price_monthly_inr')
+      .order('price_inr')
     
     if (error) {
-      logger.error('Error fetching subscription plans:', { error: (error as Record<string, unknown>).message as string })
+      logger.error('Error fetching subscription plans:', { error: error.message })
       return NextResponse.json({ error: 'Failed to fetch plans' }, { status: 500 })
     }
     
-    // Additional client-side deduplication as safety measure
-    const uniquePlans = ((plans as Record<string, unknown>[]) || []).reduce((acc: Record<string, unknown>[], plan: Record<string, unknown>) => {
-      const existingPlan = acc.find(p => (p as Record<string, unknown>).name === (plan as Record<string, unknown>).name)
-      if (!existingPlan) {
-        acc.push(plan)
-      }
+    // Group plans by plan_type and billing_cycle for easier frontend consumption
+    const groupedPlans = plans?.reduce((acc: any, plan: any) => {
+      const key = `${plan.plan_type}_${plan.billing_cycle}`
+      acc[key] = plan
       return acc
-    }, [] as Record<string, unknown>[])
+    }, {})
     
-    return NextResponse.json({ plans: uniquePlans })
+    return NextResponse.json({ plans: plans || [], groupedPlans: groupedPlans || {} })
   } catch (error) {
     logger.error('Error in handleGetPlans:', { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Failed to fetch plans' }, { status: 500 })
@@ -131,19 +123,20 @@ async function handleGetPlans(supabase: SupabaseClient) {
 async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: string) {
   try {
     // Check subscription access
-    const { data: hasAccess, error: accessError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('check_subscription_access', {
+    const { data: hasAccess, error: accessError } = await supabase.rpc('check_subscription_access', {
       p_user_id: userId
     })
 
     if (accessError) {
-      logger.error('Error checking subscription access:', {accessError})
+      logger.error('Error checking subscription access:', { error: accessError.message })
     }
 
-    // Get current subscription details
-    const { data: subscription, error: subError } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { eq: (column: string, value: string) => { order: (column: string, options: { ascending: boolean }) => { limit: (count: number) => { single: () => Promise<{ data: unknown, error: unknown }> } } } } } } }).from('subscriptions')
+    // Get current subscription details with plan information
+    const { data: subscription, error: subError } = await supabase
+      .from('subscriptions')
       .select(`
         *,
-        subscription_plans!inner(*)
+        subscription_plans(*)
       `)
       .eq('user_id', userId)
       .eq('status', 'active')
@@ -151,41 +144,35 @@ async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: st
       .limit(1)
       .single()
 
-    if (subError && (subError as Record<string, unknown>).code !== 'PGRST116') { // PGRST116 is "no rows returned"
-      logger.error('Error fetching current subscription:', {subError})
+    if (subError && subError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+      logger.error('Error fetching current subscription:', { error: subError.message })
     }
 
-    // Get trial info from subscriptions table (trial data moved from profiles)
-    const { data: trialSubscription } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { order: (column: string, options: { ascending: boolean }) => { limit: (count: number) => { single: () => Promise<{ data: unknown, error: unknown }> } } } } } }).from('subscriptions')
-      .select('trial_start_date, trial_end_date, trial_status, status')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    // Determine trial status from subscription data
+    // Get trial info from current subscription
     let trialStatus = null
-    if (trialSubscription) {
-      if ((trialSubscription as Record<string, unknown>).status === 'active' && (trialSubscription as Record<string, unknown>).trial_end_date) {
-        const trialEndDate = new Date((trialSubscription as Record<string, unknown>).trial_end_date as string)
+    if (subscription) {
+      if (subscription.status === 'active' && subscription.trial_end_date) {
+        const trialEndDate = new Date(subscription.trial_end_date)
         const now = new Date()
         trialStatus = trialEndDate > now ? 'active' : 'expired'
-      } else {
-        trialStatus = (trialSubscription as Record<string, unknown>).status === 'canceled' ? 'expired' : 'converted'
+      } else if (subscription.trial_status) {
+        trialStatus = subscription.trial_status
       }
     }
+
+    logger.info('Subscription:', { subscription })
 
     return NextResponse.json({ 
       subscription: subscription || null,
       hasAccess: hasAccess || false,
-      trial: trialSubscription ? {
-        startDate: (trialSubscription as Record<string, unknown>).trial_start_date as string,
-        endDate: (trialSubscription as Record<string, unknown>).trial_end_date as string,
+      trial: subscription && subscription.trial_start_date ? {
+        startDate: subscription.trial_start_date,
+        endDate: subscription.trial_end_date,
         status: trialStatus
       } : null
     })
   } catch (error) {
-    logger.error('Error in handleGetCurrentSubscription:', {error})
+    logger.error('Error in handleGetCurrentSubscription:', { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Failed to fetch subscription' }, { status: 500 })
   }
 }
@@ -193,8 +180,9 @@ async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: st
 // Helper function to create billing portal session
 async function handleCreateBillingPortal(supabase: any, user: any) {
   try {
-    if (!stripe) {
-      return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 })
+    const razorpay = getRazorpay()
+    if (!razorpay) {
+      return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
     // Check if user has an active subscription
@@ -206,42 +194,51 @@ async function handleCreateBillingPortal(supabase: any, user: any) {
       return NextResponse.json({ error: 'No active subscription found' }, { status: 400 })
     }
 
-    // Get or create Stripe customer
-    let customer: Stripe.Customer | null = null
+    // Get current subscription to find Razorpay subscription ID
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('razorpay_subscription_id, razorpay_customer_id')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .single()
 
-    const existingCustomers = await stripe.customers.list({
-      email: user.email,
-      limit: 1,
-    })
-
-    if (existingCustomers.data.length > 0) {
-      customer = existingCustomers.data[0]
-    } else {
-      customer = await stripe.customers.create({
-        email: user.email,
-        name: user.user_metadata?.full_name || undefined,
-        metadata: {
-          userId: user.id,
-        },
-      })
+    if (!subscription?.razorpay_subscription_id) {
+      return NextResponse.json({ error: 'No active Razorpay subscription found' }, { status: 400 })
     }
 
-    // Create billing portal session
-    const session = await stripe.billingPortal.sessions.create({
-      customer: customer.id,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?billing_portal=true`,
-    })
+    // For Razorpay, we'll redirect to their dashboard or create a custom billing page
+    // Since Razorpay doesn't have a built-in billing portal like Stripe, 
+    // we'll return the subscription details for a custom billing interface
+    try {
+      const razorpaySubscription = await razorpay.subscriptions.fetch(subscription.razorpay_subscription_id)
+      
+      logger.info('Billing portal data retrieved:', {
+        userId: user.id,
+        subscriptionId: subscription.razorpay_subscription_id,
+        status: razorpaySubscription.status
+      })
 
-    logger.info('Billing portal session created:', {
-      userId: user.id,
-      customerId: customer.id,
-      sessionUrl: session.url
-    })
+      // Return subscription data for custom billing portal
+      return NextResponse.json({ 
+        subscriptionId: razorpaySubscription.id,
+        status: razorpaySubscription.status,
+        planId: razorpaySubscription.plan_id,
+        customerId: razorpaySubscription.customer_id,
+        currentStart: razorpaySubscription.current_start,
+        currentEnd: razorpaySubscription.current_end,
+        chargeAt: razorpaySubscription.charge_at,
+        // Note: For a full billing portal, you'd implement a custom page
+        // that handles subscription modifications using Razorpay APIs
+        redirectUrl: `/billing-portal?subscription_id=${razorpaySubscription.id}`
+      })
 
-    return NextResponse.json({ url: session.url })
+    } catch (error) {
+      logger.error('Error fetching Razorpay subscription:', { error: error instanceof Error ? error.message : String(error) })
+      return NextResponse.json({ error: 'Failed to fetch subscription details' }, { status: 500 })
+    }
 
   } catch (error) {
-    logger.error('Billing portal creation error:', {error})
+    logger.error('Billing portal creation error:', { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Failed to create billing portal session' }, { status: 500 })
   }
 }
@@ -253,10 +250,15 @@ async function handlePauseSubscription(supabase: any, userId: string, subscripti
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
     }
 
+    const razorpay = getRazorpay()
+    if (!razorpay) {
+      return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
+    }
+
     // Verify subscription belongs to user
     const { data: subscription } = await supabase
       .from('subscriptions')
-      .select('id, stripe_subscription_id')
+      .select('id, razorpay_subscription_id')
       .eq('id', subscriptionId)
       .eq('user_id', userId)
       .single()
@@ -271,34 +273,32 @@ async function handlePauseSubscription(supabase: any, userId: string, subscripti
     })
 
     if (pauseError) {
-      logger.error('Error pausing subscription:', pauseError)
+      logger.error('Error pausing subscription:', { error: pauseError.message })
       return NextResponse.json({ error: 'Failed to pause subscription' }, { status: 500 })
     }
 
-    // Also pause in Stripe if available
-    if (stripe && subscription.stripe_subscription_id) {
+    // Pause in Razorpay if available
+    if (subscription.razorpay_subscription_id) {
       try {
-        await stripe.subscriptions.update(subscription.stripe_subscription_id, {
-          pause_collection: {
-            behavior: 'keep_as_draft'
-          }
+        await razorpay.subscriptions.pause(subscription.razorpay_subscription_id, {
+          pause_at: 'now'
         })
-      } catch (stripeError) {
-        logger.error('Error pausing Stripe subscription:', {stripeError})
-        // Don't fail the request if Stripe update fails
+      } catch (razorpayError) {
+        logger.error('Error pausing Razorpay subscription:', { error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError) })
+        // Don't fail the request if Razorpay update fails
       }
     }
 
     logger.info('Subscription paused successfully:', {
       userId,
       subscriptionId,
-      stripeSubscriptionId: subscription.stripe_subscription_id
+      razorpaySubscriptionId: subscription.razorpay_subscription_id
     })
 
     return NextResponse.json({ success: true, message: 'Subscription paused successfully' })
 
   } catch (error) {
-    logger.error('Error in handlePauseSubscription:', {error})
+    logger.error('Error in handlePauseSubscription:', { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Failed to pause subscription' }, { status: 500 })
   }
 }
@@ -310,10 +310,15 @@ async function handleResumeSubscription(supabase: any, userId: string, subscript
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
     }
 
+    const razorpay = getRazorpay()
+    if (!razorpay) {
+      return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
+    }
+
     // Verify subscription belongs to user
     const { data: subscription } = await supabase
       .from('subscriptions')
-      .select('id, stripe_subscription_id')
+      .select('id, razorpay_subscription_id')
       .eq('id', subscriptionId)
       .eq('user_id', userId)
       .single()
@@ -328,32 +333,32 @@ async function handleResumeSubscription(supabase: any, userId: string, subscript
     })
 
     if (resumeError) {
-      logger.error('Error resuming subscription:', resumeError)
+      logger.error('Error resuming subscription:', { error: resumeError.message })
       return NextResponse.json({ error: 'Failed to resume subscription' }, { status: 500 })
     }
 
-    // Also resume in Stripe if available
-    if (stripe && subscription.stripe_subscription_id) {
+    // Resume in Razorpay if available
+    if (subscription.razorpay_subscription_id) {
       try {
-        await stripe.subscriptions.update(subscription.stripe_subscription_id, {
-          pause_collection: null
+        await razorpay.subscriptions.resume(subscription.razorpay_subscription_id, {
+          resume_at: 'now'
         })
-      } catch (stripeError) {
-        logger.error('Error resuming Stripe subscription:', {stripeError})
-        // Don't fail the request if Stripe update fails
+      } catch (razorpayError) {
+        logger.error('Error resuming Razorpay subscription:', { error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError) })
+        // Don't fail the request if Razorpay update fails
       }
     }
 
     logger.info('Subscription resumed successfully:', {
       userId,
       subscriptionId,
-      stripeSubscriptionId: subscription.stripe_subscription_id
+      razorpaySubscriptionId: subscription.razorpay_subscription_id
     })
 
     return NextResponse.json({ success: true, message: 'Subscription resumed successfully' })
 
   } catch (error) {
-    logger.error('Error in handleResumeSubscription:', {error})
+    logger.error('Error in handleResumeSubscription:', { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Failed to resume subscription' }, { status: 500 })
   }
 }
@@ -365,9 +370,15 @@ async function handleCancelSubscription(supabase: SupabaseClient, userId: string
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
     }
 
+    const razorpay = getRazorpay()
+    if (!razorpay) {
+      return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
+    }
+
     // Verify subscription belongs to user
-    const { data: subscription } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { eq: (column: string, value: string) => { single: () => Promise<{ data: unknown, error: unknown }> } } } } }).from('subscriptions')
-      .select('id, stripe_subscription_id')
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('id, razorpay_subscription_id')
       .eq('id', subscriptionId)
       .eq('user_id', userId)
       .single()
@@ -378,7 +389,8 @@ async function handleCancelSubscription(supabase: SupabaseClient, userId: string
 
     // Save feedback if provided
     if (feedback) {
-      const { error: feedbackError } = await (supabase as unknown as { from: (table: string) => { insert: (data: Record<string, unknown>) => Promise<{ error: unknown }> } }).from('feedback')
+      const { error: feedbackError } = await supabase
+        .from('feedback')
         .insert({
           subscription_id: subscriptionId,
           user_id: userId,
@@ -389,7 +401,7 @@ async function handleCancelSubscription(supabase: SupabaseClient, userId: string
         })
 
       if (feedbackError) {
-        logger.error('Error saving feedback:', { feedbackError })
+        logger.error('Error saving feedback:', { error: feedbackError.message })
         // Don't fail the cancellation if feedback saving fails
       } else {
         logger.info('Feedback saved successfully:', {
@@ -401,36 +413,36 @@ async function handleCancelSubscription(supabase: SupabaseClient, userId: string
     }
 
     // Cancel subscription in database
-    const { error: cancelError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('cancel_subscription', {
+    const { error: cancelError } = await supabase.rpc('cancel_subscription', {
       p_subscription_id: subscriptionId,
       p_cancel_at_period_end: cancelAtPeriodEnd
     })
 
     if (cancelError) {
-      logger.error('Error canceling subscription:', {cancelError})
+      logger.error('Error canceling subscription:', { error: cancelError.message })
       return NextResponse.json({ error: 'Failed to cancel subscription' }, { status: 500 })
     }
 
-    // Also cancel in Stripe if available
-    if (stripe && (subscription as Record<string, unknown>).stripe_subscription_id) {
+    // Cancel in Razorpay if available
+    if (subscription.razorpay_subscription_id) {
       try {
         if (cancelAtPeriodEnd) {
-          await stripe.subscriptions.update((subscription as Record<string, unknown>).stripe_subscription_id as string, {
-            cancel_at_period_end: true
-          })
+          // Schedule cancellation at period end
+          await razorpay.subscriptions.cancel(subscription.razorpay_subscription_id, 1)
         } else {
-          await stripe.subscriptions.cancel((subscription as Record<string, unknown>).stripe_subscription_id as string)
+          // Cancel immediately
+          await razorpay.subscriptions.cancel(subscription.razorpay_subscription_id, 0)
         }
-      } catch (stripeError) {
-        logger.error('Error canceling Stripe subscription:', {stripeError})
-        // Don't fail the request if Stripe update fails
+      } catch (razorpayError) {
+        logger.error('Error canceling Razorpay subscription:', { error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError) })
+        // Don't fail the request if Razorpay update fails
       }
     }
 
     logger.info('Subscription canceled successfully:', {
       userId,
       subscriptionId,
-      stripeSubscriptionId: (subscription as Record<string, unknown>).stripe_subscription_id as string,
+      razorpaySubscriptionId: subscription.razorpay_subscription_id,
       cancelAtPeriodEnd,
       feedbackProvided: !!feedback
     })
@@ -441,7 +453,7 @@ async function handleCancelSubscription(supabase: SupabaseClient, userId: string
     })
 
   } catch (error) {
-    logger.error('Error in handleCancelSubscription:', {error})
+    logger.error('Error in handleCancelSubscription:', { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Failed to cancel subscription' }, { status: 500 })
   }
 }
@@ -453,10 +465,13 @@ async function handleChangePlan(supabase: any, userId: string, subscriptionId: s
       return NextResponse.json({ error: 'Subscription ID, new plan ID, and billing cycle are required' }, { status: 400 })
     }
 
+    // Note: getRazorpay() would be used here for actual plan changes in Razorpay
+    // Currently just scheduling the change in our database
+    
     // Verify subscription belongs to user
     const { data: subscription } = await supabase
       .from('subscriptions')
-      .select('id, stripe_subscription_id')
+      .select('id, razorpay_subscription_id, subscription_plan_id')
       .eq('id', subscriptionId)
       .eq('user_id', userId)
       .single()
@@ -470,6 +485,7 @@ async function handleChangePlan(supabase: any, userId: string, subscriptionId: s
       .from('subscription_plans')
       .select('*')
       .eq('id', newPlanId)
+      .eq('billing_cycle', billingCycle)
       .single()
 
     if (!newPlan) {
@@ -484,21 +500,27 @@ async function handleChangePlan(supabase: any, userId: string, subscriptionId: s
       p_change_data: {
         new_plan_id: newPlanId,
         new_billing_cycle: billingCycle,
-        new_amount: billingCycle === 'monthly' ? newPlan.price_monthly_inr : newPlan.price_annual_inr
+        new_amount: newPlan.price_inr,
+        new_razorpay_plan_id: newPlan.razorpay_plan_id
       }
     })
 
     if (scheduleError) {
-      logger.error('Error scheduling plan change:', scheduleError)
+      logger.error('Error scheduling plan change:', { error: scheduleError.message })
       return NextResponse.json({ error: 'Failed to schedule plan change' }, { status: 500 })
     }
+
+    // Note: For Razorpay, plan changes typically require creating a new subscription
+    // and canceling the old one, or using their subscription modification APIs
+    // This would be implemented based on specific business requirements
 
     logger.info('Plan change scheduled successfully:', {
       userId,
       subscriptionId,
       oldPlan: subscription.subscription_plan_id,
       newPlan: newPlanId,
-      billingCycle
+      billingCycle,
+      newAmount: newPlan.price_inr
     })
 
     return NextResponse.json({ 
@@ -507,7 +529,7 @@ async function handleChangePlan(supabase: any, userId: string, subscriptionId: s
     })
 
   } catch (error) {
-    logger.error('Error in handleChangePlan:', {error})
+    logger.error('Error in handleChangePlan:', { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Failed to change plan' }, { status: 500 })
   }
 } 

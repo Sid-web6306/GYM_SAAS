@@ -6,8 +6,9 @@ const requiredEnvVars = {
 } as const
 
 const serverEnvVars = {
-  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
-  STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+  RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
+  RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
+  RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET,
 } as const
 
 // Validate required client-side environment variables
@@ -45,22 +46,23 @@ export const clientConfig = {
   supabaseAnonKey: requiredEnvVars.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
   appUrl: requiredEnvVars.NEXT_PUBLIC_APP_URL,
   appEnv: process.env.NEXT_PUBLIC_APP_ENV || 'development',
-  // Stripe publishable key (safe for client-side)
-  stripePublishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || process.env.STRIPE_PUBLISHABLE_KEY || '',
+  // Razorpay key ID (safe for client-side)
+  razorpayKeyId: process.env.RAZORPAY_KEY_ID || '',
 } as const
 
 // Server-side config (never sent to browser)
 export const serverConfig = {
-  stripeSecretKey: serverEnvVars.STRIPE_SECRET_KEY || '',
-  stripeWebhookSecret: serverEnvVars.STRIPE_WEBHOOK_SECRET || '',
-  // Optional Stripe Price IDs
-  stripePriceIds: {
-    starterMonthly: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID,
-    starterAnnual: process.env.STRIPE_STARTER_ANNUAL_PRICE_ID,
-    professionalMonthly: process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID,
-    professionalAnnual: process.env.STRIPE_PROFESSIONAL_ANNUAL_PRICE_ID,
-    enterpriseMonthly: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID,
-    enterpriseAnnual: process.env.STRIPE_ENTERPRISE_ANNUAL_PRICE_ID,
+  razorpayKeyId: serverEnvVars.RAZORPAY_KEY_ID || '',
+  razorpayKeySecret: serverEnvVars.RAZORPAY_KEY_SECRET || '',
+  razorpayWebhookSecret: serverEnvVars.RAZORPAY_WEBHOOK_SECRET || '',
+  // Optional Razorpay Plan IDs (stored in database now)
+  razorpayPlanIds: {
+    starterMonthly: process.env.RAZORPAY_STARTER_MONTHLY_PLAN_ID,
+    starterAnnual: process.env.RAZORPAY_STARTER_ANNUAL_PLAN_ID,
+    professionalMonthly: process.env.RAZORPAY_PROFESSIONAL_MONTHLY_PLAN_ID,
+    professionalAnnual: process.env.RAZORPAY_PROFESSIONAL_ANNUAL_PLAN_ID,
+    enterpriseMonthly: process.env.RAZORPAY_ENTERPRISE_MONTHLY_PLAN_ID,
+    enterpriseAnnual: process.env.RAZORPAY_ENTERPRISE_ANNUAL_PLAN_ID,
   },
 } as const
 

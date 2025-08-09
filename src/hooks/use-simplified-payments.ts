@@ -20,6 +20,24 @@ export interface PaymentResponse {
   customerId?: string
   sessionId?: string
   checkoutUrl?: string
+  subscriptionId?: string
+  checkout?: {
+    key: string
+    subscription_id: string
+    name: string
+    description: string
+    image: string
+    prefill: {
+      name: string
+      email: string
+    }
+    theme: {
+      color: string
+    }
+    modal?: {
+      ondismiss?: () => void
+    }
+  }
 }
 
 export interface SubscriptionAction {
@@ -196,40 +214,8 @@ export function useSimplifiedPayments() {
     },
   })
 
-  // Verify payment
-  const verifyPayment = useMutation({
-    mutationFn: async ({ sessionId, paymentIntentId }: { 
-      sessionId?: string
-      paymentIntentId?: string 
-    }) => {
-      const params = new URLSearchParams()
-      if (sessionId) params.append('session_id', sessionId)
-      if (paymentIntentId) params.append('payment_intent_id', paymentIntentId)
-
-      const response = await fetch(`/api/payments?${params.toString()}`)
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to verify payment')
-      }
-
-      return response.json()
-    },
-    onSuccess: (data) => {
-      console.log('Payment successful:', data)
-      if (data.payment?.paymentStatus === 'paid') {
-        toastActions.success('Payment Successful!', 'Your payment has been processed successfully.')
-      }
-    },
-    onError: (error: Error) => {
-      logger.error('Error verifying payment:', {error})
-      toastActions.error('Payment Verification Failed', error.message)
-    },
-  })
-
   return {
     createPayment,
-    verifyPayment,
   }
 }
 
@@ -346,7 +332,13 @@ export function useSimplifiedSubscriptions() {
   return {
     // Combined data
     subscriptionData,
-    plans: subscriptionData?.plans || getPlans.data || [],
+    plans: subscriptionData ? {
+      plans: subscriptionData.plans || [],
+      groupedPlans: subscriptionData.groupedPlans || {}
+    } : { 
+      plans: getPlans.data || [], 
+      groupedPlans: {} 
+    },
     currentSubscription: subscriptionData?.currentSubscription || getCurrentSubscription.data?.subscription,
     hasAccess: subscriptionData?.hasAccess || getCurrentSubscription.data?.hasAccess || false,
     trial: getCurrentSubscription.data?.trial,
@@ -511,7 +503,6 @@ export function useSimplifiedPaymentSystem() {
     
     // Payments
     createPayment: payments.createPayment,
-    verifyPayment: payments.verifyPayment,
     
     // Subscriptions
     plans: subscriptions.plans,
@@ -527,11 +518,6 @@ export function useSimplifiedPaymentSystem() {
     
     // Global loading state
     isLoading: paymentMethods.isLoading || subscriptions.isLoading,
-    
-    // Refresh all data
-    refresh: () => {
-      paymentMethods.refetch()
-      subscriptions.refetch()
-    },
+    error: subscriptions.error,
   }
 } 

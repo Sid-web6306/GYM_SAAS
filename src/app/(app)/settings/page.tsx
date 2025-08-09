@@ -18,13 +18,17 @@ import {
   CheckCircle,
   Settings,
   Eye,
-  EyeOff
+  EyeOff,
+  Palette,
+  CreditCard
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toastActions } from '@/stores/toast-store'
 import { changePassword } from '@/actions/auth.actions'
+import { AppearanceTab } from '@/components/settings/AppearanceTab'
+import { SubscriptionTab } from '@/components/settings/SubscriptionTab'
 
 // Form schemas
 const profileSchema = z.object({
@@ -57,7 +61,7 @@ const SettingsPage = () => {
   // Get gym data for populating the form
   const { data: gymData, isLoading: gymLoading } = useGymData(profile?.gym_id || null)
   
-  const [activeTab, setActiveTab] = useState<'profile' | 'gym' | 'security'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'gym' | 'security' | 'appearance' | 'subscription'>('profile')
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -169,6 +173,8 @@ const SettingsPage = () => {
   const tabs = [
     { id: 'profile' as const, label: 'Profile', icon: User },
     { id: 'gym' as const, label: 'Gym Settings', icon: Building2 },
+    { id: 'subscription' as const, label: 'Subscription', icon: CreditCard },
+    { id: 'appearance' as const, label: 'Appearance', icon: Palette },
     { id: 'security' as const, label: 'Security', icon: Lock },
   ]
 
@@ -363,7 +369,15 @@ const SettingsPage = () => {
            </Card>
          )}
 
-         {activeTab === 'security' && (
+          {activeTab === 'subscription' && (
+            <SubscriptionTab />
+          )}
+
+          {activeTab === 'appearance' && (
+            <AppearanceTab />
+          )}
+
+          {activeTab === 'security' && (
            <Card>
              <CardHeader>
                <CardTitle className="flex items-center gap-2">

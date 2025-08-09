@@ -9,27 +9,23 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useCallback, useMemo, useRef } from 'react'
 import { toastActions } from '@/stores/toast-store'
 import type { User } from '@supabase/supabase-js'
+import type { GymRole, Permission, UserPermissions, ProfileWithRBAC } from '@/types/rbac.types'
+import type { Database } from '@/types/database.types'
 
 // ========== ENHANCED TYPES ==========
 
-export interface Profile {
-  id: string
-  full_name: string | null
-  gym_id: string | null
-  created_at: string
-  updated_at?: string
-  email?: string
-  avatar_url?: string
-  preferences?: Record<string, unknown>
-}
-
 export interface AuthSession {
   user: User | null
-  profile: Profile | null
+  profile: ProfileWithRBAC | null
   isLoading: boolean
   isInitialized: boolean
   sessionId?: string
   lastRefresh?: number
+  // RBAC data
+  role?: GymRole
+  permissions?: Permission[]
+  roleLevel?: number
+  rbacContext?: UserPermissions
 }
 
 export interface AuthError extends Error {
@@ -472,7 +468,7 @@ const createAuthQueryFn = (config: AuthConfig) => {
 
       const sessionData: AuthSession = {
         user,
-        profile: profile || null,
+        profile: profile as ProfileWithRBAC | null,
         isLoading: false,
         isInitialized: true,
         sessionId: session?.access_token?.slice(-10) || undefined,
@@ -755,14 +751,14 @@ const performLogoutCleanup = async (
 // ========== ENHANCED MUTATIONS ==========
 
 export const useUpdateProfile = (): UseMutationResult<
-  Profile,
+  ProfileWithRBAC,
   AuthError,
-  Partial<Profile>
+  Partial<ProfileWithRBAC>
 > => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (updates: Partial<Profile>) => {
+    mutationFn: async (updates: Partial<ProfileWithRBAC>) => {
       const supabase = createClient()
       const {
         data: { user },
@@ -775,7 +771,7 @@ export const useUpdateProfile = (): UseMutationResult<
 
       const { data, error } = await supabase
         .from('profiles')
-        .update(updates)
+        .update(updates as Database['public']['Tables']['profiles']['Update'])
         .eq('id', user.id)
         .select()
         .single()
@@ -784,7 +780,7 @@ export const useUpdateProfile = (): UseMutationResult<
         throw AuthErrorHandler.createAuthError(error, 'profile_update')
       }
 
-      return data as Profile
+      return data as ProfileWithRBAC
     },
     onMutate: async updates => {
       // Optimistic update

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import React from 'react'
 import ClientLayout from './client-layout'
 import { handleCatchError } from '@/lib/utils'
+import { createClient } from '@/utils/supabase/server'
 
 const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   // Enhanced server-side auth check with better error handling
@@ -19,7 +20,6 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   // Get basic profile info for initial render (TanStack Query will handle updates)
   // Only check gym setup if user is authenticated
   try {
-    const { createClient } = await import('@/utils/supabase/server')
     const supabase = await createClient()
     
     const { data: profile, error: profileError } = await supabase

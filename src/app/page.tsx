@@ -1,23 +1,21 @@
 'use client'
 
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   Users, 
   TrendingUp, 
   Dumbbell, 
   Star, 
-  ArrowRight,
   Shield,
   Smartphone,
   Check,
-  Play,
-  Zap,
   Globe
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import Footer from "@/components/layout/Footer";
+import { StaticSubscriptionPlans } from "@/components/subscriptions";
+import { AdaptiveNavigation, AdaptiveHeroCTA, AdaptiveFinalCTA } from "@/components/layout/AdaptiveNavigation";
 
 function HomeComponent() {
   const [isVisible, setIsVisible] = useState(false);
@@ -86,18 +84,7 @@ function HomeComponent() {
           <Link href="#pricing" className="text-white hover:text-purple-300 transition-colors">Pricing</Link>
           <Link href="#testimonials" className="text-white hover:text-purple-300 transition-colors">Reviews</Link>
         </div>
-        <div className="space-x-4">
-          <Link href="/login">
-            <Button variant="outline" className="text-white border-white border-2 bg-white/10 hover:bg-white hover:text-slate-900 backdrop-blur transition-all duration-200">
-              Log In
-            </Button>
-          </Link>
-          <Link href="/signup">
-            <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white transition-all duration-200">
-              Sign Up
-            </Button>
-          </Link>
-        </div>
+        <AdaptiveNavigation />
       </nav>
 
       {/* Enhanced Hero Section */}
@@ -119,31 +106,42 @@ function HomeComponent() {
           Built from the ground up for modern fitness businesses. Our comprehensive management system handles member tracking, analytics, multi-location support, and delivers powerful insights that traditional fitness software simply can&#39;t match.
         </p>
 
-        {/* Animated Statistics */}
-        <div className="mb-8">
-          <div className="text-4xl font-bold text-white mb-2">
-            {stats[currentStat].number}
-          </div>
-          <div className="text-purple-300">
-            {stats[currentStat].label}
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          <Link href="/signup">
-            <Button size="lg" className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-12 py-6 text-lg transition-all duration-200">
-              Try Free for 14 Days
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-          <Button size="lg" variant="outline" className="text-white border-white border-2 bg-white/10 hover:bg-white hover:text-slate-900 px-12 py-6 text-lg backdrop-blur transition-all duration-200">
-            <Play className="mr-2 h-5 w-5" />
-            Book a Demo
-          </Button>
-        </div>
+        <AdaptiveHeroCTA className="mb-8" />
 
         <div className="text-sm text-slate-400">
           ✓ No credit card required  •  ✓ 14-day free trial  •  ✓ Cancel anytime
+        </div>
+      </div>
+
+      {/* Animated Statistics Section */}
+      <div className="relative z-10 py-20 px-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-white mb-4">
+              Trusted by fitness professionals worldwide
+            </h2>
+            <p className="text-lg text-slate-300">
+              Join thousands who are transforming their fitness business operations
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            {stats.map((stat, index) => (
+              <div 
+                key={index}
+                className={`text-center bg-slate-800/30 rounded-lg p-6 backdrop-blur transition-all duration-500 ${
+                  currentStat === index ? 'bg-slate-800/50 scale-105 shadow-lg' : ''
+                }`}
+              >
+                <div className="text-3xl md:text-4xl font-bold text-white mb-2">
+                  {stat.number}
+                </div>
+                <div className="text-purple-300 text-sm md:text-base">
+                  {stat.label}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -206,88 +204,142 @@ function HomeComponent() {
             </Card>
           </div>
 
-          {/* Additional Features Grid */}
-          <div className="grid md:grid-cols-4 gap-6">
-            <div className="text-center p-6 bg-slate-800/30 rounded-lg backdrop-blur">
-              <Smartphone className="h-10 w-10 text-purple-400 mx-auto mb-3" />
-              <h4 className="text-white font-semibold mb-2">Mobile App Access</h4>
-              <p className="text-slate-400 text-sm">Progressive web app that works like a native mobile app</p>
+          {/* Additional Features Grid - Reorganized into 3 columns */}
+          <div className="grid md:grid-cols-3 gap-8">
+            <Card className="bg-slate-800/50 border-slate-700 backdrop-blur hover:bg-slate-800/70 transition-all duration-200">
+              <CardContent className="p-8 text-center">
+                <div className="p-3 bg-purple-500/20 rounded-lg inline-block mb-4">
+                  <Smartphone className="h-8 w-8 text-purple-400" />
+                </div>
+                <h4 className="text-white font-semibold mb-3 text-lg">Mobile-First Experience</h4>
+                <p className="text-slate-300 mb-4">Progressive web app with native mobile functionality, offline support, and push notifications for seamless member management on the go.</p>
+                <div className="text-sm text-purple-300">
+                  ✓ Progressive web app  •  ✓ Offline support  •  ✓ Push notifications
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-slate-800/50 border-slate-700 backdrop-blur hover:bg-slate-800/70 transition-all duration-200">
+              <CardContent className="p-8 text-center">
+                <div className="p-3 bg-green-500/20 rounded-lg inline-block mb-4">
+                  <Shield className="h-8 w-8 text-green-400" />
+                </div>
+                <h4 className="text-white font-semibold mb-3 text-lg">Enterprise Security & Compliance</h4>
+                <p className="text-slate-300 mb-4">Bank-level security with encrypted data storage, configurable retention policies, and GDPR compliance for complete peace of mind.</p>
+                <div className="text-sm text-green-300">
+                  ✓ Bank-level encryption  •  ✓ GDPR compliant  •  ✓ Data retention policies
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-slate-800/50 border-slate-700 backdrop-blur hover:bg-slate-800/70 transition-all duration-200">
+              <CardContent className="p-8 text-center">
+                <div className="p-3 bg-blue-500/20 rounded-lg inline-block mb-4">
+                  <Globe className="h-8 w-8 text-blue-400" />
+                </div>
+                <h4 className="text-white font-semibold mb-3 text-lg">Professional Branding & Automation</h4>
+                <p className="text-slate-300 mb-4">White-label customization options with automated email notifications, custom domains, and branded member experiences.</p>
+                <div className="text-sm text-blue-300">
+                  ✓ White-label branding  •  ✓ Custom domains  •  ✓ Automated emails
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* Benefits Section - Rebalanced with 4 benefits to match stats */}
+      <div className="relative z-10 py-20 px-4 bg-slate-800/20">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-white mb-6">
+              Why forward-thinking fitness businesses choose GymSaaS
+            </h2>
+            <p className="text-xl text-slate-300 max-w-3xl mx-auto">
+              Built specifically for the fitness industry with modern technology and proven business growth strategies
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-12 items-start">
+            <div className="space-y-8">
+              <div className="flex items-start space-x-4">
+                <div className="p-3 bg-green-500/20 rounded-lg">
+                  <Check className="h-6 w-6 text-green-400" />
+                </div>
+                <div>
+                  <h4 className="text-white font-semibold mb-2 text-lg">Modern Management Technology</h4>
+                  <p className="text-slate-300">Built with today&apos;s best practices - cloud-native, mobile-first, and designed for the modern fitness landscape.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start space-x-4">
+                <div className="p-3 bg-green-500/20 rounded-lg">
+                  <Check className="h-6 w-6 text-green-400" />
+                </div>
+                <div>
+                  <h4 className="text-white font-semibold mb-2 text-lg">Smart Analytics & Insights</h4>
+                  <p className="text-slate-300">Advanced analytics that track member growth, revenue trends, and check-in patterns to optimize your business performance.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start space-x-4">
+                <div className="p-3 bg-green-500/20 rounded-lg">
+                  <Check className="h-6 w-6 text-green-400" />
+                </div>
+                <div>
+                  <h4 className="text-white font-semibold mb-2 text-lg">Fitness-First Design</h4>
+                  <p className="text-slate-300">Every feature designed specifically for fitness businesses - no generic business tools adapted for gyms.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start space-x-4">
+                <div className="p-3 bg-green-500/20 rounded-lg">
+                  <Check className="h-6 w-6 text-green-400" />
+                </div>
+                <div>
+                  <h4 className="text-white font-semibold mb-2 text-lg">Scalable Growth Platform</h4>
+                  <p className="text-slate-300">From single locations to enterprise chains - our platform grows with your business and supports unlimited expansion.</p>
+                </div>
+              </div>
             </div>
-            <div className="text-center p-6 bg-slate-800/30 rounded-lg backdrop-blur">
-              <Shield className="h-10 w-10 text-pink-400 mx-auto mb-3" />
-              <h4 className="text-white font-semibold mb-2">Data Security & Retention</h4>
-              <p className="text-slate-400 text-sm">Secure data storage with configurable retention policies</p>
-            </div>
-            <div className="text-center p-6 bg-slate-800/30 rounded-lg backdrop-blur">
-              <Zap className="h-10 w-10 text-blue-400 mx-auto mb-3" />
-              <h4 className="text-white font-semibold mb-2">Email Notifications</h4>
-              <p className="text-slate-400 text-sm">Automated email notifications for important events</p>
-            </div>
-            <div className="text-center p-6 bg-slate-800/30 rounded-lg backdrop-blur">
-              <Globe className="h-10 w-10 text-green-400 mx-auto mb-3" />
-              <h4 className="text-white font-semibold mb-2">White-label Options</h4>
-              <p className="text-slate-400 text-sm">Customize the platform with your own branding</p>
+            
+            <div className="grid grid-cols-2 gap-6">
+              <div className="bg-slate-800/50 p-8 rounded-lg backdrop-blur text-center">
+                <div className="text-3xl font-bold text-white mb-2">50+</div>
+                <div className="text-slate-300">Members (Starter Plan)</div>
+              </div>
+              <div className="bg-slate-800/50 p-8 rounded-lg backdrop-blur text-center">
+                <div className="text-3xl font-bold text-white mb-2">200+</div>
+                <div className="text-slate-300">Members (Professional)</div>
+              </div>
+              <div className="bg-slate-800/50 p-8 rounded-lg backdrop-blur text-center">
+                <div className="text-3xl font-bold text-white mb-2">∞</div>
+                <div className="text-slate-300">Members (Enterprise)</div>
+              </div>
+              <div className="bg-slate-800/50 p-8 rounded-lg backdrop-blur text-center">
+                <div className="text-3xl font-bold text-white mb-2">2025</div>
+                <div className="text-slate-300">Launching Soon</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Benefits Section */}
-      <div className="relative z-10 py-20 px-4 bg-slate-800/20">
+      {/* Pricing Section */}
+      <div id="pricing" className="relative z-10 py-20 px-4">
         <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 className="text-4xl font-bold text-white mb-6">
-                Why forward-thinking fitness businesses choose GymSaaS
-              </h2>
-              <div className="space-y-6">
-                <div className="flex items-start space-x-4">
-                  <div className="p-2 bg-green-500/20 rounded-lg">
-                    <Check className="h-6 w-6 text-green-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-white font-semibold mb-2">Modern Management Technology</h4>
-                    <p className="text-slate-300">Built with today&#39;s best practices - cloud-native, mobile-first, and designed for the modern fitness landscape.</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-4">
-                  <div className="p-2 bg-green-500/20 rounded-lg">
-                    <Check className="h-6 w-6 text-green-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-white font-semibold mb-2">Smart Analytics</h4>
-                    <p className="text-slate-300">Advanced analytics that track member growth, revenue trends, and check-in patterns to optimize your business performance.</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-4">
-                  <div className="p-2 bg-green-500/20 rounded-lg">
-                    <Check className="h-6 w-6 text-green-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-white font-semibold mb-2">Fitness-First Design</h4>
-                    <p className="text-slate-300">Every feature designed specifically for fitness businesses - no generic business tools adapted for gyms.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-6">
-              <div className="bg-slate-800/50 p-6 rounded-lg backdrop-blur">
-                <div className="text-3xl font-bold text-white mb-2">50+</div>
-                <div className="text-slate-300">Members (Starter Plan)</div>
-              </div>
-              <div className="bg-slate-800/50 p-6 rounded-lg backdrop-blur">
-                <div className="text-3xl font-bold text-white mb-2">200+</div>
-                <div className="text-slate-300">Members (Professional)</div>
-              </div>
-              <div className="bg-slate-800/50 p-6 rounded-lg backdrop-blur">
-                <div className="text-3xl font-bold text-white mb-2">∞</div>
-                <div className="text-slate-300">Members (Enterprise)</div>
-              </div>
-              <div className="bg-slate-800/50 p-6 rounded-lg backdrop-blur">
-                <div className="text-3xl font-bold text-white mb-2">2025</div>
-                <div className="text-slate-300">Launched</div>
-              </div>
-            </div>
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-white mb-4">
+              Simple, Transparent Pricing
+            </h2>
+            <p className="text-xl text-slate-300">
+              Choose the perfect plan for your gym. Start with our free trial!
+            </p>
+          </div>
+
+          {/* Static Subscription Plans Component - Fast Loading, SEO Optimized */}
+          <div className="bg-white/5 backdrop-blur rounded-2xl p-8 border border-white/10">
+            <StaticSubscriptionPlans className="[&_.text-muted-foreground]:text-slate-400 [&_.text-slate-600]:text-slate-300 [&_.text-slate-700]:text-slate-300" />
           </div>
         </div>
       </div>
@@ -326,7 +378,7 @@ function HomeComponent() {
       </div>
 
       {/* Enhanced Social Proof */}
-      <div className="relative z-10 py-16 px-4 bg-slate-800/30">
+      <div className="relative z-10 py-20 px-4 bg-slate-800/30">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
             <h3 className="text-2xl font-semibold text-white mb-4">
@@ -352,28 +404,8 @@ function HomeComponent() {
 
       {/* Enhanced CTA Section */}
       <div className="relative z-10 py-20 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold text-white mb-6">
-            Ready to modernize your fitness business management?
-          </h2>
-          <p className="text-xl text-slate-300 mb-8">
-            Join forward-thinking fitness business owners who are transforming their operations. Experience the future of fitness management with our 14-day free trial.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-            <Link href="/signup">
-              <Button size="lg" className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-12 py-6 text-xl transition-all duration-200">
-                Try Free for 14 Days
-                <ArrowRight className="ml-2 h-6 w-6" />
-              </Button>
-            </Link>
-            <Button size="lg" variant="outline" className="text-white border-white border-2 bg-white/10 hover:bg-white hover:text-slate-900 px-12 py-6 text-xl backdrop-blur transition-all duration-200">
-              Book a Demo
-            </Button>
-          </div>
-          <div className="text-slate-400">
-            <p className="mb-2">✓ No credit card required  •  ✓ 14-day free trial  •  ✓ Cancel anytime</p>
-            <p className="text-sm">Join the 2,500+ fitness professionals already transforming their business operations</p>
-          </div>
+        <div className="max-w-4xl mx-auto">
+          <AdaptiveFinalCTA />
         </div>
       </div>
 

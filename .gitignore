@@ -4,6 +4,12 @@
 # Supabase local development files
 /supabase
 /.supabase
+
+# Ignore database files
+database/
+database/*.db
+database/*.sqlite
+*.tsbuildinfo
 # dependencies
 /node_modules
 /.pnp

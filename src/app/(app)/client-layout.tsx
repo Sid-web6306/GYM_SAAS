@@ -16,6 +16,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAuth, useLogout } from '@/hooks/use-auth'
 import { RequireAuth } from '@/components/auth/AuthGuard'
+import { RealtimeDebug } from '@/components/debug/RealtimeDebug'
+import { RealtimeProvider } from '@/components/providers/realtime-provider-simple'
 
 interface ClientLayoutProps {
   children: React.ReactNode
@@ -38,13 +40,13 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
   ]
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-background">
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
-        <div className="flex items-center justify-between h-16 px-4 border-b">
+      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-64 bg-card shadow-lg transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
+        <div className="flex items-center justify-between h-16 px-4 border-b border-border">
           <div className="flex items-center">
-            <Dumbbell className="h-8 w-8 text-purple-600" />
-            <span className="ml-2 text-xl font-bold text-gray-900">
+            <Dumbbell className="h-8 w-8 text-primary" />
+            <span className="ml-2 text-xl font-bold text-card-foreground">
               {profile?.gym_id ? 'Gym SaaS' : 'Setup Required'}
             </span>
           </div>
@@ -66,14 +68,14 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
                   href={item.href}
                   className={`${
                     isActive
-                      ? 'bg-purple-100 text-purple-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                   } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
                   onClick={() => setSidebarOpen(false)}
                 >
                   <item.icon
                     className={`${
-                      isActive ? 'text-purple-500' : 'text-gray-400 group-hover:text-gray-500'
+                      isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-accent-foreground'
                     } mr-3 h-6 w-6`}
                   />
                   {item.name}
@@ -83,32 +85,32 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
           </div>
         </nav>
 
-        {/* Legal Links */}
+        {/* Legal Links
         <div className="absolute bottom-20 w-full px-4">
-          <div className="text-xs text-gray-500 space-y-1">
-            <Link href="/privacy-policy" className="block hover:text-purple-600 transition-colors">
+          <div className="text-xs text-muted-foreground space-y-1">
+            <Link href="/privacy-policy" className="block hover:text-primary transition-colors">
               Privacy Policy
             </Link>
-            <Link href="/terms-of-service" className="block hover:text-purple-600 transition-colors">
+            <Link href="/terms-of-service" className="block hover:text-primary transition-colors">
               Terms of Service
             </Link>
-            <Link href="/contact" className="block hover:text-purple-600 transition-colors">
+            <Link href="/contact" className="block hover:text-primary transition-colors">
               Contact Us
             </Link>
           </div>
-        </div>
+        </div> */}
 
         {/* User section */}
-        <div className="absolute bottom-0 w-full p-4 border-t">
+        <div className="absolute bottom-0 w-full p-4 border-t border-border">
           <div className="flex items-center mb-3">
             <div className="flex-shrink-0">
-              <User className="h-8 w-8 text-gray-400" />
+              <User className="h-8 w-8 text-muted-foreground" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-900">
+              <p className="text-sm font-medium text-card-foreground">
                 {profile?.full_name || user?.email || 'User'}
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 {user?.email}
               </p>
             </div>
@@ -129,15 +131,15 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <div className="bg-white shadow-sm border-b lg:hidden">
+        <div className="bg-card shadow-sm border-b border-border lg:hidden">
           <div className="flex items-center justify-between h-16 px-4">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="text-gray-500 hover:text-gray-600"
+              className="text-muted-foreground hover:text-foreground"
             >
               <Menu className="h-6 w-6" />
             </button>
-            <h1 className="text-lg font-semibold text-gray-900">
+            <h1 className="text-lg font-semibold text-card-foreground">
               {navigation.find(item => item.href === pathname)?.name || 'Dashboard'}
             </h1>
             <div></div>
@@ -153,10 +155,13 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
       {/* Sidebar overlay */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
+
+      {/* Debug Component */}
+      <RealtimeDebug debugVisibleProp={false} />
     </div>
   )
 }
@@ -164,9 +169,11 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
 export default function ClientLayout({ children }: ClientLayoutProps) {
   return (
     <RequireAuth>
-      <ClientLayoutContent>
-        {children}
-      </ClientLayoutContent>
+      <RealtimeProvider>
+        <ClientLayoutContent>
+          {children}
+        </ClientLayoutContent>
+      </RealtimeProvider>
     </RequireAuth>
   )
 } 

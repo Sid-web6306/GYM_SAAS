@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import type { User } from '@supabase/supabase-js'
 import { handleCatchError } from '@/lib/utils'
+import { logger } from '@/lib/logger'
 
 // --- Types for Form State ---
 export type SignupFormState = {
@@ -166,7 +167,7 @@ export const completeOnboarding = async (
     })
     
     const { error: dbError } = await supabase.rpc('complete_user_profile', {
-      user_id: user.id,
+      p_user_id: user.id,
       gym_name: gymValidation.data.gymName,
     });
 
@@ -192,10 +193,6 @@ export const completeOnboarding = async (
     }
     
     console.log('Onboarding: Success, waiting for profile update before redirect')
-    
-    // Add a longer delay to ensure the database update is complete
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
     // Verify the profile was updated AFTER the RPC call
     const { data: updatedProfile, error: profileError } = await supabase
       .from('profiles')
@@ -277,7 +274,7 @@ export const completeSocialOnboarding = async (
     
     // Call enhanced RPC function with social profile data
     const { error: dbError } = await supabase.rpc('complete_user_profile', {
-      user_id: user.id,
+      p_user_id: user.id,
       gym_name: gymValidation.data.gymName,
     });
 
@@ -571,7 +568,7 @@ export const loginWithSocialProvider = async (
     const { data, error } = await supabase.auth.signInWithOAuth(authOptions)
 
     if (error) { 
-      console.error(`${provider} OAuth error:`, error)
+      logger.error(`${provider} OAuth error:`, { error })
       
       // Handle specific OAuth errors
       if (error.message.includes('access_denied')) {
@@ -584,10 +581,10 @@ export const loginWithSocialProvider = async (
     }
     
     if (data.url) { 
-      console.log(`Redirecting to ${provider} OAuth URL:`, data.url)
+      logger.info(`Redirecting to ${provider} OAuth URL:`, { url: data.url })
       redirect(data.url)
     } else { 
-      console.error(`${provider} OAuth: No redirect URL received`)
+      logger.error(`${provider} OAuth: No redirect URL received`)
       redirect('/login?message=social-auth-error')
     }
   } catch (error) {

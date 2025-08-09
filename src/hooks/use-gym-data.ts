@@ -414,14 +414,20 @@ export function useUpdateGym() {
 // Create Gym Hook (for admin functionality)
 export function useCreateGym() {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   
   return useMutation({
     mutationFn: async ({ name }: { name: string }) => {
+      if (!user?.id) {
+        throw new Error('User must be authenticated to create a gym')
+      }
+      
       const supabase = createClient()
       const { data, error } = await supabase
         .from('gyms')
         .insert({
           name,
+          owner_id: user.id,
           created_at: new Date().toISOString()
         })
         .select()

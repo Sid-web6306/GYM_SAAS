@@ -229,7 +229,7 @@ const LoginPageComponent = () => {
   // Show loading while checking authentication
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
           <Loader2 className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-sm text-muted-foreground">Loading...</p>
@@ -241,7 +241,7 @@ const LoginPageComponent = () => {
   // Show loading while redirecting authenticated user
   if (isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
           <Loader2 className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-sm text-muted-foreground">Redirecting to dashboard...</p>
@@ -253,7 +253,7 @@ const LoginPageComponent = () => {
   const isSocialButtonDisabled = isSubmitting || socialLoading.google || socialLoading.facebook
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+    <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="mx-auto max-w-sm w-full">
         <CardHeader>
           <CardTitle className="text-2xl">Login</CardTitle>
@@ -270,12 +270,12 @@ const LoginPageComponent = () => {
               isLoading={socialLoading.google}
               disabled={isSocialButtonDisabled}
             />
-            <SocialButton
+            {/* <SocialButton
               provider="facebook"
               onClick={() => handleSocialLogin('facebook')}
               isLoading={socialLoading.facebook}
               disabled={isSocialButtonDisabled}
-            />
+            /> */}
           </div>
 
           <div className="relative my-6">

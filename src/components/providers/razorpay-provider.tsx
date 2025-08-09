@@ -3,12 +3,12 @@
 import { ReactNode, Component } from 'react'
 import { clientConfig } from '@/lib/config'
 
-interface StripeProviderProps {
+interface RazorpayProviderProps {
   children: ReactNode
 }
 
 // Simple error fallback component
-function StripeErrorFallback() {
+function RazorpayErrorFallback() {
   return (
     <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
       <h3 className="text-red-800 font-medium">Payment System Error</h3>
@@ -19,8 +19,8 @@ function StripeErrorFallback() {
   )
 }
 
-// Simple error boundary for Stripe-related errors
-class StripeErrorBoundary extends Component<
+// Simple error boundary for Razorpay-related errors
+class RazorpayErrorBoundary extends Component<
   { children: ReactNode },
   { hasError: boolean }
 > {
@@ -34,55 +34,55 @@ class StripeErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Stripe Error Boundary caught an error:', error, errorInfo)
+    console.error('Razorpay Error Boundary caught an error:', error, errorInfo)
   }
 
   render() {
     if (this.state.hasError) {
-      return <StripeErrorFallback />
+      return <RazorpayErrorFallback />
     }
 
     return this.props.children
   }
 }
 
-export function StripeProvider({ children }: StripeProviderProps) {
-  // Check if Stripe is configured
-  const isConfigured = !!clientConfig.stripePublishableKey
+export function RazorpayProvider({ children }: RazorpayProviderProps) {
+  // Check if Razorpay is configured
+  const isConfigured = !!clientConfig.razorpayKeyId
 
   if (!isConfigured) {
-    console.warn('Stripe is not configured. Payment features will be disabled.')
+    console.warn('Razorpay is not configured. Payment features will be disabled.')
     return <>{children}</>
   }
 
   return (
-    <StripeErrorBoundary>
+    <RazorpayErrorBoundary>
       {children}
-    </StripeErrorBoundary>
+    </RazorpayErrorBoundary>
   )
 }
 
-// Helper component to get Stripe configuration status
-export function StripeConfigStatus() {
-  const isConfigured = !!clientConfig.stripePublishableKey
-  const publishableKey = clientConfig.stripePublishableKey
+// Helper component to get Razorpay configuration status
+export function RazorpayConfigStatus() {
+  const isConfigured = !!clientConfig.razorpayKeyId
+  const keyId = clientConfig.razorpayKeyId
   
   return (
     <div className="text-sm text-muted-foreground space-y-1">
       <div className="flex items-center gap-2">
         <div className={`w-2 h-2 rounded-full ${isConfigured ? 'bg-green-500' : 'bg-red-500'}`} />
-        <span>Stripe Status: {isConfigured ? 'Configured' : 'Not Configured'}</span>
+        <span>Razorpay Status: {isConfigured ? 'Configured' : 'Not Configured'}</span>
       </div>
-      {isConfigured && (
+      {isConfigured && keyId && (
         <div className="font-mono text-xs text-muted-foreground">
-          Key: {publishableKey.slice(0, 12)}...{publishableKey.slice(-4)}
+          Key ID: {keyId.slice(0, 12)}...{keyId.slice(-4)}
         </div>
       )}
       {!isConfigured && (
         <div className="text-xs text-red-600">
-          Set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY in your environment
+          Set RAZORPAY_KEY_ID in your environment
         </div>
       )}
     </div>
   )
-} 
+}
