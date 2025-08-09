@@ -1,8 +1,9 @@
 // src/stores/index.ts
 
 // Export all stores
-export * from './auth-store' // UI state only (client-side)
+export * from './auth-store' // Auth UI state only (client-side)
 export * from './toast-store' // Toast notifications
+export * from './ui-store' // Global UI state (sidebar, theme, etc.)
 
 /**
  * Store Architecture Migration Complete
@@ -15,7 +16,7 @@ export * from './toast-store' // Toast notifications
  * 
  * ✅ Zustand now handles only client UI state:
  *    - auth-store.ts: Auth UI preferences (welcome message, last login, etc.)
- *    - ui-store.ts: Global UI state and preferences
+ *    - ui-store.ts: Global UI state (sidebar, theme, layout preferences)
  *    - toast-store.ts: Toast notification queue
  * 
  * 🗑️ Removed legacy stores:

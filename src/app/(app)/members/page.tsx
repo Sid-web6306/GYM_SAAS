@@ -76,6 +76,8 @@ import {
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { MemberManagementGuard, AnalyticsGuard, AccessDenied } from '@/components/rbac/rbac-guards'
 
 // Form schema
 const memberSchema = z.object({
@@ -338,28 +340,37 @@ const MembersPage = () => {
   return (
     <div className="space-y-8 p-6 md:p-8">
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Members</h1>
-          <p className="text-muted-foreground">
-            Manage your gym members and track their activities
-          </p>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <PageHeader
+        title="Members"
+        description="Manage your gym members and track their activities"
+      >
+        <AnalyticsGuard action="export" fallback={
+          <Button variant="outline" size="sm" className="w-full sm:w-auto" disabled title="Export requires staff privileges">
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+        }>
           <Button variant="outline" size="sm" className="w-full sm:w-auto">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button variant="outline" size="sm" className="w-full sm:w-auto">
-            <Upload className="h-4 w-4 mr-2" />
-            Import
+        </AnalyticsGuard>
+        <Button variant="outline" size="sm" className="w-full sm:w-auto">
+          <Upload className="h-4 w-4 mr-2" />
+          Import
+        </Button>
+        <MemberManagementGuard action="create" fallback={
+          <Button disabled className="w-full sm:w-auto" title="Adding members requires staff privileges">
+            <UserPlus className="h-4 w-4 mr-2" />
+            Add Member
           </Button>
+        }>
           <Button onClick={() => setAddDialogOpen(true)} className="w-full sm:w-auto">
             <UserPlus className="h-4 w-4 mr-2" />
             Add Member
           </Button>
-        </div>
-      </div>
+        </MemberManagementGuard>
+      </PageHeader>
 
       {/* Stats Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -552,10 +563,18 @@ const MembersPage = () => {
                           </p>
                         </div>
                         {!searchQuery && !statusFilter && (
-                          <Button onClick={() => setAddDialogOpen(true)}>
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Add Your First Member
-                          </Button>
+                          <MemberManagementGuard action="create" fallback={
+                            <div className="text-center py-8">
+                              <AccessDenied 
+                                message="You need staff privileges to add members. Contact your gym manager to request access." 
+                              />
+                            </div>
+                          }>
+                            <Button onClick={() => setAddDialogOpen(true)}>
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Add Your First Member
+                            </Button>
+                          </MemberManagementGuard>
                         )}
                       </div>
                     </TableCell>
@@ -606,17 +625,31 @@ const MembersPage = () => {
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => openEditDialog(member.id)}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit Member
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => openDeleteDialog(member.id)}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete Member
-                            </DropdownMenuItem>
+                            <MemberManagementGuard action="update" fallback={
+                              <DropdownMenuItem disabled className="text-gray-400">
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit Member (Staff Only)
+                              </DropdownMenuItem>
+                            }>
+                              <DropdownMenuItem onClick={() => openEditDialog(member.id)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit Member
+                              </DropdownMenuItem>
+                            </MemberManagementGuard>
+                            <MemberManagementGuard action="delete" fallback={
+                              <DropdownMenuItem disabled className="text-gray-400">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete Member (Staff Only)
+                              </DropdownMenuItem>
+                            }>
+                              <DropdownMenuItem 
+                                onClick={() => openDeleteDialog(member.id)}
+                                className="text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete Member
+                              </DropdownMenuItem>
+                            </MemberManagementGuard>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

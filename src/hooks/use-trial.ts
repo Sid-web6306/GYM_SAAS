@@ -261,10 +261,10 @@ interface TrialInitializationError {
 
 export function useTrialInitialization() {
   const queryClient = useQueryClient()
-  const supabase = createClient()
 
   return useMutation<TrialInitializationResponse, TrialInitializationError, void>({
     mutationFn: async (): Promise<TrialInitializationResponse> => {
+      const supabase = createClient()
       // Get current user
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       

@@ -1,37 +1,39 @@
 'use client'
 
-import { useState } from 'react'
 import { usePathname } from 'next/navigation'
-import Link from 'next/link'
+import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Users, 
   LayoutDashboard, 
   Settings, 
-  LogOut, 
-  Menu, 
-  X,
   Dumbbell,
-  User
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { useAuth, useLogout } from '@/hooks/use-auth'
+import { useAuth } from '@/hooks/use-auth'
+import { useSidebarState } from '@/stores/ui-store'
 import { RequireAuth } from '@/components/auth/AuthGuard'
 import { RealtimeDebug } from '@/components/debug/RealtimeDebug'
 import { RealtimeProvider } from '@/components/providers/realtime-provider-simple'
+import { CollapsibleNavItem } from '@/components/layout/CollapsibleNavItem'
+import { SidebarToggle } from '@/components/layout/SidebarToggle'
+import { CollapsibleUserSection } from '@/components/layout/CollapsibleUserSection'
+import { useSidebarShortcuts } from '@/hooks/use-sidebar-shortcuts'
+import { cn } from '@/lib/utils'
 
 interface ClientLayoutProps {
   children: React.ReactNode
 }
 
 function ClientLayoutContent({ children }: ClientLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
-  const { profile, user } = useAuth()
-  const logoutMutation = useLogout()
-
-  const handleLogout = async () => {
-    logoutMutation.mutate()
-  }
+  const { profile } = useAuth()
+  const {
+    sidebarCollapsed,
+    sidebarCollapsedMobile,
+    toggleMobileSidebar,
+  } = useSidebarState()
+  
+  // Enable keyboard shortcuts
+  useSidebarShortcuts()
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -41,108 +43,142 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-64 bg-card shadow-lg transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
-        <div className="flex items-center justify-between h-16 px-4 border-b border-border">
-          <div className="flex items-center">
-            <Dumbbell className="h-8 w-8 text-primary" />
-            <span className="ml-2 text-xl font-bold text-card-foreground">
-              {profile?.gym_id ? 'Gym SaaS' : 'Setup Required'}
-            </span>
-          </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden"
-          >
-            <X className="h-6 w-6" />
-          </button>
+      {/* Desktop Sidebar */}
+      <motion.div
+        initial={false}
+        animate={{ 
+          width: sidebarCollapsed ? 64 : 256,
+        }}
+        transition={{ 
+          duration: 0.3, 
+          ease: 'easeOut' 
+        }}
+        className={cn(
+          'hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:z-50',
+          'bg-card shadow-lg border-r border-border'
+        )}
+      >
+        {/* Sidebar Header */}
+        <div className={cn(
+          'flex items-center h-16 border-b border-border transition-all duration-300',
+          sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'
+        )}>
+          {sidebarCollapsed ? (
+            /* Desktop collapsed state - only toggle button centered */
+            <SidebarToggle />
+          ) : (
+            /* Desktop expanded state - logo + text + toggle button */
+            <>
+              <div className="flex items-center min-w-0">
+                <Dumbbell className="h-8 w-8 text-primary flex-shrink-0" />
+                <span className="ml-2 text-xl font-bold text-card-foreground whitespace-nowrap">
+                  {profile?.gym_id ? 'Gym SaaS' : 'Setup Required'}
+                </span>
+              </div>
+              <SidebarToggle />
+            </>
+          )}
         </div>
         
-        <nav className="mt-5 px-2">
+        {/* Navigation */}
+        <nav className="mt-5 flex-1 px-2">
           <div className="space-y-1">
             {navigation.map((item) => {
               const isActive = pathname === item.href
               return (
-                <Link
+                <CollapsibleNavItem
                   key={item.name}
+                  name={item.name}
                   href={item.href}
-                  className={`${
-                    isActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                  } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <item.icon
-                    className={`${
-                      isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-accent-foreground'
-                    } mr-3 h-6 w-6`}
-                  />
-                  {item.name}
-                </Link>
+                  icon={item.icon}
+                  isActive={isActive}
+                />
               )
             })}
           </div>
         </nav>
 
-        {/* Legal Links
-        <div className="absolute bottom-20 w-full px-4">
-          <div className="text-xs text-muted-foreground space-y-1">
-            <Link href="/privacy-policy" className="block hover:text-primary transition-colors">
-              Privacy Policy
-            </Link>
-            <Link href="/terms-of-service" className="block hover:text-primary transition-colors">
-              Terms of Service
-            </Link>
-            <Link href="/contact" className="block hover:text-primary transition-colors">
-              Contact Us
-            </Link>
-          </div>
-        </div> */}
+        {/* User Section */}
+        <CollapsibleUserSection className="mt-auto" />
+      </motion.div>
 
-        {/* User section */}
-        <div className="absolute bottom-0 w-full p-4 border-t border-border">
-          <div className="flex items-center mb-3">
-            <div className="flex-shrink-0">
-              <User className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-card-foreground">
-                {profile?.full_name || user?.email || 'User'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {user?.email}
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            size="sm"
-            className="w-full"
-            disabled={logoutMutation.isPending}
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            {logoutMutation.isPending ? 'Signing out...' : 'Sign out'}
-          </Button>
-        </div>
-      </div>
+      {/* Mobile Sidebar */}
+      <AnimatePresence>
+        {!sidebarCollapsedMobile && (
+          <>
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-card shadow-lg border-r border-border"
+            >
+              {/* Mobile Header */}
+              <div className="flex items-center justify-between h-16 px-4 border-b border-border">
+                <div className="flex items-center min-w-0">
+                  <Dumbbell className="h-8 w-8 text-primary flex-shrink-0" />
+                  <span className="ml-2 text-xl font-bold text-card-foreground whitespace-nowrap">
+                    {profile?.gym_id ? 'Gym SaaS' : 'Setup Required'}
+                  </span>
+                </div>
+                <SidebarToggle isMobile />
+              </div>
+              
+              {/* Mobile Navigation */}
+              <nav className="mt-5 px-2 flex-1">
+                <div className="space-y-1">
+                  {navigation.map((item) => {
+                    const isActive = pathname === item.href
+                    return (
+                      <CollapsibleNavItem
+                        key={item.name}
+                        name={item.name}
+                        href={item.href}
+                        icon={item.icon}
+                        isActive={isActive}
+                        onClick={toggleMobileSidebar}
+                        forceExpanded={true}
+                      />
+                    )
+                  })}
+                </div>
+              </nav>
+
+              {/* Mobile User Section - force expanded so details + logout are visible */}
+              <CollapsibleUserSection forceExpanded />
+            </motion.div>
+
+            {/* Mobile Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="lg:hidden fixed inset-0 z-40 bg-black/50"
+              onClick={toggleMobileSidebar}
+            />
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
+      <div
+        className={cn(
+          'flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-out',
+          // Mobile: no margin
+          'ml-0',
+          // Desktop: margin based on sidebar state
+          sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
+        )}
+      >
+        {/* Mobile Top bar */}
         <div className="bg-card shadow-sm border-b border-border lg:hidden">
           <div className="flex items-center justify-between h-16 px-4">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Menu className="h-6 w-6" />
-            </button>
+            <SidebarToggle isMobile />
             <h1 className="text-lg font-semibold text-card-foreground">
               {navigation.find(item => item.href === pathname)?.name || 'Dashboard'}
             </h1>
-            <div></div>
+            <div className="w-8"></div> {/* Spacer for balance */}
           </div>
         </div>
 
@@ -151,14 +187,6 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
           {children}
         </main>
       </div>
-
-      {/* Sidebar overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
 
       {/* Debug Component */}
       <RealtimeDebug debugVisibleProp={false} />

@@ -407,6 +407,7 @@ export const signupWithEmail = async (
 
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
+  const inviteToken = formData.get('inviteToken') as string; // Get invitation token
   
   // Validate using Zod schema
   const validation = SignupSchema.safeParse({ email, password });
@@ -425,12 +426,20 @@ export const signupWithEmail = async (
   }
 
   try {
+    // Build email redirect URL with invitation token if present
+    let emailRedirectTo = `${origin}/auth/callback`
+    if (inviteToken) {
+      emailRedirectTo += `?invite=${encodeURIComponent(inviteToken)}`
+    }
+
     // Attempt to sign up the user
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: validation.data.email,
       password: validation.data.password, 
       options: {
-        emailRedirectTo: `${origin}/auth/callback`
+        emailRedirectTo,
+        // Store invitation token in user metadata for additional safety
+        data: inviteToken ? { pendingInviteToken: inviteToken } : undefined
       }
     });
     

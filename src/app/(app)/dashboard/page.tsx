@@ -12,7 +12,6 @@ import {
   TrendingUp,
   Settings,
   AlertCircle,
-  Shield,
   Timer,
   Database
 } from 'lucide-react';
@@ -23,6 +22,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { MemberGrowthChart } from '@/components/charts/member-growth-chart';
 import { RevenueChart } from '@/components/charts/revenue-chart';
 import { CheckinTrendsChart } from '@/components/charts/checkin-trends-chart';
+import { DashboardHeader } from '@/components/layout/PageHeader';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -232,38 +232,23 @@ const DashboardPage = () => {
   return (
     <div className="space-y-8 p-6 md:p-8">
       {/* Enhanced Header with Session Info */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Welcome back, {profile?.full_name || 'User'}!
-          </h1>
-          <div className="flex items-center gap-4 mt-2">
-            <p className="text-muted-foreground">
-              Here&apos;s what&apos;s happening with your gym today
-            </p>
-            {process.env.NODE_ENV === 'development' && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Shield className="h-3 w-3" />
-                <span>Session: {sessionId || 'N/A'}</span>
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <Link href="/members">
-            <Button>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Add Members
-            </Button>
-          </Link>
-          <Link href="/settings">
-            <Button variant="outline">
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <DashboardHeader
+        title={`Welcome back, ${profile?.full_name || 'User'}!`}
+        subtitle={`Here's what's happening with your gym today${process.env.NODE_ENV === 'development' ? ` • Session: ${sessionId || 'N/A'}` : ''}`}
+      >
+        <Link href="/members">
+          <Button>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Add Members
+          </Button>
+        </Link>
+        <Link href="/settings">
+          <Button variant="outline">
+            <Settings className="h-4 w-4 mr-2" />
+            Settings
+          </Button>
+        </Link>
+      </DashboardHeader>
 
       {/* Welcome Message */}
       {showWelcomeMessage && (

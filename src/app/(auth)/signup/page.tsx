@@ -19,7 +19,7 @@ import { Loader2 } from "lucide-react";
 
 import { loginWithSocialProvider, signupWithEmail } from "@/actions/auth.actions";
 import React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -81,28 +81,14 @@ const SocialButton = ({
   );
 };
 
-// Submit button component
-const SubmitButton = ({ isSubmitting }: { isSubmitting: boolean }) => {
-  return (
-    <Button 
-      type="submit" 
-      className="w-full transition-all duration-200" 
-      disabled={isSubmitting}
-    >
-      {isSubmitting ? (
-        <>
-          <Loader2 className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-          Creating Account...
-        </>
-      ) : (
-        "Sign up with Email"
-      )}
-    </Button>
-  );
-};
+// Note: SubmitButton component replaced with inline button
 
 const SignUpPageComponent = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Get invitation token from search params
+  const inviteToken = searchParams.get('invite') || '';
   
   // Use TanStack Query hooks for auth state
   const { isAuthenticated, isLoading } = useAuth();
@@ -145,7 +131,13 @@ const SignUpPageComponent = () => {
         `Redirecting to ${provider === 'google' ? 'Google' : 'Facebook'} for authentication.`
       );
       
+      const origin = typeof window !== 'undefined' ? window.location.origin : ''
+      const redirectTo = origin 
+        ? `${origin}/auth/callback`
+        : undefined
+
       await loginWithSocialProvider(provider, {
+        redirectTo,
         scopes: provider === 'google' 
           ? 'email profile openid' 
           : 'email public_profile'
@@ -175,6 +167,11 @@ const SignUpPageComponent = () => {
       formData.append('email', data.email);
       formData.append('password', data.password);
       
+      // Include invitation token if present
+      if (inviteToken) {
+        formData.append('inviteToken', inviteToken);
+      }
+      
       const result = await signupWithEmail(null, formData);
       
       if (result?.error) {
@@ -201,18 +198,22 @@ const SignUpPageComponent = () => {
   };
 
   // Show loading while checking authentication
-  if (isLoading || (isAuthenticated)) {
+  if (isLoading || isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
           <Loader2 className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-sm text-muted-foreground">
-            {isAuthenticated ? 'Redirecting to dashboard...' : 'Loading...'}
+            {isAuthenticated 
+              ? 'Redirecting to dashboard...' 
+              : 'Loading...'}
           </p>
         </div>
       </div>
     );
   }
+
+
 
   const isSocialButtonDisabled = isSubmitting || socialLoading.google || socialLoading.facebook;
 
@@ -221,9 +222,7 @@ const SignUpPageComponent = () => {
       <Card className="mx-auto max-w-sm w-full">
         <CardHeader>
           <CardTitle className="text-xl">Create your account</CardTitle>
-          <CardDescription>
-            Choose your preferred sign up method
-          </CardDescription>
+          <CardDescription>Choose your preferred sign up method</CardDescription>
         </CardHeader>
         <CardContent>
           {/* Social Login Buttons */}
@@ -284,7 +283,20 @@ const SignUpPageComponent = () => {
                   </p>
                 )}
               </div>
-              <SubmitButton isSubmitting={isSubmitting} />
+              <Button 
+                type="submit" 
+                className="w-full transition-all duration-200" 
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                    Creating Account...
+                  </>
+                ) : (
+                  "Sign up with Email"
+                )}
+              </Button>
             </div>
           </form>
 

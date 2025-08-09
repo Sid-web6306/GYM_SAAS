@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { useRouter } from 'next/navigation'
@@ -16,6 +16,8 @@ import { useAuth } from '@/hooks/use-auth'
 import { RequireAuth } from '@/components/auth/AuthGuard'
 import { authUIActions } from '@/stores/auth-store'
 import { useTrialInitialization } from '@/hooks/use-trial'
+import { useInviteVerification } from '@/hooks/use-invitations'
+import { useSearchParams } from 'next/navigation'
 
 // Enhanced submit button with improved loading states
 const SubmitButton = ({ isValid }: { isValid: boolean }) => {
@@ -220,12 +222,40 @@ const GymSetupForm = ({ user, formAction }: {
   )
 }
 
-// Main onboarding page component
-const OnboardingPage = () => {
+// Inner content that uses useSearchParams must be wrapped in Suspense
+const OnboardingContent = () => {
   const { user, hasGym, isLoading: authLoading } = useAuth()
+  // Handle invite acceptance directly (bypassing gym creation)
+  const handleInviteAcceptance = async () => {
+    if (!inviteToken || !isValidInvite) return
+    
+    try {
+      console.log('Onboarding: Accepting invitation directly')
+      await acceptInvitation()
+      toastActions.success('Welcome to the team!', `You've successfully joined ${invitation?.gym.name}`)
+      router.replace('/dashboard')
+    } catch (error) {
+      console.error('Failed to accept invitation:', error)
+      toastActions.error('Invitation Error', 'Failed to accept invitation. Please try again.')
+    }
+  }
+
   const [state, formAction] = useActionState<OnboardingFormState | null, FormData>(completeOnboarding, null)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { mutateAsync: initializeTrial, isIdle: trialNotStarted } = useTrialInitialization();
+
+  // Get invite token from URL or user metadata
+  const inviteToken = searchParams.get('invite') || user?.user_metadata?.pendingInviteToken || '';
+  
+  // Verify invitation if token exists
+  const {
+    invitation,
+    isValid: isValidInvite,
+    isLoading: isVerifyingInvite,
+    error: inviteError,
+    acceptInvitation
+  } = useInviteVerification(inviteToken);
 
   // Multi-tab redirect: if user already has gym (completed onboarding in another tab), redirect to dashboard
   useEffect(() => {
@@ -267,13 +297,17 @@ const OnboardingPage = () => {
     }
   }, [user, trialNotStarted, initializeTrial])
 
-  // Show loading state while auth is loading
-  if (authLoading) {
+  // Show loading state while auth is loading or verifying invite
+  if (authLoading || (inviteToken && isVerifyingInvite)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center space-y-4">
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-          <p className="text-gray-600">Loading your profile...</p>
+          <p className="text-gray-600">
+            {inviteToken && isVerifyingInvite 
+              ? 'Verifying your invitation...'
+              : 'Loading your profile...'}
+          </p>
         </div>
       </div>
     )
@@ -291,7 +325,211 @@ const OnboardingPage = () => {
     )
   }
 
-  // Show loading state if no user
+  // If we have a valid invitation, show invitation acceptance interface (even for unauthenticated users)
+  if (inviteToken && isValidInvite && invitation) {
+    // If user is not authenticated, show invitation with login/signup options
+    if (!user) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+            <CardHeader className="pb-6">
+              <div className="flex items-center justify-center mb-4">
+                <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-green-600 rounded-xl flex items-center justify-center">
+                  <Building2 className="w-6 h-6 text-white" />
+                </div>
+              </div>
+              <CardTitle className="text-center text-xl font-bold text-gray-900">
+                Join {invitation.gym.name}
+              </CardTitle>
+              <CardDescription className="text-center text-gray-600">
+                You&apos;ve been invited to join this gym as {invitation.role}
+              </CardDescription>
+            </CardHeader>
+            
+            <CardContent className="pt-0">
+              <div className="space-y-6">
+                {/* Invitation Details */}
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5 text-blue-600" />
+                      <span className="font-semibold text-blue-900">{invitation.gym.name}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Role:</span>
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium capitalize">
+                        {invitation.role}
+                      </span>
+                    </div>
+                    
+                    <div className="text-sm text-gray-600">
+                      Invited by: <span className="font-medium">{invitation.invited_by.name}</span>
+                    </div>
+                    
+                    {invitation.message && (
+                      <div className="mt-3 p-3 bg-white border border-blue-200 rounded text-gray-700 italic text-sm">
+                        &ldquo;{invitation.message}&rdquo;
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Authentication Required Notice */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-600" />
+                    <span className="font-medium text-yellow-800">Sign In Required</span>
+                  </div>
+                  <p className="text-sm text-yellow-700">
+                    Please sign in or create an account to accept this invitation.
+                  </p>
+                </div>
+
+                {/* Auth Action Buttons */}
+                <div className="space-y-3">
+                  <Button 
+                    onClick={() => router.push(`/login?redirect=${encodeURIComponent(window.location.href)}`)}
+                    className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white font-semibold py-3 cursor-pointer"
+                  >
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                    Sign In to Accept Invitation
+                  </Button>
+                  
+                  <Button 
+                    variant="outline"
+                    onClick={() => router.push(`/signup?redirect=${encodeURIComponent(window.location.href)}`)}
+                    className="w-full cursor-pointer"
+                  >
+                    Create Account & Accept Invitation
+                  </Button>
+                </div>
+
+                {/* Alternative Action */}
+                <div className="text-center pt-4 border-t">
+                  <p className="text-sm text-gray-600 mb-3">
+                    Don&apos;t want to join this gym?
+                  </p>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => router.push('/')}
+                    className="cursor-pointer text-gray-500"
+                  >
+                    Go to Homepage
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+
+    // User is authenticated, check email confirmation
+    const isEmailConfirmed = Boolean(user.email_confirmed_at)
+    
+    if (!isEmailConfirmed) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+            <CardContent className="pt-6">
+              <EmailConfirmationStep email={user.email || ''} />
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+
+    // User is authenticated and email confirmed, show acceptance interface
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+          <CardHeader className="pb-6">
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-green-600 rounded-xl flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <CardTitle className="text-center text-xl font-bold text-gray-900">
+              Join {invitation.gym.name}
+            </CardTitle>
+            <CardDescription className="text-center text-gray-600">
+              You&apos;re ready to join this gym as {invitation.role}
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent className="pt-0">
+            <div className="space-y-6">
+              {/* Invitation Details */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-blue-600" />
+                    <span className="font-semibold text-blue-900">{invitation.gym.name}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">Role:</span>
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium capitalize">
+                      {invitation.role}
+                    </span>
+                  </div>
+                  
+                  <div className="text-sm text-gray-600">
+                    Invited by: <span className="font-medium">{invitation.invited_by.name}</span>
+                  </div>
+                  
+                  {invitation.message && (
+                    <div className="mt-3 p-3 bg-white border border-blue-200 rounded text-gray-700 italic text-sm">
+                      &ldquo;{invitation.message}&rdquo;
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* User Info */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Ready to join!</p>
+                    <p className="text-sm text-gray-600">{user.email}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Accept Button */}
+              <Button 
+                onClick={handleInviteAcceptance}
+                className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white font-semibold py-3 cursor-pointer"
+              >
+                <CheckCircle className="w-5 h-5 mr-2" />
+                Accept Invitation & Join Team
+              </Button>
+
+              {/* Alternative Action */}
+              <div className="text-center pt-4 border-t">
+                <p className="text-sm text-gray-600 mb-3">
+                  Want to create your own gym instead?
+                </p>
+                <Button 
+                  variant="outline" 
+                  onClick={() => router.push('/onboarding')}
+                  className="cursor-pointer"
+                >
+                  Create My Own Gym
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Show loading state if no user and no invitation
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -303,7 +541,40 @@ const OnboardingPage = () => {
     )
   }
 
-  // Check if email is confirmed
+
+
+  // Show error if invite token is invalid
+  if (inviteToken && !isVerifyingInvite && (!isValidInvite || inviteError)) {
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+            <CardContent className="pt-6">
+              <div className="text-center space-y-4">
+                <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-8 h-8 text-red-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Invalid Invitation</h2>
+                  <p className="text-gray-600 mt-2">
+                    {inviteError || 'This invitation link is invalid or has expired.'}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button onClick={() => router.push('/onboarding')} className="w-full cursor-pointer">
+                    Continue with Gym Setup
+                  </Button>
+                  <Button variant="outline" onClick={() => router.push('/dashboard')} className="w-full cursor-pointer">
+                    Go to Dashboard
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+    )
+  }
+
+  // Check if email is confirmed for authenticated users  
   const isEmailConfirmed = Boolean(user.email_confirmed_at)
   const userEmail = user.email || ''
 
@@ -341,6 +612,15 @@ const OnboardingPage = () => {
         </Card>
       </div>
     </RequireAuth>
+  )
+}
+
+// Main onboarding page component wrapped with Suspense for useSearchParams
+const OnboardingPage = () => {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" /></div>}>
+      <OnboardingContent />
+    </Suspense>
   )
 }
 

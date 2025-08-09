@@ -427,7 +427,6 @@ export function useCreateGym() {
         .from('gyms')
         .insert({
           name,
-          owner_id: user.id,
           created_at: new Date().toISOString()
         })
         .select()
@@ -565,6 +564,64 @@ function generateCheckinData(members: MemberData[]) {
 }
 
 // Prefetch function for server-side usage
+// Hook to get gym owner information using secure RPC function
+export function useGymOwner(gymId: string | null) {
+  const { isAuthenticated, user } = useAuth()
+  
+  return useQuery({
+    queryKey: ['gym', 'owner', gymId],
+    queryFn: async () => {
+      if (!gymId) throw new Error('Gym ID is required')
+      
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .rpc('get_gym_owner_info', { gym_uuid: gymId })
+      
+      if (error) {
+        // Handle authentication errors gracefully
+        if (isAuthenticationError(error)) {
+          console.log('Gym owner fetch: Authentication error during logout - this is expected')
+          throw error
+        }
+        
+        // Handle access denied (user not in gym) - return null
+        if (error.message?.includes('Access denied')) {
+          console.log('Gym owner fetch: Access denied - user not member of gym')
+          return null
+        }
+        
+        console.error('Gym owner fetch error:', error)
+        throw error
+      }
+      
+      // RPC returns array with different field names, map to expected format
+      if (data && data.length > 0) {
+        const owner = data[0]
+        return {
+          id: owner.owner_id,
+          full_name: owner.owner_full_name,
+          email: owner.owner_email
+        }
+      }
+      return null
+    },
+    enabled: !!gymId && isAuthenticated && !!user,
+    staleTime: 15 * 60 * 1000, // 15 minutes - owner info changes rarely
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (isAuthenticationError(error)) {
+        return false
+      }
+      // Don't retry on access denied errors
+      if (error && typeof error === 'object' && 'message' in error && 
+          typeof error.message === 'string' && error.message.includes('Access denied')) {
+        return false
+      }
+      return failureCount < 3
+    },
+  })
+}
+
 export async function prefetchGymData(queryClient: QueryClient, gymId: string) {
   await Promise.all([
     queryClient.prefetchQuery({

@@ -1,7 +1,7 @@
 // src/types/database.types.ts
 
 // Import the generated `Database` type from the CLI
-import { type Database as SupabaseDatabase } from './supabase.types'
+import { type Database as SupabaseDatabase } from '@/types/supabase'
 
 // This is our new, globally available type for the database.
 // We will use this in our Supabase client helpers.

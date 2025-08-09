@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useAuth, useUpdateProfile } from '@/hooks/use-auth'
-import { useUpdateGym, useGymData } from '@/hooks/use-gym-data'
+import { useUpdateGym, useGymData, useGymOwner } from '@/hooks/use-gym-data'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,7 +20,9 @@ import {
   Eye,
   EyeOff,
   Palette,
-  CreditCard
+  CreditCard,
+  Users,
+  Crown
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -29,7 +31,10 @@ import { toastActions } from '@/stores/toast-store'
 import { changePassword } from '@/actions/auth.actions'
 import { AppearanceTab } from '@/components/settings/AppearanceTab'
 import { SubscriptionTab } from '@/components/settings/SubscriptionTab'
-
+import { TeamTab } from '@/components/settings/TeamTab'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { RoleContextIndicator } from '@/components/layout/RoleContextIndicator'
+import { ManagerOnly, GymSettingsGuard, BillingGuard, AccessDenied } from '@/components/rbac/rbac-guards'
 // Form schemas
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(100, 'Name must be less than 100 characters'),
@@ -61,7 +66,10 @@ const SettingsPage = () => {
   // Get gym data for populating the form
   const { data: gymData, isLoading: gymLoading } = useGymData(profile?.gym_id || null)
   
-  const [activeTab, setActiveTab] = useState<'profile' | 'gym' | 'security' | 'appearance' | 'subscription'>('profile')
+  // Get gym owner information (only if user is not the owner)
+  const { data: gymOwner } = useGymOwner(profile?.gym_id || null)
+  
+  const [activeTab, setActiveTab] = useState<'profile' | 'gym' | 'team' | 'subscription' | 'appearance' | 'security'>('profile')
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -172,8 +180,9 @@ const SettingsPage = () => {
 
   const tabs = [
     { id: 'profile' as const, label: 'Profile', icon: User },
-    { id: 'gym' as const, label: 'Gym Settings', icon: Building2 },
-    { id: 'subscription' as const, label: 'Subscription', icon: CreditCard },
+    { id: 'gym' as const, label: 'Gym Settings', icon: Building2, guard: 'gym' },
+    { id: 'team' as const, label: 'Team Management', icon: Users, guard: 'manager' },
+    { id: 'subscription' as const, label: 'Subscription', icon: CreditCard, guard: 'billing' },
     { id: 'appearance' as const, label: 'Appearance', icon: Palette },
     { id: 'security' as const, label: 'Security', icon: Lock },
   ]
@@ -181,27 +190,21 @@ const SettingsPage = () => {
   return (
     <div className="space-y-8 p-6 md:p-8">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <div className="p-2 bg-primary/10 rounded-lg">
-          <Settings className="h-6 w-6 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your account and preferences
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Manage your account and preferences"
+        showGymContext={true}
+      />
 
-      <div className="flex flex-col gap-8 lg:flex-row">
+      <div className="flex flex-col gap-6 lg:flex-row lg:gap-6">
         {/* Tab Navigation */}
-        <div className="lg:w-1/4">
+        <div className="lg:w-[240px] lg:flex-none">
           <nav className="space-y-2">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors cursor-pointer ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors cursor-pointer w-full lg:w-[220px] ${
                   activeTab === tab.id
                     ? 'bg-primary text-primary-foreground'
                     : 'hover:bg-muted text-muted-foreground hover:text-foreground'
@@ -262,6 +265,57 @@ const SettingsPage = () => {
 
                   <Separator />
 
+                  {/* Role & Gym Context Section */}
+                  <div className="space-y-4">
+                    <h3 className="font-medium flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      Role & Access Information
+                    </h3>
+                    
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {/* Current Role */}
+                      <div className="space-y-2">
+                        <Label>Current Role</Label>
+                        <div className="flex items-center gap-2">
+                          <RoleContextIndicator variant="chip" showGym={false} />
+                          <span className="text-sm text-muted-foreground">
+                            Access Level: {profile?.default_role ? 
+                              (profile.default_role === 'owner' ? '100' :
+                               profile.default_role === 'manager' ? '75' :
+                               profile.default_role === 'trainer' ? '60' :
+                               profile.default_role === 'staff' ? '50' : '25') : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Current Gym */}
+                      <div className="space-y-2">
+                        <Label>Current Gym</Label>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md">
+                            <Building2 className="w-4 h-4" />
+                            <span className="text-sm font-medium">
+                              {gymData?.name || 'Loading...'}
+                            </span>
+                          </div>
+                          
+                          {/* Show gym owner info if user is not the owner */}
+                          {gymOwner && !profile?.is_gym_owner && (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-md">
+                              <Crown className="w-4 h-4" />
+                              <span className="text-sm">
+                                <span className="font-medium">Owner:</span>{' '}
+                                {gymOwner.full_name || gymOwner.email}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <h3 className="font-medium">Account Status</h3>
@@ -294,18 +348,25 @@ const SettingsPage = () => {
           )}
 
           {activeTab === 'gym' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
-                  Gym Settings
-                </CardTitle>
-                <CardDescription>
-                  Manage your gym information and preferences
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {hasGym ? (
+            <GymSettingsGuard action="update" fallback={
+              <div className="p-8">
+                <AccessDenied 
+                  message="Gym settings can only be modified by managers and gym owners. Contact your gym owner if you need to make changes." 
+                />
+              </div>
+            }>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    Gym Settings
+                  </CardTitle>
+                  <CardDescription>
+                    Manage your gym information and preferences
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {hasGym ? (
                   <form onSubmit={gymForm.handleSubmit(handleGymUpdate)} className="space-y-6">
                     <div className="space-y-2">
                       <Label htmlFor="gym_name">Gym Name</Label>
@@ -363,14 +424,35 @@ const SettingsPage = () => {
                      Complete your gym setup to manage gym settings
                    </p>
                    <Button>Complete Gym Setup</Button>
-                 </div>
-               )}
-             </CardContent>
-           </Card>
-         )}
+                   </div>
+                  )}
+                </CardContent>
+              </Card>
+            </GymSettingsGuard>
+          )}
+
+          {activeTab === 'team' && (
+            <ManagerOnly fallback={
+              <div className="p-8">
+                <AccessDenied 
+                  message="Team management is only available to managers and gym owners. Contact your gym owner to request manager privileges." 
+                />
+              </div>
+            }>
+              <TeamTab />
+            </ManagerOnly>
+          )}
 
           {activeTab === 'subscription' && (
-            <SubscriptionTab />
+            <BillingGuard action="read" fallback={
+              <div className="p-8">
+                <AccessDenied 
+                  message="Subscription details are only available to staff members and above. Contact your gym manager for access." 
+                />
+              </div>
+            }>
+              <SubscriptionTab />
+            </BillingGuard>
           )}
 
           {activeTab === 'appearance' && (

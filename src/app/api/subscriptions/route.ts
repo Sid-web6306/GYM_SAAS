@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { getRazorpay } from '@/lib/razorpay'
 import { logger } from '@/lib/logger'
+import type { Tables } from '@/types/supabase'
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
 
@@ -106,11 +106,12 @@ async function handleGetPlans(supabase: SupabaseClient) {
     }
     
     // Group plans by plan_type and billing_cycle for easier frontend consumption
-    const groupedPlans = plans?.reduce((acc: any, plan: any) => {
-      const key = `${plan.plan_type}_${plan.billing_cycle}`
-      acc[key] = plan
-      return acc
-    }, {})
+    const groupedPlans: Record<string, Tables<'subscription_plans'>> = {}
+    const typedPlans = (plans ?? []) as Tables<'subscription_plans'>[]
+    for (const plan of typedPlans) {
+      const key = `${plan.plan_type ?? 'default'}_${plan.billing_cycle}`
+      groupedPlans[key] = plan
+    }
     
     return NextResponse.json({ plans: plans || [], groupedPlans: groupedPlans || {} })
   } catch (error) {
@@ -160,7 +161,11 @@ async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: st
       }
     }
 
-    logger.info('Subscription:', { subscription })
+    logger.info('Subscription fetched', {
+      userId,
+      subscriptionId: subscription?.id,
+      status: subscription?.status
+    })
 
     return NextResponse.json({ 
       subscription: subscription || null,
@@ -178,7 +183,8 @@ async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: st
 }
 
 // Helper function to create billing portal session
-async function handleCreateBillingPortal(supabase: any, user: any) {
+type MinimalUser = { id: string; email?: string | null }
+async function handleCreateBillingPortal(supabase: SupabaseClient, user: MinimalUser) {
   try {
     const razorpay = getRazorpay()
     if (!razorpay) {
@@ -244,7 +250,7 @@ async function handleCreateBillingPortal(supabase: any, user: any) {
 }
 
 // Helper function to pause subscription
-async function handlePauseSubscription(supabase: any, userId: string, subscriptionId: string) {
+async function handlePauseSubscription(supabase: SupabaseClient, userId: string, subscriptionId: string) {
   try {
     if (!subscriptionId) {
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
@@ -304,7 +310,7 @@ async function handlePauseSubscription(supabase: any, userId: string, subscripti
 }
 
 // Helper function to resume subscription
-async function handleResumeSubscription(supabase: any, userId: string, subscriptionId: string) {
+async function handleResumeSubscription(supabase: SupabaseClient, userId: string, subscriptionId: string) {
   try {
     if (!subscriptionId) {
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
@@ -339,13 +345,63 @@ async function handleResumeSubscription(supabase: any, userId: string, subscript
 
     // Resume in Razorpay if available
     if (subscription.razorpay_subscription_id) {
-      try {
-        await razorpay.subscriptions.resume(subscription.razorpay_subscription_id, {
-          resume_at: 'now'
+      const razorpaySubscriptionId = subscription.razorpay_subscription_id
+      const maxAttempts = 3
+      let attempt = 0
+      let lastError: unknown = null
+
+      while (attempt < maxAttempts) {
+        try {
+          attempt++
+          await razorpay.subscriptions.resume(razorpaySubscriptionId, {
+            resume_at: 'now'
+          })
+          break
+        } catch (razorpayError) {
+          lastError = razorpayError
+          logger.error('Error resuming Razorpay subscription:', {
+            userId,
+            subscriptionId,
+            razorpaySubscriptionId,
+            attempt,
+            maxAttempts,
+            error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError),
+            stack: razorpayError instanceof Error ? razorpayError.stack : undefined
+          })
+          if (attempt < maxAttempts) {
+            // Exponential backoff
+            await new Promise((resolve) => setTimeout(resolve, attempt * 200))
+          }
+        }
+      }
+
+      if (attempt === maxAttempts) {
+        // Roll back DB resume to maintain consistency if Razorpay failed
+        const { error: rollbackError } = await supabase.rpc('pause_subscription', {
+          p_subscription_id: subscriptionId
         })
-      } catch (razorpayError) {
-        logger.error('Error resuming Razorpay subscription:', { error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError) })
-        // Don't fail the request if Razorpay update fails
+
+        if (rollbackError) {
+          logger.error('Failed to rollback subscription after Razorpay resume failure:', {
+            userId,
+            subscriptionId,
+            razorpaySubscriptionId,
+            lastError: lastError instanceof Error ? lastError.message : String(lastError),
+            rollbackError: rollbackError.message
+          })
+        } else {
+          logger.warn('Rolled back subscription to paused state after Razorpay resume failure:', {
+            userId,
+            subscriptionId,
+            razorpaySubscriptionId,
+            lastError: lastError instanceof Error ? lastError.message : String(lastError)
+          })
+        }
+
+        return NextResponse.json(
+          { error: 'Failed to resume subscription with payment provider. Subscription remains paused.' },
+          { status: 502 }
+        )
       }
     }
 
@@ -364,7 +420,19 @@ async function handleResumeSubscription(supabase: any, userId: string, subscript
 }
 
 // Helper function to cancel subscription
-async function handleCancelSubscription(supabase: SupabaseClient, userId: string, subscriptionId: string, cancelAtPeriodEnd: boolean = true, feedback?: any) {
+type CancellationFeedback = {
+  reason: string
+  feedbackText?: string | null
+  rating?: number | null
+  wouldRecommend?: boolean | null
+}
+async function handleCancelSubscription(
+  supabase: SupabaseClient,
+  userId: string,
+  subscriptionId: string,
+  cancelAtPeriodEnd: boolean = true,
+  feedback?: CancellationFeedback
+) {
   try {
     if (!subscriptionId) {
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
@@ -459,7 +527,13 @@ async function handleCancelSubscription(supabase: SupabaseClient, userId: string
 }
 
 // Helper function to change subscription plan
-async function handleChangePlan(supabase: any, userId: string, subscriptionId: string, newPlanId: string, billingCycle: string) {
+async function handleChangePlan(
+  supabase: SupabaseClient,
+  userId: string,
+  subscriptionId: string,
+  newPlanId: string,
+  billingCycle: 'monthly' | 'annual'
+) {
   try {
     if (!subscriptionId || !newPlanId || !billingCycle) {
       return NextResponse.json({ error: 'Subscription ID, new plan ID, and billing cycle are required' }, { status: 400 })
