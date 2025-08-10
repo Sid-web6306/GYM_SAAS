@@ -15,16 +15,16 @@ const inter = Inter({ subsets: ["latin"] });
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
 };
 
 export const metadata: Metadata = {
   title: "Gym SaaS MVP",
   description: "A comprehensive gym management system",
   manifest: "/manifest.json",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#000000" },
-  ],
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -47,7 +47,7 @@ export default function RootLayout({
         <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="beforeInteractive" />
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="rose"
           enableSystem={false}
           disableTransitionOnChange={false}
           themes={['light', 'blue', 'green', 'purple', 'rose']}

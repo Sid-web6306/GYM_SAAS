@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a multi-tenant Gym SaaS MVP built with Next.js 15 and Supabase. The application allows gym owners to manage their members, view analytics, handle member check-ins, and manage subscriptions with tiered pricing plans. The system includes payment processing through Stripe, subscription management, and comprehensive legal pages (privacy policy, terms of service, refund policy). Each gym owner's data is isolated through a multi-tenant architecture.
+This is a multi-tenant Gym SaaS MVP built with Next.js 15 and Supabase. The application allows gym owners to manage their members, view analytics, handle member check-ins, and manage subscriptions with tiered pricing plans. The system includes payment processing through razorpay, subscription management, and comprehensive legal pages (privacy policy, terms of service, refund policy). Each gym owner's data is isolated through a multi-tenant architecture.
 
 ## Development Commands
 

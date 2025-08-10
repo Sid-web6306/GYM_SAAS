@@ -96,7 +96,7 @@ export async function createInvitation(formData: FormData): Promise<CreateInvite
       if (existingRole) {
         return { 
           success: false, 
-          error: `User already has the role of ${existingRole.role} in this gym` 
+          error: `User already has a role in this gym` 
         }
       }
     }

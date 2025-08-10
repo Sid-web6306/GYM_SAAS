@@ -17,6 +17,7 @@ interface ToastStore {
   
   // Internal helper
   _showToast: (type: ToastType, title: string, description: string) => void
+  _sanitize: (text: string) => string
 }
 
 // Helper to create a unique key for deduplication
@@ -27,6 +28,35 @@ const createToastKey = (type: ToastType, title: string, description: string) => 
 export const useToastStore = create<ToastStore>((set, get) => ({
   recentToasts: new Map(),
   
+  // Basic sanitizer to avoid leaking sensitive data in UI toasts
+  // - Masks common secret keys/tokens/passwords
+  // - Masks email addresses
+  // - Truncates overly long payloads
+  _sanitize(text: string) {
+    if (!text) return ''
+    let sanitized = String(text)
+
+    // Mask common secrets in key=value or JSON formats
+    const sensitiveKeys = [
+      'access_token', 'refresh_token', 'authorization', 'api_key', 'apikey',
+      'secret', 'client_secret', 'password', 'session', 'sessionid', 'session_id'
+    ]
+    const keyEqVal = new RegExp(`(?:${sensitiveKeys.join('|')})=([^&\n\r\s]+)`, 'gi')
+    const keyJsonVal = new RegExp(`"(?:${sensitiveKeys.join('|')})"\s*:\s*"[^"]+"`, 'gi')
+    sanitized = sanitized.replace(keyEqVal, (m) => m.replace(/=.*/, '=***'))
+    sanitized = sanitized.replace(keyJsonVal, (m) => m.replace(/:\s*"[^"]+"/, ': "***"'))
+
+    // Mask email addresses like j***@domain.com
+    sanitized = sanitized.replace(/\b([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*(@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g, '$1***$2')
+
+    // Truncate very long strings
+    const MAX_LEN = 300
+    if (sanitized.length > MAX_LEN) {
+      sanitized = sanitized.slice(0, MAX_LEN) + '…'
+    }
+    return sanitized
+  },
+
   // Internal helper with deduplication
   _showToast: (type: ToastType, title: string, description: string) => {
     const state = get()
@@ -36,7 +66,9 @@ export const useToastStore = create<ToastStore>((set, get) => ({
     
     // Prevent duplicate toasts within 3 seconds
     if (lastShown && now - lastShown < 3000) {
-      console.log('Preventing duplicate toast:', { type, title, description })
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Preventing duplicate toast:', { type, title /* description intentionally omitted */ })
+      }
       return
     }
     
@@ -55,7 +87,7 @@ export const useToastStore = create<ToastStore>((set, get) => ({
     
     // Show the toast
     const toastOptions = {
-      description,
+      description: state._sanitize(description),
       duration: 8000,
     }
     
