@@ -7,8 +7,8 @@ export default function TeamPage() {
   return (
     <div className="space-y-8 p-6 md:p-8">
       <PageHeader
-        title="Team"
-        description="Invite and manage team members for your gym"
+        title="Roles & Invitations"
+        description="Invite users and manage their roles for your gym"
       />
 
       <ManagerOnly

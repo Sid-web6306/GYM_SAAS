@@ -179,10 +179,10 @@ const SettingsPage = () => {
 
   const tabs = [
     { id: 'profile' as const, label: 'Profile', icon: User },
+    { id: 'security' as const, label: 'Security', icon: Lock },
     { id: 'gym' as const, label: 'Gym Settings', icon: Building2, guard: 'gym' },
     { id: 'subscription' as const, label: 'Subscription', icon: CreditCard, guard: 'billing' },
     { id: 'appearance' as const, label: 'Appearance', icon: Palette },
-    { id: 'security' as const, label: 'Security', icon: Lock },
   ]
 
   return (
@@ -229,6 +229,58 @@ const SettingsPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Role & Gym Context Section - moved to top for better context */}
+                <div className="space-y-4">
+                  <h3 className="font-medium flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Role & Access Information
+                  </h3>
+                  
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {/* Current Role */}
+                    <div className="space-y-2">
+                      <Label>Current Role</Label>
+                      <div className="flex items-center gap-2">
+                        <RoleContextIndicator variant="chip" showGym={false} />
+                        <span className="text-sm text-muted-foreground">
+                          Access Level: {profile?.default_role ? 
+                            (profile.default_role === 'owner' ? '100' :
+                             profile.default_role === 'manager' ? '75' :
+                             profile.default_role === 'trainer' ? '60' :
+                             profile.default_role === 'staff' ? '50' : '25') : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Current Gym */}
+                    <div className="space-y-2">
+                      <Label>Current Gym</Label>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md">
+                          <Building2 className="w-4 h-4" />
+                          <span className="text-sm font-medium">
+                            {gymData?.name || 'Loading...'}
+                          </span>
+                        </div>
+                        
+                        {/* Show gym owner info if user is not the owner */}
+                        {gymOwner && !profile?.is_gym_owner && (
+                          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-md">
+                            <Crown className="w-4 h-4" />
+                            <span className="text-sm">
+                              <span className="font-medium">Owner:</span>{' '}
+                              {gymOwner.full_name || gymOwner.email}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Profile form */}
                 <form onSubmit={profileForm.handleSubmit(handleProfileUpdate)} className="space-y-6">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
@@ -258,57 +310,6 @@ const SettingsPage = () => {
                       <p className="text-sm text-muted-foreground">
                         Email cannot be changed. Contact support if you need to update your email.
                       </p>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  {/* Role & Gym Context Section */}
-                  <div className="space-y-4">
-                    <h3 className="font-medium flex items-center gap-2">
-                      <Settings className="h-4 w-4" />
-                      Role & Access Information
-                    </h3>
-                    
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {/* Current Role */}
-                      <div className="space-y-2">
-                        <Label>Current Role</Label>
-                        <div className="flex items-center gap-2">
-                          <RoleContextIndicator variant="chip" showGym={false} />
-                          <span className="text-sm text-muted-foreground">
-                            Access Level: {profile?.default_role ? 
-                              (profile.default_role === 'owner' ? '100' :
-                               profile.default_role === 'manager' ? '75' :
-                               profile.default_role === 'trainer' ? '60' :
-                               profile.default_role === 'staff' ? '50' : '25') : 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Current Gym */}
-                      <div className="space-y-2">
-                        <Label>Current Gym</Label>
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md">
-                            <Building2 className="w-4 h-4" />
-                            <span className="text-sm font-medium">
-                              {gymData?.name || 'Loading...'}
-                            </span>
-                          </div>
-                          
-                          {/* Show gym owner info if user is not the owner */}
-                          {gymOwner && !profile?.is_gym_owner && (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-md">
-                              <Crown className="w-4 h-4" />
-                              <span className="text-sm">
-                                <span className="font-medium">Owner:</span>{' '}
-                                {gymOwner.full_name || gymOwner.email}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
                     </div>
                   </div>
 

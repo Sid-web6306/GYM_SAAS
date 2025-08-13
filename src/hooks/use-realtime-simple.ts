@@ -39,6 +39,10 @@ const TABLE_QUERY_MAPPINGS = {
     ['user-subscriptions', userId],   // Subscription history
     ['check-subscription-access', userId], // Access checks
     ['trial-info']                    // Trial status
+  ],
+  attendance_sessions: (gymId: string) => [
+    ['attendance', 'members', gymId],
+    ['attendance', 'staff', gymId]
   ]
 } as const
 
@@ -368,6 +372,7 @@ export function useRealtimeSync(gymId: string | null) {
     // Set up gym-specific subscriptions with error handling
     try {
       setupSubscription('members', `gym_id=eq.${gymId}`)
+      setupSubscription('attendance_sessions', `gym_id=eq.${gymId}`)
       setupSubscription('gyms', `id=eq.${gymId}`)
     } catch (error) {
       logger.realtime.error('Error setting up gym subscriptions', { 

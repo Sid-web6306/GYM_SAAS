@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 type GymRole = 'owner' | 'manager' | 'trainer' | 'staff' | 'member'
 
 // Role icon mapping
-const ROLE_ICONS = {
+export const ROLE_ICONS = {
   owner: Crown,
   manager: Users,
   trainer: Dumbbell,
@@ -28,7 +28,7 @@ const ROLE_ICONS = {
 } as const
 
 // Role color mapping
-const ROLE_COLORS = {
+export const ROLE_COLORS = {
   owner: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   manager: 'bg-purple-100 text-purple-800 border-purple-200',
   trainer: 'bg-blue-100 text-blue-800 border-blue-200',
