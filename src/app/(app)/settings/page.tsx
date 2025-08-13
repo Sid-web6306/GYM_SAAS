@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useTransition, useDeferredValue } from 'react'
 import { useAuth, useUpdateProfile } from '@/hooks/use-auth'
 import { useUpdateGym, useGymData, useGymOwner } from '@/hooks/use-gym-data'
 import { Button } from '@/components/ui/button'
@@ -21,7 +21,6 @@ import {
   EyeOff,
   Palette,
   CreditCard,
-  Users,
   Crown
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -29,12 +28,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toastActions } from '@/stores/toast-store'
 import { changePassword } from '@/actions/auth.actions'
-import { AppearanceTab } from '@/components/settings/AppearanceTab'
-import { SubscriptionTab } from '@/components/settings/SubscriptionTab'
-import { TeamTab } from '@/components/settings/TeamTab'
+import dynamic from 'next/dynamic'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { RoleContextIndicator } from '@/components/layout/RoleContextIndicator'
-import { ManagerOnly, GymSettingsGuard, BillingGuard, AccessDenied } from '@/components/rbac/rbac-guards'
+import { GymSettingsGuard, BillingGuard, AccessDenied } from '@/components/rbac/rbac-guards'
 // Form schemas
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(100, 'Name must be less than 100 characters'),
@@ -69,7 +66,9 @@ const SettingsPage = () => {
   // Get gym owner information (only if user is not the owner)
   const { data: gymOwner } = useGymOwner(profile?.gym_id || null)
   
-  const [activeTab, setActiveTab] = useState<'profile' | 'gym' | 'team' | 'subscription' | 'appearance' | 'security'>('profile')
+  const [selectedTab, setSelectedTab] = useState<'profile' | 'gym' | 'subscription' | 'appearance' | 'security'>('profile')
+  const [, startTransition] = useTransition()
+  const deferredTab = useDeferredValue(selectedTab)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -181,7 +180,6 @@ const SettingsPage = () => {
   const tabs = [
     { id: 'profile' as const, label: 'Profile', icon: User },
     { id: 'gym' as const, label: 'Gym Settings', icon: Building2, guard: 'gym' },
-    { id: 'team' as const, label: 'Team Management', icon: Users, guard: 'manager' },
     { id: 'subscription' as const, label: 'Subscription', icon: CreditCard, guard: 'billing' },
     { id: 'appearance' as const, label: 'Appearance', icon: Palette },
     { id: 'security' as const, label: 'Security', icon: Lock },
@@ -203,9 +201,9 @@ const SettingsPage = () => {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => startTransition(() => setSelectedTab(tab.id))}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors cursor-pointer w-full lg:w-[220px] ${
-                  activeTab === tab.id
+                  selectedTab === tab.id
                     ? 'bg-primary text-primary-foreground'
                     : 'hover:bg-muted text-muted-foreground hover:text-foreground'
                 }`}
@@ -219,7 +217,7 @@ const SettingsPage = () => {
 
         {/* Tab Content */}
         <div className="flex-1">
-          {activeTab === 'profile' && (
+          {deferredTab === 'profile' && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -347,7 +345,7 @@ const SettingsPage = () => {
             </Card>
           )}
 
-          {activeTab === 'gym' && (
+          {deferredTab === 'gym' && (
             <GymSettingsGuard action="update" fallback={
               <div className="p-8">
                 <AccessDenied 
@@ -431,19 +429,9 @@ const SettingsPage = () => {
             </GymSettingsGuard>
           )}
 
-          {activeTab === 'team' && (
-            <ManagerOnly fallback={
-              <div className="p-8">
-                <AccessDenied 
-                  message="Team management is only available to managers and gym owners. Contact your gym owner to request manager privileges." 
-                />
-              </div>
-            }>
-              <TeamTab />
-            </ManagerOnly>
-          )}
+          {/* Team tab removed; moved to main Team page */}
 
-          {activeTab === 'subscription' && (
+          {deferredTab === 'subscription' && (
             <BillingGuard action="read" fallback={
               <div className="p-8">
                 <AccessDenied 
@@ -451,15 +439,15 @@ const SettingsPage = () => {
                 />
               </div>
             }>
-              <SubscriptionTab />
+              <LazySubscriptionTab />
             </BillingGuard>
           )}
 
-          {activeTab === 'appearance' && (
-            <AppearanceTab />
+          {deferredTab === 'appearance' && (
+            <LazyAppearanceTab />
           )}
 
-          {activeTab === 'security' && (
+          {deferredTab === 'security' && (
            <Card>
              <CardHeader>
                <CardTitle className="flex items-center gap-2">
@@ -635,3 +623,14 @@ const SettingsPage = () => {
 }
 
 export default SettingsPage 
+
+// Lazy-loaded heavy tabs for better responsiveness
+const LazyAppearanceTab = dynamic(
+  () => import('@/components/settings/AppearanceTab').then((m) => m.AppearanceTab),
+  { ssr: false, loading: () => <div className="p-8 text-muted-foreground">Loading appearance settings...</div> }
+)
+
+const LazySubscriptionTab = dynamic(
+  () => import('@/components/settings/SubscriptionTab').then((m) => m.SubscriptionTab),
+  { ssr: false, loading: () => <div className="p-8 text-muted-foreground">Loading subscription details...</div> }
+)

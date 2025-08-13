@@ -13,6 +13,7 @@ interface CollapsibleNavItemProps {
   isActive: boolean
   onClick?: () => void
   forceExpanded?: boolean // Override collapse state for mobile use
+  prefetch?: boolean
 }
 
 export function CollapsibleNavItem({
@@ -21,7 +22,8 @@ export function CollapsibleNavItem({
   icon: Icon,
   isActive,
   onClick,
-  forceExpanded = false
+  forceExpanded = false,
+  prefetch = true
 }: CollapsibleNavItemProps) {
   const { sidebarCollapsed, showTooltips } = useUIStore()
   
@@ -32,6 +34,7 @@ export function CollapsibleNavItem({
     <div className="relative group">
       <Link
         href={href}
+        prefetch={prefetch}
         onClick={onClick}
         className={cn(
           'group flex items-center rounded-md text-sm font-medium transition-all duration-200',

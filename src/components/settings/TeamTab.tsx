@@ -184,7 +184,7 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
     const variant = variants[status as keyof typeof variants] || variants.pending
 
     return (
-      <Badge className={`${variant} flex items-center gap-1`}>
+      <Badge className={`${variant} inline-flex items-center gap-1 px-2 py-0.5 w-auto`}>
         <Icon className="h-3 w-3" />
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </Badge>
@@ -201,7 +201,7 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
     }
     
     return (
-      <Badge className={colors[role as keyof typeof colors] || colors.member}>
+      <Badge className={`${colors[role as keyof typeof colors] || colors.member} inline-flex items-center px-2 py-0.5 w-auto`}>
         {role.charAt(0).toUpperCase() + role.slice(1)}
       </Badge>
     )
