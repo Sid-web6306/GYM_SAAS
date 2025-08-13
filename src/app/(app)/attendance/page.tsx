@@ -18,6 +18,7 @@ import { CalendarDays, Users, BookUser, Search } from 'lucide-react'
 import { StaffManagementGuard, MemberManagementGuard, AccessDenied } from '@/components/rbac/rbac-guards'
 import { useAuth } from '@/hooks/use-auth'
 import { useMemberAttendance, useStaffAttendance, formatDurationFromSeconds, useEndAttendance } from '@/hooks/use-attendance'
+import type { AttendanceRow } from '@/hooks/use-attendance'
 import { Button } from '@/components/ui/button'
 import DateRangePopover from '@/components/ui/date-range-popover'
 import { cn } from '@/lib/utils'
@@ -265,14 +266,7 @@ function AttendanceList({
   onCheckout,
   showRole = false,
 }: {
-  rows: Array<{
-    session_id: string
-    name: string
-    role: string
-    check_in_at: string
-    check_out_at: string | null
-    total_seconds: number
-  }>
+  rows: AttendanceRow[]
   loading: boolean
   error: boolean
   onCheckout: (sessionId: string) => void

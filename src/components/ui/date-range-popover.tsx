@@ -140,7 +140,7 @@ const defaultGetLabel = (
   const now = new Date()
   for (const p of presets) {
     const r = p.computeRange(now, { weekStartsOn: weekStartsOn ?? 1 })
-    if (r.from === (from ?? r.from) && r.to === (to ?? r.to)) return p.label
+    if (r.from === from && r.to === to) return p.label
   }
   if (from && to) return `${from} → ${to}`
   if (from && !to) return `${from} → …`
@@ -177,7 +177,6 @@ export function DateRangePopover(props: DateRangePopoverProps) {
       setDisplayMonth(startOfMonth(initial))
     }
   }, [open, value])
-
   const selectedRange: DateRange | undefined =
     staged.from || staged.to
       ? { from: toDate(staged.from) ?? undefined, to: toDate(staged.to) ?? undefined }
@@ -185,7 +184,6 @@ export function DateRangePopover(props: DateRangePopoverProps) {
 
   const minDateObj = toDate(minDate ?? null)
   const maxDateObj = toDate(maxDate ?? null)
-
   const handleSelect = (range: DateRange | undefined) => {
     if (!range) {
       setStaged({ from: null, to: null })
@@ -199,6 +197,7 @@ export function DateRangePopover(props: DateRangePopoverProps) {
       onChange(next)
     }
   }
+  
 
   const clear = () => {
     setStaged({ from: null, to: null })

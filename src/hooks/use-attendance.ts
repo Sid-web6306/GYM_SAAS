@@ -20,7 +20,7 @@ export type AttendanceRow = {
   role: string
   check_in_at: string
   check_out_at: string | null
-  total_seconds: number
+  total_seconds: number | null | undefined
 }
 
 export function useMemberAttendance(gymId: string | null, filters?: AttendanceFilters) {

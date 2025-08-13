@@ -25,11 +25,18 @@ This document describes the end-to-end attendance architecture for members and s
 - `created_by` (uuid, fk → `profiles.id`, set from `auth.uid()` if available)
 - `created_at`, `updated_at` (timestamptz)
 
-Constraints/invariants (enforced by trigger):
+Constraints/invariants:
 - If `subject_type='member'`, then `member_id` is required and `gym_id` is derived from that member
 - If `subject_type='staff'`, then `staff_user_id` is required and `gym_id` is derived from that staff user profile
 - `check_out_at >= check_in_at`
+- Exactly one of (`member_id`, `staff_user_id`) is non-null, matching `subject_type` (CHECK)
+- At most one open session per subject (partial UNIQUE index)
 
+DDL (indicative):
+- CHECK ((subject_type='member' AND member_id IS NOT NULL AND staff_user_id IS NULL)
+         OR (subject_type='staff' AND staff_user_id IS NOT NULL AND member_id IS NULL))
+- CHECK (check_out_at IS NULL OR check_out_at >= check_in_at)
+- UNIQUE (gym_id, subject_type, member_id, staff_user_id) WHERE check_out_at IS NULL
 Indexes:
 - `(gym_id, check_in_at desc)`
 - `(subject_type, member_id, staff_user_id)`
@@ -76,25 +83,24 @@ Function: `public.get_staff_attendance(
   p_limit int default 50,
   p_offset int default 0
 )` → returns rows:
+Behavior:
+- Starting a session reuses an existing open session for the same subject (if any) to prevent duplicates
+- Ending a session only sets `check_out_at` if it’s still null
 
-- `session_id`, `staff_user_id`, `name`, `role`, `check_in_at`, `check_out_at`, `total_seconds`
-
-### Mutations
-
-Start session:
-
-- `public.start_attendance_session(
-    p_subject_type text,              -- 'member' | 'staff'
-    p_member_id uuid default null,
-    p_staff_user_id uuid default null,
-    p_method text default null,
-    p_notes text default null
-  )` → returns inserted or existing open session
-
-End session:
-
-- `public.end_attendance_session(
-    p_session_id uuid,
+Concurrency-safe design:
+- Ensure the partial UNIQUE index (see Data Model) exists.
+- In start_attendance_session:
+  - INSERT with derived gym_id; ON CONFLICT ON CONSTRAINT unique_open_session DO
+    UPDATE SET /* fields = EXCLUDED.fields */ WHERE attendance_sessions.check_out_at IS NULL
+    RETURNING *
+- In end_attendance_session:
+  - UPDATE attendance_sessions
+    SET check_out_at = p_checkout_at
+    WHERE id = p_session_id
+      AND check_out_at IS NULL
+    RETURNING *
+- Use a single transaction per call; SERIALIZABLE isolation (or default with the above
+  ON CONFLICT logic) to fully guard against races.
     p_checkout_at timestamptz default now()
   )` → returns updated session
 
