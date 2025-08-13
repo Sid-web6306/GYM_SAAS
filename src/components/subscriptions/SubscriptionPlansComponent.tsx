@@ -68,6 +68,7 @@ export function SubscriptionPlansComponent({
   variant = 'default'
 }: SubscriptionPlansComponentProps) {
   const { plans, isLoading, createPayment, currentSubscription, error } = useSimplifiedPaymentSystem()
+  console.debug("plans", currentSubscription);
   const { data: trialInfo, isLoading: trialLoading } = useTrialInfo()
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
@@ -269,7 +270,7 @@ export function SubscriptionPlansComponent({
               <div className="flex items-center justify-center gap-3 text-primary">
                 <DynamicCheckCircle className="h-5 w-5" />
                 <span className="font-medium">
-                  Current Plan: {currentSubscription.plan_type?.charAt(0).toUpperCase() + currentSubscription.plan_type?.slice(1)}
+                  Current Plan: {currentSubscription.subscription_plans.display_name}
                 </span>
               </div>
               <div className="text-center mt-2">

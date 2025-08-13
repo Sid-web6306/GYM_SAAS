@@ -11,7 +11,7 @@ import Link from "next/link";
 import React, { useEffect } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { toast } from "sonner";
+import { toastActions } from "@/stores/toast-store";
 
 const SubmitButton = () => {
   const { pending } = useFormStatus();
@@ -27,10 +27,10 @@ const ForgotPasswordPage = () => {
 
   useEffect(() => {
     if (state?.error) {
-      toast.error("Error", { description: state.error });
+      toastActions.error("Error", state.error);
     }
     if (state?.success) {
-      toast.success("Success", { description: state.success });
+      toastActions.success("Success", state.success);
     }
   }, [state]);
 

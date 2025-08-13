@@ -75,16 +75,18 @@ export async function POST(request: NextRequest) {
         const customers = await razorpay.customers.all({
           count: 100  // Increase count or implement pagination
         });
+        logger.info('Razorpay customers:', { customers: customers.items.length })
         existingCustomer = customers.items.find((c: any) => c.email === user.email);
       }
       
       if (existingCustomer) {
+        logger.info('Razorpay customer found:', { customer: existingCustomer })
         customer = existingCustomer
       } else {
         customer = await razorpay.customers.create(customerData)
       }
     } catch (error) {
-      logger.error('Error creating/finding Razorpay customer:', { error: error instanceof Error ? error.message : String(error) })
+      logger.error('Error creating/finding Razorpay customer:', { error: error instanceof Error ? error.message : JSON.stringify(error) })
       return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 })
     }
 
@@ -120,6 +122,7 @@ export async function POST(request: NextRequest) {
         subscriptionId: subscription.id,
         customerId: customer.id,
         checkout: {
+          offer_id: 'offer_R46udDRoTcRPIK',
           key: serverConfig.razorpayKeyId,
           subscription_id: subscription.id,
           name: 'Gym SaaS Pro',

@@ -227,13 +227,14 @@ async function handlePaymentFailed(
   processingStart: number
 ): Promise<void> {
   const payment = event.payload.payment!.entity;
-  
+  logger.info('Payment failed', { payment });
   logger.warn('⚠️ Payment failed', { 
     paymentId: payment.id,
     amount: payment.amount,
     currency: payment.currency,
     errorCode: payment.error_code,
-    errorDescription: payment.error_description
+    errorDescription: payment.error_description,
+    notes: payment.notes
   });
 
   // If this payment is related to a subscription, update the subscription status
@@ -373,6 +374,49 @@ async function handleSubscriptionActivated(
       userId,
       planName: plan.name
     });
+
+    // After successfully creating the new subscription in our DB, cancel any previous active subscriptions
+    try {
+      const { data: previousSubs } = await supabase
+        .from('subscriptions')
+        .select('id, razorpay_subscription_id')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .neq('razorpay_subscription_id', subscription.id)
+
+      if (previousSubs && previousSubs.length > 0) {
+        const razorpay = getRazorpay()
+        if (razorpay) {
+          for (const prev of previousSubs) {
+            if (prev.razorpay_subscription_id) {
+              try {
+                await razorpay.subscriptions.cancel(prev.razorpay_subscription_id, 0)
+                await supabase
+                  .from('subscriptions')
+                  .update({ status: 'canceled', canceled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+                  .eq('id', prev.id)
+                logger.info('Canceled previous active subscription after new activation', {
+                  userId,
+                  oldRazorpaySubscriptionId: prev.razorpay_subscription_id,
+                  newRazorpaySubscriptionId: subscription.id
+                })
+              } catch (cancelErr) {
+                logger.error('Failed to cancel previous subscription after new activation', {
+                  error: cancelErr instanceof Error ? cancelErr.message : String(cancelErr),
+                  userId,
+                  oldRazorpaySubscriptionId: prev.razorpay_subscription_id
+                })
+              }
+            }
+          }
+        }
+      }
+    } catch (cleanupErr) {
+      logger.error('Error while cleaning up previous subscriptions after activation', {
+        error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
+        userId
+      })
+    }
   }
 
   await logWebhookEvent(event, supabase, Date.now() - processingStart);

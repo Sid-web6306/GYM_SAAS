@@ -2,11 +2,13 @@
 
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Suspense, useDeferredValue } from 'react'
 import { 
   Users, 
   LayoutDashboard, 
   Settings, 
   Dumbbell,
+  UserCog,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useSidebarState } from '@/stores/ui-store'
@@ -25,6 +27,7 @@ interface ClientLayoutProps {
 
 function ClientLayoutContent({ children }: ClientLayoutProps) {
   const pathname = usePathname()
+  const deferredPathname = useDeferredValue(pathname)
   const { profile } = useAuth()
   const {
     sidebarCollapsed,
@@ -38,6 +41,7 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Members', href: '/members', icon: Users },
+    { name: 'Team', href: '/team', icon: UserCog },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 
@@ -84,7 +88,7 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
         <nav className="mt-5 flex-1 px-2">
           <div className="space-y-1">
             {navigation.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = deferredPathname === item.href
               return (
                 <CollapsibleNavItem
                   key={item.name}
@@ -92,6 +96,7 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
                   href={item.href}
                   icon={item.icon}
                   isActive={isActive}
+                  prefetch={true}
                 />
               )
             })}
@@ -128,7 +133,7 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
               <nav className="mt-5 px-2 flex-1">
                 <div className="space-y-1">
                   {navigation.map((item) => {
-                    const isActive = pathname === item.href
+                    const isActive = deferredPathname === item.href
                     return (
                       <CollapsibleNavItem
                         key={item.name}
@@ -138,6 +143,7 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
                         isActive={isActive}
                         onClick={toggleMobileSidebar}
                         forceExpanded={true}
+                        prefetch={true}
                       />
                     )
                   })}
@@ -184,7 +190,9 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
 
         {/* Page content */}
         <main className="flex-1 overflow-x-hidden overflow-y-auto">
-          {children}
+          <Suspense fallback={<div className="p-6 text-muted-foreground">Loading...</div>}>
+            {children}
+          </Suspense>
         </main>
       </div>
 

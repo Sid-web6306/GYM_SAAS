@@ -1,4 +1,4 @@
-'use client'
+ 'use client'
 
 import { useTheme } from 'next-themes'
 import { useState, useEffect } from 'react'
@@ -77,7 +77,7 @@ export const ThemeSelector = () => {
     return null
   }
 
-  const currentTheme = theme || resolvedTheme || 'light'
+  const currentTheme = theme || resolvedTheme || 'rose'
 
   return (
     <div className="space-y-2">

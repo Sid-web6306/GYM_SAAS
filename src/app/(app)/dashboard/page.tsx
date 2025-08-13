@@ -25,7 +25,7 @@ import { CheckinTrendsChart } from '@/components/charts/checkin-trends-chart';
 import { DashboardHeader } from '@/components/layout/PageHeader';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation'
-import { toast } from 'sonner'
+import { toastActions } from '@/stores/toast-store'
 import React from 'react';
 
 const DashboardPage = () => {
@@ -75,13 +75,7 @@ const DashboardPage = () => {
   // Handle payment success notification
   React.useEffect(() => {
     if (paymentSuccess && subscriptionId) {
-      toast.success(
-        'Payment Successful! 🎉',
-        {
-          description: 'Your subscription has been activated. Welcome to premium!',
-          duration: 5000,
-        }
-      )
+      toastActions.success('Payment Successful! 🎉', 'Your subscription has been activated. Welcome to premium!')
       
       // Clean up URL parameters
       const url = new URL(window.location.href)
@@ -153,7 +147,7 @@ const DashboardPage = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">
-            {isRefreshing ? 'Syncing account data...' : 'Loading authentication...'}
+            {isRefreshing ? 'Syncing account data...' : 'Loading Dashboard...'}
           </p>
         </div>
       </div>

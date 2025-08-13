@@ -29,7 +29,7 @@ import { useSimplifiedPaymentSystem } from '@/hooks/use-simplified-payments'
 import { TrialStatus } from './TrialStatus'
 import { SubscriptionFeedbackForm } from './SubscriptionFeedbackForm'
 import { ExpiredSubscriptionModal } from './ExpiredSubscriptionModal'
-import { toast } from 'sonner'
+import { toastActions } from '@/stores/toast-store'
 import { BillingGuard, AccessDenied } from '@/components/rbac/rbac-guards'
 
 // Helper functions
@@ -88,7 +88,7 @@ function SubscriptionManagementContent() {
       })
       
       setShowFeedbackDialog(false)
-      toast.success('Subscription canceled successfully')
+      toastActions.success('Subscription canceled successfully', '')
       
       // Show expired modal after a short delay
       setTimeout(() => {
@@ -96,9 +96,7 @@ function SubscriptionManagementContent() {
       }, 1000)
       
     } catch (error) {
-      toast.error('Failed to cancel subscription', {
-        description: error instanceof Error ? error.message : 'Please try again or contact support'
-      })
+      toastActions.error('Failed to cancel subscription', error instanceof Error ? error.message : 'Please try again or contact support')
     } finally {
       setIsSubmittingFeedback(false)
     }
@@ -116,16 +114,14 @@ function SubscriptionManagementContent() {
       })
       
       setShowFeedbackDialog(false)
-      toast.success('Subscription canceled successfully')
+      toastActions.success('Subscription canceled successfully', '')
       
       // Show expired modal after a short delay
       setTimeout(() => {
         setShowExpiredModal(true)
       }, 1000)
     } catch (error) {
-      toast.error('Failed to cancel subscription', {
-        description: error instanceof Error ? error.message : 'Please try again or contact support'
-      })
+      toastActions.error('Failed to cancel subscription', error instanceof Error ? error.message : 'Please try again or contact support')
     }
   }
 
@@ -141,7 +137,7 @@ function SubscriptionManagementContent() {
   const handleCancelAccount = () => {
     setShowExpiredModal(false)
     // Handle account cancellation
-    toast.info('Account cancellation will be processed')
+    toastActions.info('Account cancellation will be processed', '')
   }
   
   if (trialLoading || subscriptionLoading || plansLoading) {

@@ -539,13 +539,10 @@ async function handleChangePlan(
       return NextResponse.json({ error: 'Subscription ID, new plan ID, and billing cycle are required' }, { status: 400 })
     }
 
-    // Note: getRazorpay() would be used here for actual plan changes in Razorpay
-    // Currently just scheduling the change in our database
-    
     // Verify subscription belongs to user
     const { data: subscription } = await supabase
       .from('subscriptions')
-      .select('id, razorpay_subscription_id, subscription_plan_id')
+      .select('id, razorpay_subscription_id, subscription_plan_id, current_period_end')
       .eq('id', subscriptionId)
       .eq('user_id', userId)
       .single()
@@ -566,11 +563,38 @@ async function handleChangePlan(
       return NextResponse.json({ error: 'New plan not found' }, { status: 404 })
     }
 
-    // Schedule the plan change
+    // Try to schedule the plan change in Razorpay at cycle end (pending update)
+    let razorpayUpdateAttempted = false
+    let razorpayUpdateSucceeded = false
+    const razorpay = getRazorpay()
+    if (razorpay && subscription.razorpay_subscription_id && newPlan.razorpay_plan_id) {
+      razorpayUpdateAttempted = true
+      try {
+        await razorpay.subscriptions.update(subscription.razorpay_subscription_id, {
+          plan_id: newPlan.razorpay_plan_id,
+          schedule_change_at: 'cycle_end'
+        })
+        razorpayUpdateSucceeded = true
+      } catch (razorpayError) {
+        razorpayUpdateSucceeded = false
+        logger.warn('Failed to schedule Razorpay plan change at cycle end; will rely on DB scheduling', {
+          error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError),
+          subscriptionId,
+          newPlanId,
+          billingCycle
+        })
+      }
+    }
+
+    // Schedule the plan change in our database at the end of current billing period
+    const effectiveDate = subscription?.current_period_end
+      ? new Date(subscription.current_period_end).toISOString()
+      : new Date().toISOString()
+
     const { error: scheduleError } = await supabase.rpc('schedule_subscription_change', {
       p_subscription_id: subscriptionId,
       p_change_type: 'plan_change',
-      p_effective_date: new Date().toISOString(),
+      p_effective_date: effectiveDate,
       p_change_data: {
         new_plan_id: newPlanId,
         new_billing_cycle: billingCycle,
@@ -584,22 +608,21 @@ async function handleChangePlan(
       return NextResponse.json({ error: 'Failed to schedule plan change' }, { status: 500 })
     }
 
-    // Note: For Razorpay, plan changes typically require creating a new subscription
-    // and canceling the old one, or using their subscription modification APIs
-    // This would be implemented based on specific business requirements
-
     logger.info('Plan change scheduled successfully:', {
       userId,
       subscriptionId,
       oldPlan: subscription.subscription_plan_id,
       newPlan: newPlanId,
       billingCycle,
-      newAmount: newPlan.price_inr
+      newAmount: newPlan.price_inr,
+      razorpayUpdateAttempted,
+      razorpayUpdateSucceeded,
+      effectiveDate
     })
 
     return NextResponse.json({ 
-      success: true, 
-      message: 'Plan change has been scheduled and will take effect at the next billing period'
+      success: true,
+      message: 'Plan change has been scheduled to take effect at the end of the current billing period'
     })
 
   } catch (error) {
