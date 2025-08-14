@@ -33,6 +33,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toastActions } from '@/stores/toast-store'
 import { ROLE_LEVELS } from '@/types/rbac.types'
+import { ROLE_COLORS } from '@/components/layout/RoleContextIndicator'
 import type { GymRole } from '@/types/rbac.types'
 import type { InvitationWithDetails, InvitationFilters } from '@/types/invite.types'
 import { formatDistanceToNow } from 'date-fns'
@@ -191,21 +192,11 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
     )
   }
 
-  const getRoleBadge = (role: string) => {
-    const colors = {
-      owner: 'bg-purple-100 text-purple-800',
-      manager: 'bg-blue-100 text-blue-800',
-      staff: 'bg-green-100 text-green-800',
-      trainer: 'bg-orange-100 text-orange-800',
-      member: 'bg-gray-100 text-gray-800'
-    }
-    
-    return (
-      <Badge className={`${colors[role as keyof typeof colors] || colors.member} inline-flex items-center px-2 py-0.5 w-auto`}>
-        {role.charAt(0).toUpperCase() + role.slice(1)}
-      </Badge>
-    )
-  }
+  const getRoleBadge = (role: string) => (
+    <Badge className={`${ROLE_COLORS[role as keyof typeof ROLE_COLORS] || ROLE_COLORS.member} inline-flex items-center px-2 py-0.5 w-auto capitalize`}>
+      {role}
+    </Badge>
+  )
 
   const isExpired = (expiresAt: string) => new Date(expiresAt) < new Date()
 

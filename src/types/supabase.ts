@@ -100,6 +100,74 @@ export type Database = {
         ]
       }
       ,
+       attendance_sessions: {
+         Row: {
+           id: string
+           gym_id: string
+           subject_type: 'member' | 'staff'
+           member_id: string | null
+           staff_user_id: string | null
+           check_in_at: string
+           check_out_at: string | null
+           method: string | null
+           notes: string | null
+           created_by: string | null
+           created_at: string
+           updated_at: string
+         }
+         Insert: {
+           id?: string
+           gym_id?: string
+           subject_type: 'member' | 'staff'
+           member_id?: string | null
+           staff_user_id?: string | null
+           check_in_at?: string
+           check_out_at?: string | null
+           method?: string | null
+           notes?: string | null
+           created_by?: string | null
+           created_at?: string
+           updated_at?: string
+         }
+         Update: {
+           id?: string
+           gym_id?: string
+           subject_type?: 'member' | 'staff'
+           member_id?: string | null
+           staff_user_id?: string | null
+           check_in_at?: string
+           check_out_at?: string | null
+           method?: string | null
+           notes?: string | null
+           created_by?: string | null
+           created_at?: string
+           updated_at?: string
+         }
+         Relationships: [
+           {
+             foreignKeyName: "attendance_sessions_gym_id_fkey",
+             columns: ["gym_id"],
+             isOneToOne: false,
+             referencedRelation: "gyms",
+             referencedColumns: ["id"],
+           },
+           {
+             foreignKeyName: "attendance_sessions_member_id_fkey",
+             columns: ["member_id"],
+             isOneToOne: false,
+             referencedRelation: "members",
+             referencedColumns: ["id"],
+           },
+           {
+             foreignKeyName: "attendance_sessions_staff_user_id_fkey",
+             columns: ["staff_user_id"],
+             isOneToOne: false,
+             referencedRelation: "profiles",
+             referencedColumns: ["id"],
+           },
+         ]
+       }
+       ,
       member_activities: {
         Row: {
           id: string
@@ -962,6 +1030,65 @@ export type Database = {
           owner_full_name: string | null
           owner_email: string
         }[]
+      }
+      ,
+      get_member_attendance: {
+        Args: {
+          p_gym_id: string
+          p_search?: string | null
+          p_from?: string | null
+          p_to?: string | null
+          p_limit?: number | null
+          p_offset?: number | null
+        }
+        Returns: {
+          session_id: string
+          member_id: string
+          name: string
+          role: string
+          check_in_at: string
+          check_out_at: string | null
+          total_seconds: number
+        }[]
+      }
+      ,
+      get_staff_attendance: {
+        Args: {
+          p_gym_id: string
+          p_search?: string | null
+          p_from?: string | null
+          p_to?: string | null
+          p_limit?: number | null
+          p_offset?: number | null
+        }
+        Returns: {
+          session_id: string
+          staff_user_id: string
+          name: string
+          role: string
+          check_in_at: string
+          check_out_at: string | null
+          total_seconds: number
+        }[]
+      }
+      ,
+      start_attendance_session: {
+        Args: {
+          p_subject_type: 'member' | 'staff'
+          p_member_id?: string | null
+          p_staff_user_id?: string | null
+          p_method?: string | null
+          p_notes?: string | null
+        }
+        Returns: Database['public']['Tables']['attendance_sessions']['Row']
+      }
+      ,
+      end_attendance_session: {
+        Args: {
+          p_session_id: string
+          p_checkout_at?: string | null
+        }
+        Returns: Database['public']['Tables']['attendance_sessions']['Row']
       }
     }
     Enums: {

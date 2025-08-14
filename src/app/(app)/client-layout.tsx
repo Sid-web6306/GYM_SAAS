@@ -9,6 +9,8 @@ import {
   Settings, 
   Dumbbell,
   UserCog,
+  BookUser,
+  CalendarDays,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useSidebarState } from '@/stores/ui-store'
@@ -40,8 +42,10 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Attendance', href: '/attendance', icon: CalendarDays },
     { name: 'Members', href: '/members', icon: Users },
-    { name: 'Team', href: '/team', icon: UserCog },
+    { name: 'Roles & Invitations', href: '/team', icon: UserCog },
+    { name: 'Staff Directory', href: '/staff', icon: BookUser },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 
