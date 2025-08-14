@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { RazorpayProvider } from "@/components/providers/razorpay-provider";
 import { PWAWrapper } from "@/components/pwa/PWAWrapper";
+import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -30,10 +31,6 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "GymSaaS",
   },
-  icons: [
-    { rel: "icon", url: "/icon.svg" },
-    { rel: "apple-touch-icon", url: "/icon-192x192.png" },
-  ],
 };
 
 export default function RootLayout({
@@ -60,6 +57,7 @@ export default function RootLayout({
               <SessionProvider>
                 {children}
                 <PWAWrapper />
+                <ServiceWorkerRegister />
               </SessionProvider>
               <Toaster />
             </QueryProvider>
