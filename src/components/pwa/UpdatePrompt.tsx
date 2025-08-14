@@ -33,12 +33,31 @@ function setSnoozeFor(ms: number) {
   localStorage.setItem('pwa-update-snooze-until', String(until))
 }
 
+async function getBuildIdSignature(): Promise<string> {
+  try {
+    const res = await fetch('/_next/static/BUILD_ID', { cache: 'no-store' })
+    if (!res.ok) return ''
+    const text = (await res.text()).trim()
+    return text || ''
+  } catch {
+    return ''
+  }
+}
+
+function getStoredSig(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('pwa-version-sig')
+}
+
+function setStoredSig(sig: string) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem('pwa-version-sig', sig)
+}
+
 export function UpdatePrompt({
-  checkUrl = '/sw.js',
   intervalMs = 60_000,
   snoozeMs = 4 * 60 * 60 * 1000, // 4 hours
 }: {
-  checkUrl?: string
   intervalMs?: number
   snoozeMs?: number
 }) {
@@ -55,10 +74,14 @@ export function UpdatePrompt({
     }
   }
 
+  const latestSigRef = useRef<string>('')
+
   const schedule = useCallback(() => {
     clearTimer()
     timerRef.current = setTimeout(async () => {
-      const sig = await headSignature(checkUrl)
+      let sig = await getBuildIdSignature()
+      if (!sig) sig = await headSignature('/sw.js')
+      latestSigRef.current = sig
       if (initialSig && sig && sig !== initialSig) {
         if (!getSnoozeUntil() || Date.now() >= getSnoozeUntil()) {
           setUpdateAvailable(true)
@@ -66,13 +89,16 @@ export function UpdatePrompt({
       }
       schedule()
     }, intervalMs)
-  }, [checkUrl, initialSig, intervalMs])
+  }, [initialSig, intervalMs])
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const sig = await headSignature(checkUrl)
-      if (!cancelled) setInitialSig(sig || '')
+      // Prefer stored baseline across reloads so users still see the banner if they deferred
+      const stored = getStoredSig()
+      const sig = stored || (await getBuildIdSignature()) || (await headSignature('/sw.js')) || ''
+      if (!cancelled) setInitialSig(sig)
+      if (!stored && sig) setStoredSig(sig)
       schedule()
     })()
     const onVisible = () => {
@@ -84,7 +110,7 @@ export function UpdatePrompt({
       document.removeEventListener('visibilitychange', onVisible)
       clearTimer()
     }
-  }, [checkUrl, schedule])
+  }, [schedule])
 
   if (!updateAvailable || shouldSnooze) return null
 
@@ -95,7 +121,7 @@ export function UpdatePrompt({
           A new version is available.
         </div>
         <div className="flex gap-2">
-          <Button size="sm" onClick={() => location.reload()}>Reload</Button>
+          <Button size="sm" onClick={() => { if (latestSigRef.current) setStoredSig(latestSigRef.current); location.reload() }}>Reload</Button>
           <Button size="sm" variant="outline" onClick={() => { setSnoozeFor(snoozeMs); setUpdateAvailable(false) }}>Later</Button>
         </div>
       </DynamicCardContent>

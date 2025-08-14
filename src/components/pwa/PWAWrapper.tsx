@@ -11,7 +11,7 @@ export function PWAWrapper() {
     <>
       <OfflineStatus />
       <InstallPrompt />
-      <UpdatePrompt />
+      <UpdatePrompt  intervalMs={1000}/>
     </>
   )
 } 
