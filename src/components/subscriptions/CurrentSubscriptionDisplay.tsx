@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   DynamicCard,
@@ -48,9 +47,8 @@ export function CurrentSubscriptionDisplay({
   className = ""
 }: CurrentSubscriptionDisplayProps) {
   const router = useRouter()
-  const { currentSubscription, plans, isLoading, error, createBillingPortal } = useSimplifiedPaymentSystem()
+  const { currentSubscription, plans, isLoading, error } = useSimplifiedPaymentSystem()
   const { data: trialInfo, isLoading: trialLoading } = useTrialInfo()
-  const [isManagingSubscription, setIsManagingSubscription] = useState(false)
 
   // Priority logic: Trial first, then subscription
   const isOnTrial = trialInfo && isTrialActive(trialInfo)
@@ -81,18 +79,6 @@ export function CurrentSubscriptionDisplay({
   const formatPrice = (priceInPaise: number) => {
     return Math.round(priceInPaise / 100)
   }
-
-  const handleManageSubscription = async () => {
-    try {
-      setIsManagingSubscription(true)
-      await createBillingPortal.mutateAsync()
-    } catch (error) {
-      console.error('Error opening billing portal:', error)
-    } finally {
-      setIsManagingSubscription(false)
-    }
-  }
-
   const handleUpgradeClick = () => {
     router.push('/upgrade')
   }
@@ -324,25 +310,6 @@ export function CurrentSubscriptionDisplay({
               >
                 <DynamicArrowUpRight className="h-4 w-4 mr-2" />
                 Upgrade Plan
-              </DynamicButton>
-              
-              <DynamicButton 
-                onClick={handleManageSubscription}
-                disabled={isManagingSubscription}
-                variant="default"
-                className="flex-1 cursor-pointer bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 border-0"
-              >
-                {isManagingSubscription ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                    Opening...
-                  </div>
-                ) : (
-                  <>
-                    <DynamicCreditCard className="h-4 w-4 mr-2" />
-                    Manage Billing
-                  </>
-                )}
               </DynamicButton>
             </div>
           </DynamicCardContent>

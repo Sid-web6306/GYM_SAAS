@@ -1,0 +1,109 @@
+'use client'
+
+import { Suspense, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { OTPVerification } from '@/components/auth/OTPVerification'
+import { useAuth } from '@/hooks/use-auth'
+import { Loader2, Building2 } from 'lucide-react'
+import { toastActions } from '@/stores/toast-store'
+
+const VerifyEmailContent = () => {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { user, isLoading, isAuthenticated } = useAuth()
+  
+  const email = searchParams.get('email') || user?.email || ''
+
+  // Redirect if user is already verified and authenticated
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user?.email_confirmed_at) {
+      console.log('Email already verified, redirecting to onboarding')
+      toastActions.success('Email Verified!', 'Your email is already verified.')
+      router.replace('/onboarding')
+    }
+  }, [isLoading, isAuthenticated, user, router])
+
+  // No need for custom callback - let component handle redirect
+
+  // Show loading state while checking auth
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+        <div className="text-center">
+          <Loader2 className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // If already verified, show loading while redirecting
+  if (isAuthenticated && user?.email_confirmed_at) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+        <div className="text-center">
+          <Loader2 className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-sm text-muted-foreground">Email already verified! Redirecting...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // If no email available, redirect to signup
+  if (!email) {
+    toastActions.error('Missing Email', 'No email address found. Please sign up again.')
+    router.replace('/signup')
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+        <div className="text-center">
+          <Loader2 className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-sm text-muted-foreground">Redirecting...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 p-4">
+      <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+        <CardHeader className="pb-6">
+          <div className="flex items-center justify-center mb-4">
+            <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-green-600 rounded-xl flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-white" />
+            </div>
+          </div>
+          <CardTitle className="text-center text-xl font-bold text-gray-900">
+            Verify Your Email
+          </CardTitle>
+          <CardDescription className="text-center text-gray-600">
+            Complete your account setup by verifying your email address
+          </CardDescription>
+        </CardHeader>
+        
+        <CardContent className="pt-0">
+          <OTPVerification
+            email={email}
+            type="signup"
+            redirectTo="/onboarding"
+          />
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// Main page component wrapped with Suspense for useSearchParams
+const VerifyEmailPage = () => {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
+      </div>
+    }>
+      <VerifyEmailContent />
+    </Suspense>
+  )
+}
+
+export default VerifyEmailPage

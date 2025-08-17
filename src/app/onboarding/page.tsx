@@ -45,49 +45,37 @@ const SubmitButton = ({ isValid }: { isValid: boolean }) => {
   )
 }
 
-// Email confirmation component with better UX
-const EmailConfirmationStep = ({ email }: { email: string }) => (
-  <div className="space-y-6">
-    <div className="text-center space-y-4">
-      <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-        <Mail className="w-8 h-8 text-blue-600" />
-      </div>
-      
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Check Your Email</h2>
-        <p className="text-gray-600 mt-2">
-          We&apos;ve sent a confirmation link to complete your registration.
-        </p>
-      </div>
-    </div>
+// Redirect to email verification if email not confirmed
+const EmailVerificationRedirect = ({ email }: { email: string }) => {
+  const router = useRouter()
+  
+  useEffect(() => {
+    // Redirect to OTP verification page
+    toastActions.info('Email Verification Required', 'Please verify your email to continue.')
+    router.replace(`/verify-email?email=${encodeURIComponent(email)}`)
+  }, [email, router])
 
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <Mail className="w-4 h-4 text-blue-600" />
-        <span className="text-sm font-medium text-blue-900">Email sent to:</span>
+  return (
+    <div className="space-y-6">
+      <div className="text-center space-y-4">
+        <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+          <Mail className="w-8 h-8 text-blue-600" />
+        </div>
+        
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Email Verification Required</h2>
+          <p className="text-gray-600 mt-2">
+            Redirecting you to verify your email address...
+          </p>
+        </div>
       </div>
-      <div className="bg-white border border-blue-200 rounded px-3 py-2">
-        <code className="text-sm text-blue-800 break-all">{email}</code>
+
+      <div className="flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
       </div>
     </div>
-    
-    <div className="space-y-4 text-center">
-      <div className="text-sm text-gray-600 space-y-2">
-        <p>Click the confirmation link in your email to continue.</p>
-        <p>After confirming, you&apos;ll be redirected back here automatically.</p>
-      </div>
-      
-      <Button 
-        variant="outline" 
-        onClick={() => window.location.reload()}
-        className="w-full cursor-pointer"
-      >
-        <CheckCircle className="w-4 h-4 mr-2" />
-        I&apos;ve confirmed my email
-      </Button>
-    </div>
-  </div>
-)
+  )
+}
 
 // Gym setup form with validation
 const GymSetupForm = ({ user, formAction }: {
@@ -429,7 +417,7 @@ const OnboardingContent = () => {
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
             <CardContent className="pt-6">
-              <EmailConfirmationStep email={user.email || ''} />
+              <EmailVerificationRedirect email={user.email || ''} />
             </CardContent>
           </Card>
         </div>
@@ -602,7 +590,7 @@ const OnboardingContent = () => {
                 formAction={formAction}
               />
             ) : (
-              <EmailConfirmationStep email={userEmail} />
+              <EmailVerificationRedirect email={userEmail} />
             )}
           </CardContent>
         </Card>

@@ -268,29 +268,6 @@ export function useSimplifiedSubscriptions() {
     staleTime: 2 * 60 * 1000, // 2 minutes
   })
 
-  // Create billing portal session
-  const createBillingPortal = useMutation({
-    mutationFn: async () => {
-      const response = await fetch('/api/subscriptions?action=billing-portal')
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to create billing portal')
-      }
-      const data = await response.json()
-      
-      // Redirect to billing portal
-      if (data.url) {
-        window.location.href = data.url
-      }
-      
-      return data
-    },
-    onError: (error: Error) => {
-      logger.error('Error creating billing portal:', {error})
-      toastActions.error('Billing Portal Error', error.message)
-    },
-  })
-
   // Subscription actions (pause, resume, cancel, change plan)
   const subscriptionAction = useMutation({
     mutationFn: async (actionRequest: SubscriptionAction) => {
@@ -349,7 +326,6 @@ export function useSimplifiedSubscriptions() {
     
     // Actions
     refetch,
-    createBillingPortal,
     subscriptionAction,
     
     // Individual queries for specific use cases
@@ -509,7 +485,6 @@ export function useSimplifiedPaymentSystem() {
     currentSubscription: subscriptions.currentSubscription,
     hasAccess: subscriptions.hasAccess,
     trial: subscriptions.trial,
-    createBillingPortal: subscriptions.createBillingPortal,
     subscriptionAction: subscriptions.subscriptionAction,
     
     // Documents

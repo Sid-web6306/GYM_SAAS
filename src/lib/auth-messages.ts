@@ -1,9 +1,9 @@
 // Enhanced auth messages with social authentication support
 export const AUTH_MESSAGES = {
-  // Email verification
+  // Email OTP verification
   'check-email': {
     title: 'Check Your Email',
-    message: 'We\'ve sent you a confirmation link. Please check your email and click the link to verify your account.',
+    message: 'We\'ve sent you a 6-digit verification code. Please enter the code to verify your account.',
     type: 'info' as const,
   },
   'email-verified': {
@@ -13,7 +13,7 @@ export const AUTH_MESSAGES = {
   },
   'email-verification-failed': {
     title: 'Verification Failed',
-    message: 'Unable to verify your email. The link may have expired or already been used. Please try signing up again.',
+    message: 'Invalid or expired verification code. Please check the code and try again, or request a new one.',
     type: 'error' as const,
   },
 
@@ -42,7 +42,7 @@ export const AUTH_MESSAGES = {
   },
   'email-not-confirmed': {
     title: 'Email Not Verified',
-    message: 'Please check your email and click the verification link before signing in.',
+    message: 'Please verify your email with the 6-digit code we sent you before signing in.',
     type: 'warning' as const,
   },
   'account-exists': {

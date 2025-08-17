@@ -426,20 +426,15 @@ export const signupWithEmail = async (
   }
 
   try {
-    // Build email redirect URL with invitation token if present
-    let emailRedirectTo = `${origin}/auth/callback`
-    if (inviteToken) {
-      emailRedirectTo += `?invite=${encodeURIComponent(inviteToken)}`
-    }
-
-    // Attempt to sign up the user
+    // Attempt to sign up the user (OTP-only, no email confirmation links)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: validation.data.email,
-      password: validation.data.password, 
+      password: validation.data.password,
       options: {
-        emailRedirectTo,
-        // Store invitation token in user metadata for additional safety
-        data: inviteToken ? { pendingInviteToken: inviteToken } : undefined
+        // Store invitation token in user metadata for OTP verification
+        data: inviteToken ? { pendingInviteToken: inviteToken } : undefined,
+        // Disable email confirmation links - we use OTP instead
+        emailRedirectTo: undefined
       }
     });
     
@@ -458,8 +453,24 @@ export const signupWithEmail = async (
       return { error: { message: 'Could not create account. Please try again.' } }
     }
 
-    // Redirect to email confirmation page
-    redirect('/confirm-email');
+    // Send email OTP instead of confirmation link
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      email: validation.data.email,
+      options: {
+        shouldCreateUser: false // User already created above
+      }
+    });
+
+    if (otpError) {
+      logger.error('Failed to send OTP after signup:', { 
+        error: otpError.message,
+        email: validation.data.email 
+      })
+      // Don't fail the signup, user can resend OTP
+    }
+
+    // Redirect to OTP verification page
+    redirect(`/verify-email?email=${encodeURIComponent(validation.data.email)}`);
   } catch (error) {
     handleCatchError(error, 'Signup error');
     const errorMessage = handleAuthError(error, 'Signup');
