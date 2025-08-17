@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Camera, Upload, X, Loader2 } from 'lucide-react'
+import Image from 'next/image'
+import { Camera, Upload, X, Loader2, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { createClient } from '@/utils/supabase/client'
@@ -10,13 +11,18 @@ import { toastActions } from '@/stores/toast-store'
 import { validateImageFile, generateAvatarFilename, type AvatarSize } from '@/lib/avatar-utils'
 import { useUpdateProfile } from '@/hooks/use-auth'
 import { ImageEditor } from '@/components/ui/image-editor'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null
   userId: string
   name?: string | null
   email?: string | null
-  onAvatarChange?: (avatarUrl: string | null) => void
   size?: AvatarSize
   className?: string
 }
@@ -26,18 +32,60 @@ export function AvatarUpload({
   userId,
   name,
   email,
-  onAvatarChange,
   size = 'xl',
   className
 }: AvatarUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isEditorOpen, setIsEditorOpen] = useState(false)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [originalFile, setOriginalFile] = useState<File | null>(null)
   const [originalUrl, setOriginalUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
   const updateProfileMutation = useUpdateProfile()
+
+  // Helper function to extract file path from storage URL
+  const extractPathFromStorageUrl = (url: string): string | null => {
+    try {
+      // Supabase storage URLs have format: https://[project].supabase.co/storage/v1/object/public/[bucket]/[path]
+      const urlParts = url.split('/storage/v1/object/public/user-uploads/')
+      if (urlParts.length === 2) {
+        return decodeURIComponent(urlParts[1])
+      }
+      return null
+    } catch (error) {
+      console.error('Failed to extract path from storage URL:', error)
+      return null
+    }
+  }
+
+  // Helper function to safely delete old avatar from storage
+  const deleteOldAvatar = async (avatarUrl: string | null): Promise<void> => {
+    if (!avatarUrl) return
+
+    try {
+      const filePath = extractPathFromStorageUrl(avatarUrl)
+      if (!filePath) {
+        console.warn('Could not extract file path from avatar URL:', avatarUrl)
+        return
+      }
+
+      const { error } = await supabase.storage
+        .from('user-uploads')
+        .remove([filePath])
+
+      if (error) {
+        console.warn('Failed to delete old avatar file:', error.message)
+        // Don't throw - cleanup failure shouldn't break the main flow
+      } else {
+        console.log('Successfully deleted old avatar:', filePath)
+      }
+    } catch (error) {
+      console.warn('Error during avatar cleanup:', error)
+      // Don't throw - cleanup failure shouldn't break the main flow
+    }
+  }
 
   // Cleanup URLs on unmount to prevent memory leaks
   useEffect(() => {
@@ -79,6 +127,11 @@ export function AvatarUpload({
     try {
       setUploading(true)
 
+      // 🧹 Clean up old avatar before uploading new one
+      if (currentAvatarUrl) {
+        await deleteOldAvatar(currentAvatarUrl)
+      }
+
       // Generate unique filename and user-specific path
       const fileName = generateAvatarFilename(userId, file.name)
       const filePath = `${userId}/avatars/${fileName}`
@@ -88,7 +141,7 @@ export function AvatarUpload({
         .from('user-uploads')
         .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: false
+          upsert: true
         })
 
       if (error) {
@@ -121,8 +174,6 @@ export function AvatarUpload({
           updated_at: new Date().toISOString() 
         })
         
-        // Success - the mutation already handles success toast and cache updates
-        onAvatarChange?.(publicUrl)
         setPreviewUrl(null)
       } catch (updateError) {
         console.error('Profile update error:', updateError)
@@ -147,14 +198,16 @@ export function AvatarUpload({
     try {
       setUploading(true)
 
+      // 🧹 Delete avatar file from storage
+      if (currentAvatarUrl) {
+        await deleteOldAvatar(currentAvatarUrl)
+      }
+
       // Update profile using optimized mutation (avoids unnecessary refetch)
       await updateProfileMutation.mutateAsync({ 
         avatar_url: null, 
         updated_at: new Date().toISOString() 
       })
-
-      // Success - the mutation already handles success toast and cache updates
-      onAvatarChange?.(null)
 
     } catch (error) {
       console.error('Remove avatar error:', error)
@@ -281,6 +334,19 @@ export function AvatarUpload({
           {currentAvatarUrl ? 'Change Photo' : 'Upload Photo'}
         </Button>
 
+        {displayAvatarUrl && (
+          <Button
+            type="button"
+            onClick={() => setIsPreviewOpen(true)}
+            disabled={isLoading}
+            size="sm"
+            variant="outline"
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Preview
+          </Button>
+        )}
+
         {currentAvatarUrl && (
           <Button
             type="button"
@@ -320,6 +386,42 @@ export function AvatarUpload({
           originalUrl={originalUrl}
         />
       )}
+
+      {/* Avatar Preview Modal */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Avatar Preview</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center space-y-4 p-4">
+            {displayAvatarUrl ? (
+              <div className="relative">
+                <Image
+                  src={displayAvatarUrl}
+                  alt="Avatar preview"
+                  width={256}
+                  height={256}
+                  className="w-64 h-64 rounded-full object-cover border-2 border-border"
+                />
+              </div>
+            ) : (
+              <div className="w-64 h-64 rounded-full bg-muted flex items-center justify-center border-2 border-border">
+                <UserAvatar
+                  src={null}
+                  name={name}
+                  email={email}
+                  size="xl"
+                  className="w-32 h-32 text-4xl"
+                />
+              </div>
+            )}
+            <div className="text-center">
+              <p className="font-medium">{name}</p>
+              {email && <p className="text-sm text-muted-foreground">{email}</p>}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
