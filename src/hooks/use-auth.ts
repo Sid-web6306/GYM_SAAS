@@ -375,8 +375,13 @@ export class AuthErrorHandler {
       return false
     }
 
-    // Don't retry on network errors after 3 attempts
-    if (errorObj?.code === 'NETWORK_ERROR' && attemptNumber >= 2) {
+    // Don't retry on profile not found errors (PGRST116) - these are expected for new users
+    if (errorObj?.code === 'PGRST116') {
+      return false
+    }
+
+    // Don't retry on network errors after 2 attempts (reduced from 3)
+    if (errorObj?.code === 'NETWORK_ERROR' && attemptNumber >= 1) {
       return false
     }
 
@@ -462,8 +467,20 @@ const createAuthQueryFn = (config: AuthConfig) => {
 
       const { data: profile, error: profileError } = await profilePromise
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.warn('Profile fetch warning:', profileError)
+      if (profileError) {
+        if (profileError.code === 'PGRST116') {
+          // No profile found - this is expected for new users during profile creation
+          console.log('Profile not found for user (may be new user):', { 
+            userId: user.id, 
+            email: user.email,
+            userCreated: user.created_at,
+            userConfirmed: user.email_confirmed_at
+          })
+        } else {
+          console.warn('Profile fetch error:', profileError)
+          // For critical profile errors, don't block the auth flow
+          console.warn('Continuing auth flow despite profile error')
+        }
       }
 
       const sessionData: AuthSession = {

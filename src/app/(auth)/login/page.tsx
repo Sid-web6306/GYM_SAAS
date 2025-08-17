@@ -31,8 +31,7 @@ import { withSuspense } from "@/components/providers/suspense-provider"
 
 // Zod schema for client-side validation
 const LoginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
+  email: z.string().email("Please enter a valid email address")
 })
 
 type LoginFormData = z.infer<typeof LoginSchema>
@@ -124,8 +123,7 @@ const LoginPageComponent = () => {
   const form = useForm<LoginFormData>({
     resolver: zodResolver(LoginSchema),
     defaultValues: {
-      email: "",
-      password: "",
+      email: ""
     },
   })
   
@@ -209,12 +207,11 @@ const LoginPageComponent = () => {
     try {
       const formData = new FormData()
       formData.append('email', data.email)
-      formData.append('password', data.password)
       
       const result = await loginWithEmail(null, formData)
       
       if (result?.error) {
-        toastActions.error("Login Failed", "Invalid email or password. Please try again.")
+        toastActions.error("Login Failed", "Invalid email address or login failed. Please try again.")
       }
       // If no error, the server action will handle the redirect
       
@@ -310,32 +307,6 @@ const LoginPageComponent = () => {
                 {form.formState.errors.email && (
                   <p id="email-error" className="text-xs text-red-500" role="alert">
                     {form.formState.errors.email.message}
-                  </p>
-                )}
-              </div>
-              <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Password *</Label>
-                  <Link href="/forgot-password" className="ml-auto inline-block text-sm underline">
-                    Forgot your password?
-                  </Link>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  aria-describedby={form.formState.errors.password ? "password-error" : "password-description"}
-                  aria-invalid={!!form.formState.errors.password}
-                  {...form.register('password')}
-                />
-                {!form.formState.errors.password && (
-                  <p id="password-description" className="text-xs text-muted-foreground">
-                    Enter your account password
-                  </p>
-                )}
-                {form.formState.errors.password && (
-                  <p id="password-error" className="text-xs text-red-500" role="alert">
-                    {form.formState.errors.password.message}
                   </p>
                 )}
               </div>

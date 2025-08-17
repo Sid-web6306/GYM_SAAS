@@ -212,7 +212,8 @@ const GymSetupForm = ({ user, formAction }: {
 
 // Inner content that uses useSearchParams must be wrapped in Suspense
 const OnboardingContent = () => {
-  const { user, hasGym, isLoading: authLoading } = useAuth()
+  const { user, hasGym, isLoading: authLoading, profile } = useAuth()
+  const [profileLoadTimeout, setProfileLoadTimeout] = useState(false)
   // Handle invite acceptance directly (bypassing gym creation)
   const handleInviteAcceptance = async () => {
     if (!inviteToken || !isValidInvite) return
@@ -245,8 +246,21 @@ const OnboardingContent = () => {
     acceptInvitation
   } = useInviteVerification(inviteToken);
 
-  useEffect(( )=> {
-    console.log('Onboarding: useEffect')
+  // Add timeout for profile loading
+  useEffect(() => {
+    if (user && !profile && !profileLoadTimeout) {
+      console.log('Onboarding: User found but no profile, setting timeout')
+      const timer = setTimeout(() => {
+        console.log('Onboarding: Profile load timeout reached')
+        setProfileLoadTimeout(true)
+      }, 5000) // 5 second timeout
+      
+      return () => clearTimeout(timer)
+    }
+  }, [user, profile, profileLoadTimeout])
+
+  useEffect(() => {
+    console.log('Onboarding: useEffect', { user: !!user, hasGym, authLoading, profile: !!profile })
   });
 
   // Multi-tab redirect: if user already has gym (completed onboarding in another tab), redirect to dashboard
@@ -290,7 +304,8 @@ const OnboardingContent = () => {
   }, [user, trialNotStarted, initializeTrial])
 
   // Show loading state while auth is loading or verifying invite
-  if (authLoading || (inviteToken && isVerifyingInvite)) {
+  // But allow proceeding if we have user and profile timeout is reached
+  if ((authLoading || (inviteToken && isVerifyingInvite)) && !(user && profileLoadTimeout)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center space-y-4">
@@ -513,14 +528,43 @@ const OnboardingContent = () => {
     )
   }
 
-  // Show loading state if no user and no invitation
-  if (!user) {
+  // Show loading state if no user and no invitation (unless timeout reached)
+  if (!user && !profileLoadTimeout) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center space-y-4">
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
           <p className="text-gray-600">Loading your profile...</p>
         </div>
+      </div>
+    )
+  }
+
+  // If we timeout without a user, show error
+  if (!user && profileLoadTimeout) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Authentication Error</h2>
+                <p className="text-gray-600 mt-2">
+                  Unable to load your profile. Please refresh the page or try logging in again.
+                </p>
+              </div>
+              <Button 
+                onClick={() => window.location.reload()} 
+                className="mt-4"
+              >
+                Refresh Page
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -559,8 +603,8 @@ const OnboardingContent = () => {
   }
 
   // Check if email is confirmed for authenticated users  
-  const isEmailConfirmed = Boolean(user.email_confirmed_at)
-  const userEmail = user.email || ''
+  const isEmailConfirmed = Boolean(user?.email_confirmed_at)
+  const userEmail = user?.email || ''
 
   return (
     <RequireAuth>
@@ -584,7 +628,7 @@ const OnboardingContent = () => {
           </CardHeader>
           
           <CardContent className="pt-0">
-            {isEmailConfirmed ? (
+            {isEmailConfirmed && user ? (
               <GymSetupForm 
                 user={user} 
                 formAction={formAction}

@@ -16,7 +16,6 @@ export type SignupFormState = {
     message: string;
     details?: {
       email?: string[];
-      password?: string[];
     } | null;
   } | null;
 }
@@ -34,35 +33,18 @@ export type LoginFormState = {
   error: string | null;
 }
 
-export type ForgotPasswordFormState = {
-  error: string | null;
-  success: string | null;
-}
-
-export type ResetPasswordFormState = {
-  error: string | null;
-  success: string | null;
-}
-
-export type ChangePasswordFormState = {
-  error: string | null;
-  success: string | null;
-}
+// Removed password-related form states - no longer needed for passwordless auth
 
 // --- Zod Schemas for Validation ---
-const SignupSchema = z.object({
+const EmailSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters long' }),
 })
 
 const GymNameSchema = z.object({
   gymName: z.string().min(3, { message: 'Gym name must be at least 3 characters long' }),
 })
 
-const ChangePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(6, 'New password must be at least 6 characters long'),
-})
+// Removed password schemas - no longer needed for passwordless auth
 
 // --- HELPER FUNCTIONS ---
 
@@ -110,7 +92,7 @@ const handleAuthError = (error: unknown, context: string) => {
   }
   
   if (errorMessage.includes('Invalid login credentials')) {
-    return 'Invalid email or password. Please try again.';
+    return 'Invalid email or authentication failed. Please try again.';
   }
   
   if (errorMessage.includes('already registered') || 
@@ -394,23 +376,17 @@ function extractSocialProfileData(user: User) {
   };
 }
 
-// --- SIMPLIFIED SIGNUP WITH EMAIL ACTION ---
+// --- PASSWORDLESS SIGNUP WITH SUPABASE OTP ---
 export const signupWithEmail = async (
   prevState: SignupFormState | null,
   formData: FormData
 ): Promise<SignupFormState> => {
   const supabase = await createClient()
-  const origin = (await headers()).get('origin');
-  if (!origin) {
-    return { error: {message: 'Could not determine origin.' }};
-  }
-
   const email = formData.get('email') as string;
-  const password = formData.get('password') as string;
-  const inviteToken = formData.get('inviteToken') as string; // Get invitation token
+  const inviteToken = formData.get('inviteToken') as string;
   
   // Validate using Zod schema
-  const validation = SignupSchema.safeParse({ email, password });
+  const validation = EmailSchema.safeParse({ email });
   
   if (!validation.success) {
     const errors = validation.error.flatten().fieldErrors;
@@ -419,66 +395,52 @@ export const signupWithEmail = async (
         message: 'Please fix the errors below',
         details: {
           email: errors.email,
-          password: errors.password,
         }
       }
     };
   }
 
   try {
-    // Attempt to sign up the user (OTP-only, no email confirmation links)
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // ✅ Use Supabase's built-in OTP system for signup
+    const { error } = await supabase.auth.signInWithOtp({
       email: validation.data.email,
-      password: validation.data.password,
       options: {
-        // Store invitation token in user metadata for OTP verification
-        data: inviteToken ? { pendingInviteToken: inviteToken } : undefined,
-        // Disable email confirmation links - we use OTP instead
-        emailRedirectTo: undefined
+        shouldCreateUser: true, // Create user (unverified until OTP verification)
+        data: {
+          signupFlow: true,
+          ...(inviteToken && { pendingInviteToken: inviteToken })
+        }
       }
     });
-    
-    if (authError) {
-      // Enhanced user existence check
-      if (authError.message.includes('already registered') || 
-          authError.message.includes('already exists') ||
-          authError.message.includes('User already registered')) {
+
+    if (error) {
+      // Handle user already exists
+      if (error.message.includes('already registered') || 
+          error.message.includes('already exists') ||
+          error.message.includes('User already registered')) {
         redirect('/login?message=user-exists');
       }
-      const errorMessage = handleAuthError(authError, 'Signup');
+      
+      const errorMessage = handleAuthError(error, 'Passwordless Signup');
       return { error: { message: errorMessage } } 
     }
-    
-    if (!authData.user) {
-      return { error: { message: 'Could not create account. Please try again.' } }
-    }
 
-    // Send email OTP instead of confirmation link
-    const { error: otpError } = await supabase.auth.signInWithOtp({
+    logger.info('Supabase signup OTP sent:', { 
       email: validation.data.email,
-      options: {
-        shouldCreateUser: false // User already created above
-      }
-    });
-
-    if (otpError) {
-      logger.error('Failed to send OTP after signup:', { 
-        error: otpError.message,
-        email: validation.data.email 
-      })
-      // Don't fail the signup, user can resend OTP
-    }
+      hasInviteToken: !!inviteToken 
+    })
 
     // Redirect to OTP verification page
     redirect(`/verify-email?email=${encodeURIComponent(validation.data.email)}`);
+    
   } catch (error) {
-    handleCatchError(error, 'Signup error');
-    const errorMessage = handleAuthError(error, 'Signup');
+    handleCatchError(error, 'Passwordless signup error');
+    const errorMessage = handleAuthError(error, 'Passwordless Signup');
     return { error: { message: errorMessage } }
   }
 }
 
-// --- ENHANCED LOGIN WITH EMAIL ACTION ---
+// --- PASSWORDLESS LOGIN WITH EMAIL ACTION ---
 export const loginWithEmail = async (
   prevState: LoginFormState | null,
   formData: FormData
@@ -486,59 +448,59 @@ export const loginWithEmail = async (
   const supabase = await createClient();
   
   const email = formData.get('email') as string;
-  const password = formData.get('password') as string;
 
-  if (!email || !password) {
-    return { error: 'Email and password are required.' };
+  if (!email) {
+    return { error: 'Email is required.' };
+  }
+
+  // Validate email format
+  const validation = EmailSchema.safeParse({ email });
+  if (!validation.success) {
+    return { error: 'Please enter a valid email address.' };
   }
 
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    // ✅ Passwordless login: Send OTP to existing user
+    const { error } = await supabase.auth.signInWithOtp({
+      email: validation.data.email,
+      options: {
+        shouldCreateUser: false, // User must already exist for login
+        data: {
+          loginFlow: true
+        }
+      }
     });
 
     if (error) {
-      // Enhanced error handling for different scenarios
-      if (error.message.includes('Email not confirmed')) {
-        redirect('/login?message=email-not-confirmed');
-      }
-      
-      // Provide helpful guidance for invalid credentials
-      if (error.message.includes('Invalid login credentials')) {
+      // Enhanced error handling for passwordless login
+      if (error.message.includes('User not found') || 
+          error.message.includes('not found') ||
+          error.message.includes('Invalid email')) {
         return { 
-          error: 'Invalid email or password. If you signed up with Google or Facebook, please use those login buttons instead. If you set a password after social login, there might be an account setup issue - try logging in with your social provider first.' 
+          error: 'No account found with this email address. Please sign up first or check your email address.' 
         };
       }
       
-      const errorMessage = handleAuthError(error, 'Login');
+      if (error.message.includes('rate limit')) {
+        return {
+          error: 'Too many login attempts. Please wait a few minutes before trying again.'
+        };
+      }
+      
+      const errorMessage = handleAuthError(error, 'Passwordless Login');
       return { error: errorMessage };
     }
+
+    logger.info('Passwordless login OTP sent:', { 
+      email: validation.data.email 
+    })
+
+    // Redirect to OTP verification page
+    redirect(`/verify-email?email=${encodeURIComponent(validation.data.email)}`);
     
-    // Enhanced onboarding gatekeeper
-    if (data.user) {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('gym_id')
-        .eq('id', data.user.id)
-        .single();
-
-      if (profileError && profileError.code !== 'PGRST116') {
-        const errorMessage = handleAuthError(profileError, 'Profile fetch');
-        return { error: errorMessage };
-      }
-
-      if (profile?.gym_id) {
-        redirect('/dashboard'); // User has gym details, go to dashboard
-      } else {
-        redirect('/onboarding'); // User needs to complete onboarding
-      }
-    } else {
-      redirect('/onboarding'); // Fallback to onboarding
-    }
   } catch (error) {
-    handleCatchError(error, 'Login error');
-    const errorMessage = handleAuthError(error, 'Login');
+    handleCatchError(error, 'Passwordless login error');
+    const errorMessage = handleAuthError(error, 'Passwordless Login');
     return { error: errorMessage };
   }
 };
@@ -700,154 +662,3 @@ export const logout = async () => {
     }
   }
 }
-
-// --- FORGOT PASSWORD ACTION ---
-export const forgotPassword = async (
-  prevState: ForgotPasswordFormState | null,
-  formData: FormData
-): Promise<ForgotPasswordFormState> => {
-  const supabase = await createClient();
-  const origin = (await headers()).get('origin');
-  
-  const email = formData.get('email') as string;
-
-  if (!email) {
-    return { error: 'Email is required.', success: null };
-  }
-
-  if (!origin) {
-    return { error: 'Could not determine origin.', success: null };
-  }
-
-  try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${origin}/reset-password`,
-    });
-
-    if (error) {
-      const errorMessage = handleAuthError(error, 'Password reset');
-      return { error: errorMessage, success: null };
-    }
-
-    return { 
-      error: null, 
-      success: 'Password reset email sent. Please check your inbox.' 
-    };
-  } catch (error) {
-    handleCatchError(error, 'Password reset error');
-    const errorMessage = handleAuthError(error, 'Password reset');
-    return { error: errorMessage, success: null };
-  }
-};
-
-// --- RESET PASSWORD ACTION ---
-export const resetPassword = async (
-  prevState: ResetPasswordFormState | null,
-  formData: FormData
-): Promise<ResetPasswordFormState> => {
-  const supabase = await createClient();
-  
-  const password = formData.get('password') as string;
-  const confirmPassword = formData.get('confirmPassword') as string;
-
-  if (!password || !confirmPassword) {
-    return { error: 'Both password fields are required.', success: null };
-  }
-
-  if (password !== confirmPassword) {
-    return { error: 'Passwords do not match.', success: null };
-  }
-
-  if (password.length < 6) {
-    return { error: 'Password must be at least 6 characters long.', success: null };
-  }
-
-  try {
-    // Validate session before updating password
-    const { user, error: userError } = await validateUserSession(supabase);
-    if (userError || !user) {
-      return { error: 'Session expired. Please request a new password reset.', success: null };
-    }
-
-    const { error } = await supabase.auth.updateUser({
-      password: password
-    });
-
-    if (error) {
-      const errorMessage = handleAuthError(error, 'Password update');
-      return { error: errorMessage, success: null };
-    }
-
-    return { 
-      error: null, 
-      success: 'Password updated successfully. Please log in with your new password.' 
-    };
-  } catch (error) {
-    handleCatchError(error, 'Password update error');
-    const errorMessage = handleAuthError(error, 'Password update');
-    return { error: errorMessage, success: null };
-  }
-};
-
-// --- CHANGE PASSWORD ACTION ---
-export const changePassword = async (
-  prevState: ChangePasswordFormState | null,
-  formData: FormData
-): Promise<ChangePasswordFormState> => {
-  const supabase = await createClient();
-  
-  const currentPassword = formData.get('currentPassword') as string;
-  const newPassword = formData.get('newPassword') as string;
-
-  // Validate using Zod schema
-  const validation = ChangePasswordSchema.safeParse({ currentPassword, newPassword });
-  
-  if (!validation.success) {
-    const errors = validation.error.flatten().fieldErrors;
-    const errorMessage = errors.currentPassword?.[0] || errors.newPassword?.[0] || 'Invalid input';
-    return { error: errorMessage, success: null };
-  }
-
-  try {
-    // Validate session before updating password
-    const { user, error: userError } = await validateUserSession(supabase);
-    if (userError || !user) {
-      return { error: 'Session expired. Please log in again.', success: null };
-    }
-
-    // Check if user is from social auth (doesn't have a password set)
-    const provider = user.app_metadata?.provider;
-    if (provider && provider !== 'email') {
-      return { error: 'Social auth users should use "Set Password" instead of "Change Password".', success: null };
-    }
-
-    // Verify current password by attempting to sign in (only for email auth users)
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: user.email || '',
-      password: validation.data.currentPassword,
-    });
-
-    if (signInError) {
-      return { error: 'Current password is incorrect.', success: null };
-    }
-
-    // Update password
-    const { error } = await supabase.auth.updateUser({
-      password: validation.data.newPassword
-    });
-
-    if (error) {
-      const errorMessage = handleAuthError(error, 'Password change');
-      return { error: errorMessage, success: null };
-    }
-
-    return { 
-      error: null, 
-      success: 'Password changed successfully.' 
-    };
-  } catch (error) {
-    handleCatchError(error, 'Password change error');
-    const errorMessage = handleAuthError(error, 'Password change');
-    return { error: errorMessage, success: null };
-  }
-};

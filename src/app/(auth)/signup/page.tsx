@@ -28,10 +28,9 @@ import { toastActions } from "@/stores/toast-store";
 import { authUIActions } from "@/stores/auth-store";
 import { withSuspense } from "@/components/providers/suspense-provider";
 
-// Zod schema for client-side validation
+// Zod schema for client-side validation (passwordless)
 const SignupSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters long"),
 });
 
 type SignupFormData = z.infer<typeof SignupSchema>;
@@ -112,8 +111,7 @@ const SignUpPageComponent = () => {
   const signupForm = useForm<SignupFormData>({
     resolver: zodResolver(SignupSchema),
     defaultValues: {
-      email: "",
-      password: "",
+      email: ""
     },
   });
   
@@ -172,7 +170,6 @@ const SignUpPageComponent = () => {
       
       const formData = new FormData();
       formData.append('email', data.email);
-      formData.append('password', data.password);
       
       // Include invitation token if present
       if (inviteToken) {
@@ -189,9 +186,6 @@ const SignUpPageComponent = () => {
         if (result.error.details) {
           if (result.error.details.email) {
             signupForm.setError('email', { message: result.error.details.email[0] });
-          }
-          if (result.error.details.password) {
-            signupForm.setError('password', { message: result.error.details.password[0] });
           }
         }
       }
@@ -274,20 +268,6 @@ const SignUpPageComponent = () => {
                 {signupForm.formState.errors.email && (
                   <p className="text-xs text-red-500">
                     {signupForm.formState.errors.email.message}
-                  </p>
-                )}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password">Password *</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Create a strong password"
-                  {...signupForm.register('password')}
-                />
-                {signupForm.formState.errors.password && (
-                  <p className="text-xs text-red-500">
-                    {signupForm.formState.errors.password.message}
                   </p>
                 )}
               </div>

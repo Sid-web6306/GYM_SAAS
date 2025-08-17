@@ -17,27 +17,10 @@ export const AUTH_MESSAGES = {
     type: 'error' as const,
   },
 
-  // Password reset
-  'password-reset-sent': {
-    title: 'Reset Link Sent',
-    message: 'Check your email for a password reset link. Make sure to check your spam folder too.',
-    type: 'info' as const,
-  },
-  'password-updated': {
-    title: 'Password Updated',
-    message: 'Your password has been successfully updated. You can now log in with your new password.',
-    type: 'success' as const,
-  },
-  'password-reset-failed': {
-    title: 'Reset Failed',
-    message: 'Unable to reset your password. The link may have expired. Please request a new reset link.',
-    type: 'error' as const,
-  },
-
   // Authentication errors
   'invalid-credentials': {
     title: 'Invalid Credentials',
-    message: 'The email or password you entered is incorrect. Please check your credentials and try again.',
+    message: 'The email you entered is incorrect or the account does not exist. Please check your email and try again.',
     type: 'error' as const,
   },
   'email-not-confirmed': {
@@ -47,7 +30,7 @@ export const AUTH_MESSAGES = {
   },
   'account-exists': {
     title: 'Account Already Exists',
-    message: 'An account with this email already exists. Please sign in instead or use password reset if you forgot your password.',
+    message: 'An account with this email already exists. Please sign in instead.',
     type: 'warning' as const,
   },
   'signup-disabled': {

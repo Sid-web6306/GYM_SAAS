@@ -4,29 +4,23 @@ import { logger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, token, type } = await request.json()
+    const { email, token, type = 'email' } = await request.json()
 
-    if (!email || !token || !type) {
+    if (!email || !token) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    if (type !== 'email') {
-      return NextResponse.json(
-        { success: false, error: 'Invalid verification type' },
+        { success: false, error: 'Email and verification code are required' },
         { status: 400 }
       )
     }
 
     const supabase = await createClient()
 
-    // Verify the OTP using Supabase
+    // ✅ Use Supabase's built-in OTP verification (handles both signup and login)
+    // The database trigger will automatically create the profile for new users
     const { data, error } = await supabase.auth.verifyOtp({
       email,
       token,
-      type: 'email'
+      type
     })
 
     if (error) {
@@ -62,7 +56,10 @@ export async function POST(request: NextRequest) {
 
     logger.info('OTP verification successful:', { 
       email,
-      userId: data.user.id 
+      userId: data.user.id,
+      emailConfirmed: !!data.user.email_confirmed_at,
+      createdAt: data.user.created_at,
+      confirmedAt: data.user.email_confirmed_at
     })
 
     return NextResponse.json({
@@ -83,3 +80,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+

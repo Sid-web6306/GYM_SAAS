@@ -1,42 +1,53 @@
+import pino from 'pino'
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 interface LogContext {
   [key: string]: unknown
 }
 
+// Centralized logging configuration
+const createPinoLogger = () => {
+  const isDev = process.env.NODE_ENV === 'development'
+  const isClient = typeof window !== 'undefined'
+  
+  // Use simple console-based logging to avoid worker thread issues in Next.js
+  return pino({
+    level: isDev ? 'debug' : 'info',
+    browser: {
+      asObject: true,
+    },
+    formatters: {
+      level: (label) => ({ level: label.toUpperCase() }),
+    },
+    timestamp: () => `,"timestamp":"${new Date().toISOString()}"`,
+    base: {
+      environment: isDev ? 'development' : 'production',
+      platform: isClient ? 'client' : 'server',
+    },
+    // Avoid transport worker threads that cause Next.js bundling issues
+    // Pretty formatting will be handled by pino's default console output
+  })
+}
+
 class Logger {
+  private pinoLogger = createPinoLogger()
   private isDev = process.env.NODE_ENV === 'development'
   private isClient = typeof window !== 'undefined'
   
   private log(level: LogLevel, message: string, context?: LogContext) {
-    // Skip debug logs in production
-    if (!this.isDev && level === 'debug') return
-    
-    const timestamp = new Date().toISOString()
-    const logData = { 
-      timestamp, 
-      level, 
-      message, 
+    // Enhanced logging with Pino backend but same API
+    const enrichedContext = {
+      ...context,
+      timestamp: new Date().toISOString(),
       environment: this.isDev ? 'development' : 'production',
       platform: this.isClient ? 'client' : 'server',
-      ...context 
     }
     
-    // Use appropriate console method
-    const consoleMethod: keyof Console = level === 'debug' ? 'log' : level
-    
-    if (this.isDev) {
-      // Pretty print in development
-      console[consoleMethod](`[${level.toUpperCase()}] ${message}`, context || '')
-    } else {
-      // Structured logging in production
-      console[consoleMethod](JSON.stringify(logData))
-    }
-    
-    // In production, could send to external logging service here
-    if (!this.isDev && (level === 'error' || level === 'warn')) {
-      // TODO: Send to external logging service (e.g., Sentry, LogRocket)
-    }
+    // Use Pino for high-performance terminal logging
+    // Development: Pretty formatted with colors
+    // Production: Structured JSON to stdout/stderr
+    this.pinoLogger[level](enrichedContext, message)
   }
   
   debug = (message: string, context?: LogContext) => 
