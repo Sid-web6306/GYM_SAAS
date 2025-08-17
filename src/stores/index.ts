@@ -2,6 +2,7 @@
 
 // Export all stores
 export * from './auth-store' // Auth UI state only (client-side)
+export * from './settings-store' // Settings UI state with persistence
 export * from './toast-store' // Toast notifications
 export * from './ui-store' // Global UI state (sidebar, theme, etc.)
 

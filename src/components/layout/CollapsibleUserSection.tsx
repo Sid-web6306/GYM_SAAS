@@ -1,8 +1,9 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { User, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { useAuth, useLogout } from '@/hooks/use-auth'
 import { useUIStore } from '@/stores/ui-store'
 import { cn } from '@/lib/utils'
@@ -36,7 +37,13 @@ export function CollapsibleUserSection({ className, forceExpanded = false }: Col
           <div className="relative group">
             <div className="flex justify-center">
               <div className="flex-shrink-0">
-                <User className="h-8 w-8 text-muted-foreground" />
+                <UserAvatar 
+                  src={profile?.avatar_url}
+                  name={profile?.full_name}
+                  email={user?.email}
+                  userId={user?.id}
+                  size="md"
+                />
               </div>
             </div>
             
@@ -97,7 +104,13 @@ export function CollapsibleUserSection({ className, forceExpanded = false }: Col
         >
           <div className="flex items-center mb-3">
             <div className="flex-shrink-0">
-              <User className="h-8 w-8 text-muted-foreground" />
+              <UserAvatar 
+                src={profile?.avatar_url}
+                name={profile?.full_name}
+                email={user?.email}
+                userId={user?.id}
+                size="md"
+              />
             </div>
             <motion.div
               initial={false}

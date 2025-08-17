@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useState, useEffect, useTransition, useDeferredValue } from 'react'
+import React, { useEffect, useTransition, useDeferredValue } from 'react'
 import { useAuth, useUpdateProfile } from '@/hooks/use-auth'
 import { useUpdateGym, useGymData, useGymOwner } from '@/hooks/use-gym-data'
+import { useSettingsStore } from '@/stores/settings-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,6 +24,7 @@ import {
   CreditCard,
   Crown
 } from 'lucide-react'
+import { AvatarUpload } from '@/components/ui/avatar-upload'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -33,9 +35,14 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { RoleContextIndicator } from '@/components/layout/RoleContextIndicator'
 import { GymSettingsGuard, BillingGuard, AccessDenied } from '@/components/rbac/rbac-guards'
 // Form schemas
+const phoneE164Regex = /^\+?[1-9]\d{1,14}$/
+
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(100, 'Name must be less than 100 characters'),
   email: z.string().email('Invalid email address'),
+  phone_number: z.string().optional().refine((v) => !v || phoneE164Regex.test(v), {
+    message: 'Invalid phone number. Use E.164 format, e.g. +911234567890',
+  }),
 })
 
 const gymSchema = z.object({
@@ -66,12 +73,12 @@ const SettingsPage = () => {
   // Get gym owner information (only if user is not the owner)
   const { data: gymOwner } = useGymOwner(profile?.gym_id || null)
   
-  const [selectedTab, setSelectedTab] = useState<'profile' | 'gym' | 'subscription' | 'appearance' | 'security'>('profile')
+  const { selectedTab, setSelectedTab } = useSettingsStore()
   const [, startTransition] = useTransition()
   const deferredTab = useDeferredValue(selectedTab)
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showCurrentPassword, setShowCurrentPassword] = React.useState(false)
+  const [showNewPassword, setShowNewPassword] = React.useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false)
   
   // Detect if user is using social authentication
   const authProvider = user?.app_metadata?.provider
@@ -84,6 +91,7 @@ const SettingsPage = () => {
     defaultValues: {
       full_name: profile?.full_name || '',
       email: user?.email || '',
+      phone_number: profile?.phone_number || '',
     },
   })
 
@@ -101,6 +109,7 @@ const SettingsPage = () => {
       profileForm.reset({
         full_name: profile.full_name || '',
         email: user?.email || '',
+        phone_number: profile.phone_number || '',
       })
     }
   }, [profile, user, profileForm])
@@ -130,6 +139,7 @@ const SettingsPage = () => {
     try {
       await updateProfileMutation.mutateAsync({
         full_name: data.full_name,
+        phone_number: data.phone_number || null,
       })
       toastActions.success('Profile Updated', 'Your profile has been updated successfully.')
     } catch (error) {
@@ -229,6 +239,19 @@ const SettingsPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Avatar Upload Section */}
+                <div className="flex flex-col items-center">
+                  <h3 className="text-lg font-medium mb-4">Profile Picture</h3>
+                  <AvatarUpload
+                    currentAvatarUrl={profile?.avatar_url}
+                    userId={user?.id || ''}
+                    name={profile?.full_name}
+                    email={user?.email}
+                  />
+                </div>
+
+                <Separator />
+
                 {/* Role & Gym Context Section - moved to top for better context */}
                 <div className="space-y-4">
                   <h3 className="font-medium flex items-center gap-2">
@@ -309,6 +332,24 @@ const SettingsPage = () => {
                       />
                       <p className="text-sm text-muted-foreground">
                         Email cannot be changed. Contact support if you need to update your email.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="phone_number">Mobile Number</Label>
+                      <Input
+                        id="phone_number"
+                        placeholder="Enter your mobile number (E.164)"
+                        {...profileForm.register('phone_number')}
+                      />
+                      {profileForm.formState.errors.phone_number && (
+                        <p className="text-sm text-destructive flex items-center gap-1">
+                          <AlertCircle className="h-4 w-4" />
+                          {profileForm.formState.errors.phone_number.message}
+                        </p>
+                      )}
+                      <p className="text-sm text-muted-foreground">
+                        Add your mobile number to enable SMS verification and 2FA.
                       </p>
                     </div>
                   </div>
