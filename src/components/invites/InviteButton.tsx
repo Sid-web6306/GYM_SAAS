@@ -71,11 +71,23 @@ export const InviteButton: React.FC<InviteButtonProps> = ({
       })
 
       if (result.success) {
-        toastActions.success('Invitation Sent', `Invitation sent to ${data.email}`)
+        if (result.warning) {
+          // Partial success - invitation created but email failed
+          toastActions.error('Email Failed', result.warning)
+          // Show the invitation URL for manual sharing
+          if (result.invitation?.invite_url) {
+            setTimeout(() => {
+              toastActions.info('Manual Share', `Copy this link to share manually: ${result.invitation!.invite_url}`)
+            }, 3000)
+          }
+        } else {
+          // Full success - invitation created and email sent
+          toastActions.success('Invitation Sent', `Invitation sent to ${data.email}`)
+        }
         form.reset()
         setIsOpen(false)
       } else {
-        toastActions.error('Failed to Send Invitation', result.error || 'Unknown error')
+        toastActions.error('Failed to Create Invitation', result.error || 'Unknown error')
       }
     } catch (error) {
       console.error('Error sending invitation:', error)

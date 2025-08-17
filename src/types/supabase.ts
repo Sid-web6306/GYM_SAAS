@@ -1089,6 +1089,15 @@ export type Database = {
           p_checkout_at?: string | null
         }
         Returns: Database['public']['Tables']['attendance_sessions']['Row']
+      },
+      update_attendance_session: {
+        Args: {
+          p_session_id: string
+          p_check_in_at: string
+          p_check_out_at?: string | null
+          p_notes?: string | null
+        }
+        Returns: Database['public']['Tables']['attendance_sessions']['Row']
       }
     }
     Enums: {

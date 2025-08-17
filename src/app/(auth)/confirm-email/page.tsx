@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { useAuth } from '@/hooks/use-auth'
 import { useEffect } from 'react'
+import Link from "next/link"
 
 const ConfirmEmailPage = () => {
   const router = useRouter()
@@ -82,6 +83,10 @@ const ConfirmEmailPage = () => {
             >
               Back to Login
             </Button>
+
+            <div className="mt-2">
+              <Link href="/" className="underline text-sm">Go to home</Link>
+            </div>
           </div>
         </CardContent>
       </Card>

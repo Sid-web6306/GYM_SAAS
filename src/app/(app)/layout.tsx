@@ -6,6 +6,7 @@ import React from 'react'
 import ClientLayout from './client-layout'
 import { handleCatchError } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/server'
+import { logger } from '@/lib/logger'
 
 const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   // Enhanced server-side auth check with better error handling
@@ -35,7 +36,7 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
     
     // Server-side onboarding check - only if we have a valid profile
     if (profile && !profile.gym_id) {
-      console.log('AppLayout: No gym setup, redirecting to onboarding')
+      logger.info('AppLayout: No gym setup, redirecting to onboarding')
       return redirect('/onboarding')
     }
   } catch (error) {

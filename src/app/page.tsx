@@ -72,7 +72,7 @@ function HomeComponent() {
       </div>
 
       {/* Enhanced Navigation */}
-      <nav className="relative z-10 flex items-center justify-between p-6 backdrop-blur-sm">
+      <nav className="relative z-50 flex items-center justify-between p-6 backdrop-blur-sm">
         <div className="flex items-center space-x-2">
           <div className="p-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
             <Dumbbell className="h-6 w-6 text-white" />

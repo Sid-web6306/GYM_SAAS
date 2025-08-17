@@ -421,26 +421,40 @@ export function useCreateMember() {
     mutationFn: async ({ gymId, memberData }: { gymId: string; memberData: CreateMemberData }) => {
       const supabase = createClient()
       
-      const newMember = {
-        ...memberData,
-        gym_id: gymId,
-        status: memberData.status || 'active',
-        join_date: memberData.join_date || new Date().toISOString(),
-        created_at: new Date().toISOString(),
+      // Use RPC function to create member with automatic role assignment
+      // @ts-expect-error - RPC function not in generated types yet
+      const { data: memberId, error: rpcError } = await supabase.rpc('create_member_with_role', {
+        p_gym_id: gymId,
+        p_first_name: memberData.first_name,
+        p_last_name: memberData.last_name,
+        p_email: memberData.email || null,
+        p_phone_number: memberData.phone_number || null,
+        p_status: memberData.status || 'active',
+        p_join_date: memberData.join_date || new Date().toISOString(),
+      })
+      
+      if (rpcError) {
+        console.error('Member creation RPC error:', rpcError)
+        throw rpcError
       }
       
-      const { data, error } = await supabase
+      if (!memberId) {
+        throw new Error('Failed to create member - no ID returned')
+      }
+      
+      // Fetch the created member data
+      const { data: createdMember, error: fetchError } = await supabase
         .from('members')
-        .insert(newMember)
-        .select()
+        .select('*')
+        .eq('id', String(memberId))
         .single()
       
-      if (error) {
-        console.error('Member creation error:', error)
-        throw error
+      if (fetchError) {
+        console.error('Member fetch error after creation:', fetchError)
+        throw fetchError
       }
       
-      return data as Member
+      return createdMember as Member
     },
     onMutate: async () => {
       // Cancel outgoing refetches

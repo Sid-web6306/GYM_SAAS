@@ -1,667 +1,354 @@
-# 🚀 Gym SaaS MVP - Complete Documentation
+## MSG91 WhatsApp Integration Guide
 
-This is a comprehensive documentation file consolidating all the individual guides and documentation for the Gym SaaS MVP project.
+### Overview
 
-## 📚 Table of Contents
+Add WhatsApp messaging capabilities via MSG91 using a provider-based communications layer that mirrors the existing email abstraction in `src/lib/email-service.ts`. Email continues to work as-is (Resend/dev). WhatsApp is additive and gated by config flags to avoid breaking current behavior.
 
-1. [Project Overview](#project-overview)
-2. [Getting Started](#getting-started)
-3. [Environment Setup](#environment-setup)
-4. [Architecture & Technology Stack](#architecture--technology-stack)
-5. [Authentication System](#authentication-system)
-6. [Real-time System](#real-time-system)
-7. [Stripe Integration](#stripe-integration)
-8. [PWA Implementation](#pwa-implementation)
-9. [Performance & Security](#performance--security)
-10. [Development Guides](#development-guides)
-11. [Migration Guides](#migration-guides)
-12. [Troubleshooting](#troubleshooting)
+### Objectives
 
----
+- **Enable WhatsApp messaging** using MSG91 with minimal impact to existing flows.
+- **Do not break** current email-based invitations and notifications.
+- **Centralize** communications (email + WhatsApp) orchestration and logging.
+- **Respect security**: server-only secrets and no RLS bypass in Supabase [[memory:5667666]].
 
-## Project Overview
+### Scope
 
-### 🎯 Project Goal
+- In-scope: WhatsApp via MSG91 WhatsApp API, template messaging, server API endpoints, configuration wiring, and optional feature hooks (invites/payments/trial).
+- Out-of-scope (for now): SMS fallback, DB auditing table, rate limiting/queues, i18n content, media messaging.
 
-A multi-tenant SaaS application for managing gym memberships, schedules, and check-ins. This project is a solo-developer effort to build a functional MVP within 6 weeks.
+## Architecture
 
-### ✨ Core Features (MVP Scope)
+### Components
 
-- **Secure Authentication:** Gym owners can sign up and log in
-- **Multi-tenancy:** Each gym owner's data is isolated and secure
-- **Member Management:** Ability to add, view, update, and delete members
-- **Dashboard:** A simple overview of key metrics (e.g., total members)
-- **Check-in System:** A basic feature for members to check into the gym
-- **Real-time Updates:** Live synchronization across all browser tabs
-- **Subscription Management:** Integrated Stripe payment processing
-- **PWA Support:** Works as a native mobile app
+- **Provider layer (WhatsApp)**: `src/lib/whatsapp-service.ts`
+  - Interface for WhatsApp operations and `getWhatsAppService()` factory similar to `email-service`.
+  - Providers: `Msg91WhatsAppService` (production), `DevWhatsAppService` (development no-op/logging).
 
-### 🛠️ Technology Stack
+- **MSG91 client helpers**: `src/lib/msg91.ts`
+  - Thin wrappers around MSG91 WhatsApp API endpoints.
 
-- **Frontend:** Next.js 15 (App Router) with TypeScript
-- **Styling:** Tailwind CSS + Shadcn/ui
-- **Backend (BaaS):** Supabase (PostgreSQL, Auth, Storage, Real-time)
-- **State Management:** TanStack Query + Zustand
-- **Payments:** Stripe with React Stripe.js
-- **Deployment:** Vercel
+- **Orchestration**: `src/lib/communications.ts`
+  - High-level helpers that coordinate email + WhatsApp for events, guarded by config flags.
 
----
+- **Server API routes (optional but recommended)**:
+  - `src/app/api/communications/whatsapp/route.ts`: Authenticated endpoint to send templated WhatsApp messages.
 
-## Getting Started
+- **Configuration**: `src/lib/config.ts`
+  - Extend server config with MSG91 keys, template IDs, and feature flags.
 
-### Development Commands
+### Why this design
 
-```bash
-# Start development server
-npm run dev
+- Mirrors existing email abstraction for consistency.
+- Keeps all MSG91 interactions server-side to avoid exposing secrets and to preserve RLS patterns [[memory:5667666]].
+- Incremental adoption: features opt-in to WhatsApp via flags; email remains the primary channel.
 
-# Build for production
-npm run build
+## Files to Add (under `src/`)
 
-# Start production server
-npm start
+- `lib/whatsapp-service.ts`
+  - `WhatsAppService` interface and `getWhatsAppService()` factory.
+  - Methods:
+    - `sendTemplate({ to, templateId, parameters?, languageCode? })`
+    - `sendText({ to, message })` (for simple text messages)
 
-# Run linting
-npm run lint
-```
+- `lib/msg91.ts`
+  - `msg91SendWhatsAppTemplate`, `msg91SendWhatsAppText` low-level HTTP helpers.
 
-### File Structure
-```
-src/
-├── app/                     # Next.js App Router
-│   ├── (app)/              # Protected routes (dashboard, etc.)
-│   ├── (auth)/             # Authentication pages
-│   └── auth/callback/      # OAuth callback handler
-├── actions/                # Server Actions
-├── components/             # Reusable UI components
-│   ├── ui/                # Shadcn/ui components
-│   ├── charts/            # Chart components using Tremor
-│   ├── pwa/               # PWA-specific components
-│   └── providers/         # Context providers
-├── hooks/                  # Custom React hooks
-├── stores/                 # Zustand state management
-├── types/                  # TypeScript type definitions
-├── lib/                    # Utilities and configurations
-└── utils/supabase/         # Supabase client configurations
-```
+- `lib/communications.ts`
+  - Orchestrators for feature events (e.g., `sendInviteMessage`, `sendPaymentMessage`, `sendTrialMessage`).
 
----
+- `types/communications.types.ts`
+  - Types for WhatsApp template parameters, message payloads, and normalized results.
 
-## Environment Setup
+- Optional API routes:
+  - `app/api/communications/whatsapp/route.ts` (POST)
 
-### Required Environment Variables
+## Configuration
 
-Create a `.env.local` file in the project root with the following variables:
+Add server-side environment variables (do not expose to client):
 
-```bash
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+- `WHATSAPP_PROVIDER=msg91`
+- `MSG91_API_KEY=...`
+- `MSG91_WHATSAPP_NUMBER=...` (your registered WhatsApp Business number)
+- `MSG91_TEMPLATE_ID_INVITE=...`
+- `MSG91_TEMPLATE_ID_PAYMENT=...`
+- `MSG91_TEMPLATE_ID_TRIAL=...`
+- `MSG91_TEMPLATE_ID_GENERIC=...`
+- `ENABLE_WHATSAPP=true|false` (feature toggle; default false)
+- Optional fine-grained flags: `ENABLE_WHATSAPP_INVITES`, `ENABLE_WHATSAPP_TRIALS`, `ENABLE_WHATSAPP_PAYMENTS`
 
-# Stripe Configuration
-STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key_here
-STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key_here
-STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+Update `src/lib/config.ts` to:
 
-# Stripe Price IDs (Optional - will create prices dynamically if not provided)
-STRIPE_STARTER_MONTHLY_PRICE_ID=price_starter_monthly
-STRIPE_STARTER_ANNUAL_PRICE_ID=price_starter_annual
-STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID=price_professional_monthly
-STRIPE_PROFESSIONAL_ANNUAL_PRICE_ID=price_professional_annual
-STRIPE_ENTERPRISE_MONTHLY_PRICE_ID=price_enterprise_monthly
-STRIPE_ENTERPRISE_ANNUAL_PRICE_ID=price_enterprise_annual
+- Include the above under server-only config.
+- Validate presence/format, emit warnings in development when missing.
+- Keep client config clean; do not export MSG91 secrets.
 
-# App Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-NEXT_PUBLIC_APP_ENV=development
-```
+## Tier-based channel gating
 
-### Setup Steps
+### Goal
 
-1. **Supabase Setup:**
-   - Go to [Supabase Dashboard](https://supabase.com/dashboard)
-   - Create a new project or use existing one
-   - Go to Settings > API
-   - Copy the Project URL and anon/public key
-   - Add to your `.env.local` file
+Enable channels based on subscription tier:
 
-2. **Stripe Setup:**
-   - Go to [Stripe Dashboard](https://dashboard.stripe.com/)
-   - Navigate to Developers > API Keys
-   - Copy your publishable key and secret key
-   - For webhooks, go to Developers > Webhooks
-   - Add endpoint: `https://your-domain.com/api/webhooks/stripe`
-   - Copy the webhook secret
+- Tier 1 (Starter): email only
+- Tier 2 (Professional): email + WhatsApp
+- Tier 3 (Enterprise): email + WhatsApp (+ advanced features)
 
----
+This uses existing DB fields in `public.subscription_plans`:
 
-## Architecture & Technology Stack
+- `tier_level integer` with constraint `[1,2,3]`
+- Optional `features text[]` for overrides
 
-### Authentication System
+### Implementation
 
-The application uses a modern authentication architecture that separates server state (TanStack Query) from client UI state (Zustand).
+1) Add a resolver in `src/lib/communications.ts`:
 
-#### Key Features:
-- **Multi-tenant authentication** with Supabase Auth
-- **Server Actions** for auth operations in `src/actions/auth.actions.ts`
-- **TanStack Query** for server state management
-- **Zustand store** for client-side UI state management
-- **Onboarding flow** for new gym owners to complete their profiles
-- **Social login** support (Google, Facebook) with OAuth callbacks
+```ts
+type Channel = 'email' | 'whatsapp'
 
-#### Usage Example:
-```typescript
-import { useAuth, useLogout } from '@/hooks/use-auth'
-import { useAuthStore } from '@/stores/auth-store'
+export function resolveChannelsForTier(tierLevel: number, features?: string[]): Channel[] {
+  // Feature override support (optional)
+  // If features array explicitly lists channels, prefer that
+  const normalized = (features || []).map(f => f.toLowerCase())
+  const explicit: Channel[] = []
+  if (normalized.includes('email')) explicit.push('email')
+  if (normalized.includes('whatsapp')) explicit.push('whatsapp')
+  if (explicit.length > 0) return explicit
 
-function MyComponent() {
-  // Server state from TanStack Query
-  const { user, profile, isAuthenticated, hasGym, isLoading } = useAuth()
-  const logoutMutation = useLogout()
-  
-  // UI state from Zustand
-  const { showWelcomeMessage, rememberEmail } = useAuthStore()
-  
-  const handleLogout = () => {
-    logoutMutation.mutate()
+  // Fallback to tier mapping
+  switch (tierLevel) {
+    case 1:
+      return ['email']
+    case 2:
+    case 3:
+      return ['email', 'whatsapp']
+    default:
+      return ['email']
   }
 }
-```
 
-### State Management
-
-#### TanStack Query (Server State)
-- User authentication data
-- Gym data and analytics
-- Member management
-- Subscription information
-- Automatic caching and background refetching
-
-#### Zustand (Client UI State)
-- UI preferences and settings
-- Toast notifications
-- Onboarding status
-- Theme preferences
-
-### Database & Types
-
-- **Supabase** as Backend-as-a-Service
-- **Type-safe** database interactions with generated types
-- **Multi-tenant** architecture with profiles linked to gym_id
-- **RPC functions** for complex operations
-- **Row Level Security (RLS)** for data isolation
-
----
-
-## Real-time System
-
-### Architecture Overview
-
-The real-time system provides live data synchronization across all browser tabs and user sessions using Supabase Real-time and TanStack Query integration.
-
-### Key Components
-
-1. **RealtimeProvider** - App-level real-time state management
-2. **useRealtime Hook** - Generic subscription hook with flexible configuration
-3. **Cross-tab Synchronization** - Uses BroadcastChannel API for tab communication
-4. **Automatic Query Invalidation** - TanStack Query cache updates
-
-### Usage Examples
-
-#### Basic Real-time Status
-```typescript
-import { useRealtimeStatus } from '@/components/providers/realtime-provider'
-
-function StatusIndicator() {
-  const { isConnected, subscriptionCount } = useRealtimeStatus()
-  
-  return (
-    <div className="flex items-center gap-2">
-      <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
-      <span className="text-xs">
-        {isConnected ? `Live (${subscriptionCount})` : 'Offline'}
-      </span>
-    </div>
-  )
+export function channelsAllowWhatsApp(channels: Channel[]) {
+  return channels.includes('whatsapp')
 }
 ```
 
-#### Members Real-time Updates
-```typescript
-import { useMembersRealtime } from '@/hooks/use-realtime'
+2) Fetch current user's plan with tier in server contexts that send messages (e.g., invite actions, payments API). Example:
 
-function MembersPage() {
-  const { profile } = useAuth()
-  
-  const { isConnected } = useMembersRealtime(profile?.gym_id, {
-    enabled: true,
-    onMemberUpdate: () => console.log('Member data updated!')
+```ts
+// Given Supabase client and userId
+const { data: subscription } = await supabase
+  .from('subscriptions')
+  .select('*, subscription_plans(*)')
+  .eq('user_id', userId)
+  .eq('status', 'active')
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .single()
+
+const tierLevel = subscription?.subscription_plans?.tier_level ?? 1
+const features = subscription?.subscription_plans?.features ?? []
+const channels = resolveChannelsForTier(tierLevel, features)
+```
+
+3) Use the resolved channels in orchestrators:
+
+```ts
+// Example in sendInviteMessage orchestrator
+if (channelsAllowWhatsApp(channels) && process.env.ENABLE_WHATSAPP_INVITES === 'true') {
+  await whatsAppService.sendTemplate({ 
+    to: recipientPhone, 
+    templateId: process.env.MSG91_TEMPLATE_ID_INVITE,
+    parameters: templateParams
   })
+}
+```
+
+4) UI gating (optional): leverage existing upgrade flows. When a user on tier 1 accesses WhatsApp features, show upgrade prompts (reusing `TrialGuard` or upgrade links) with required plan info.
+
+### Notes
+
+- The features array, if populated with channel names (`email`, `whatsapp`), can override the tier mapping on a per-plan basis without code changes.
+- WhatsApp requires pre-approved templates - ensure all templates are approved by WhatsApp before production use.
+
+## Contracts and Examples
+
+### WhatsAppService interface (sketch)
+
+```ts
+export interface WhatsAppService {
+  sendTemplate(params: { 
+    to: string; 
+    templateId: string; 
+    parameters?: Array<{ type: 'text' | 'image' | 'document', value: string }>; 
+    languageCode?: string 
+  }): Promise<{ success: boolean; messageId?: string; error?: string }>
   
-  // useMembers automatically gets real-time updates
-  const { data: members } = useMembers(profile?.gym_id, filters)
-  
-  return <div>Members {isConnected ? '🟢' : '🔴'}</div>
+  sendText(params: { 
+    to: string; 
+    message: string 
+  }): Promise<{ success: boolean; messageId?: string; error?: string }>
 }
 ```
 
-### Performance Features
+### WhatsApp route example
 
-- **Circuit Breaker Pattern**: Prevents excessive invalidations
-- **Debounced Invalidation**: Batches rapid updates
-- **Priority Processing**: DELETE events get reduced throttling
-- **Memory Efficient**: Automatic cleanup and leak prevention
-
----
-
-## Stripe Integration
-
-### Overview
-
-The application includes comprehensive Stripe integration with both redirect-based and embedded payment flows, real-time webhook processing, and automated subscription management.
-
-### Features
-
-- **Modern Stripe React Components** with PaymentElement
-- **Multiple Payment Flows**: Redirect-based and embedded forms
-- **Express Checkout**: Apple Pay, Google Pay support
-- **Real-time Sync**: Webhook-driven database updates
-- **Document Downloads**: Invoice and receipt generation
-- **Enhanced Analytics**: Payment and subscription tracking
-
-### Payment Flow Options
-
-#### 1. Redirect-based Checkout
-```typescript
-const { redirectToCheckout } = useStripeCheckout()
-
-const handleUpgrade = () => {
-  redirectToCheckout(planId, billingCycle)
-}
-```
-
-#### 2. Embedded Payment Forms
-```typescript
-const PaymentForm = ({ clientSecret }) => {
-  return (
-    <PaymentElementForm
-      clientSecret={clientSecret}
-      onSuccess={handleSuccess}
-      onError={handleError}
-      showExpressCheckout={true}
-    />
-  )
-}
-```
-
-### Webhook Configuration
-
-Required webhook events in Stripe Dashboard:
-```
-✅ checkout.session.completed
-✅ customer.subscription.created  
-✅ customer.subscription.updated
-✅ customer.subscription.deleted
-✅ invoice.payment_succeeded
-✅ invoice.payment_failed
-✅ invoice.finalized
-✅ customer.updated
-```
-
-### Local Development with Webhooks
-
-#### Using ngrok (Recommended)
 ```bash
-# Install ngrok
-npm install -g ngrok
-
-# Run your app
-npm run dev
-
-# In another terminal, expose localhost
-ngrok http 3000
-
-# Update Stripe webhook URL to: https://abc123.ngrok.io/api/webhooks/stripe
+curl -X POST https://your.app/api/communications/whatsapp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+91XXXXXXXXXX",
+    "templateId": "invite_template",
+    "parameters": [
+      {"type": "text", "value": "Acme Gym"},
+      {"type": "text", "value": "Siddhant"}
+    ]
+  }'
 ```
 
-#### Using Stripe CLI
-```bash
-# Install and login to Stripe CLI
-stripe login
+## WhatsApp Template Management
 
-# Forward events to localhost
-stripe listen --forward-to localhost:3000/api/webhooks/stripe
+### Template Structure
+WhatsApp templates must be pre-approved. Example templates:
+
+**Invite Template:**
+```
+Hi {{1}}! 🏋️‍♀️
+
+You've been invited to join *{{2}}*. 
+
+Click here to accept your invitation: {{3}}
+
+Welcome to the team! 💪
 ```
 
-### Test Cards
+**Payment Success Template:**
+```
+Payment Confirmed! ✅
 
-Use these test cards for development:
-- **Successful payment**: `4242 4242 4242 4242`
-- **Declined payment**: `4000 0000 0000 0002`
-- **Requires authentication**: `4000 0000 0000 3220`
+Thanks {{1}}! Your payment of ₹{{2}} for {{3}} plan has been processed.
 
----
+Your subscription is now active until {{4}}.
 
-## PWA Implementation
+Need help? Reply to this message.
+```
 
-### Overview
+**Trial Reminder Template:**
+```
+Trial Ending Soon ⏰
 
-The project has been converted to a PWA-first strategy, providing a single codebase that works across all devices with native-like functionality.
+Hi {{1}}! Your trial at {{2}} expires in {{3}} days.
 
-### Features Implemented
+Upgrade now to continue: {{4}}
 
-#### ✅ Core PWA Features
-- Service Worker for offline functionality
-- Web App Manifest
-- Installable app experience
-- Responsive design for all devices
-- Offline status indicator
-- Install prompt with platform detection
+Questions? We're here to help!
+```
 
-#### ✅ Mobile Optimizations
-- Touch-friendly UI components
-- Responsive tables and forms
-- Mobile-first responsive design
-- Proper viewport configuration
-- iOS Safari compatibility
+### Template Parameter Mapping
 
-### Installation Instructions
-
-#### For Users (Mobile)
-
-**iOS (Safari)**
-1. Open the app in Safari
-2. Tap the share button (square with arrow)
-3. Select "Add to Home Screen"
-4. Tap "Add" to install
-
-**Android (Chrome)**
-1. Open the app in Chrome
-2. Look for the "Install App" banner
-3. Tap "Install" or use the three-dot menu
-4. Select "Install App" or "Add to Home Screen"
-
-### Configuration
-
-#### Next.js Configuration (`next.config.ts`)
-```typescript
-const withPWA = require('@ducanh2912/next-pwa')({
-  dest: 'public',
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
-  reloadOnOnline: true,
-  swcMinify: true,
-  disable: process.env.NODE_ENV === 'development',
-  workboxOptions: {
-    disableDevLogs: true,
+```ts
+// src/lib/whatsapp-templates.ts
+export const WHATSAPP_TEMPLATES = {
+  INVITE: {
+    id: process.env.MSG91_TEMPLATE_ID_INVITE,
+    parameters: ['recipientName', 'gymName', 'inviteLink']
+  },
+  PAYMENT_SUCCESS: {
+    id: process.env.MSG91_TEMPLATE_ID_PAYMENT,
+    parameters: ['customerName', 'amount', 'planName', 'expiryDate']
+  },
+  TRIAL_REMINDER: {
+    id: process.env.MSG91_TEMPLATE_ID_TRIAL,
+    parameters: ['userName', 'gymName', 'daysLeft', 'upgradeLink']
   }
-})
-```
+} as const
 
----
-
-## Performance & Security
-
-### Performance Improvements
-
-#### 1. Dynamic Imports Strategy
-- **Chart Components**: Tremor library dynamically imported (~200KB+ savings)
-- **PWA Components**: Non-essential components loaded on demand
-- **Centralized Management**: Single `dynamic-imports.ts` file
-
-#### 2. Query Optimization
-- **Circuit Breaker Pattern**: Prevents excessive query invalidations
-- **Debounced Invalidation**: Batches rapid updates for better performance
-- **Strategic Cache Management**: Targeted invalidation reduces unnecessary refetches
-
-#### 3. Memory Management
-- **Automatic Cleanup**: Proper subscription and component cleanup
-- **Mount State Tracking**: Prevents operations on unmounted components
-- **Efficient Cross-tab Communication**: Minimal payload broadcasting
-
-### Security Enhancements
-
-#### 1. Input Sanitization
-```typescript
-import { sanitizeInput, validateInput } from '@/lib/sanitization'
-
-const email = sanitizeInput.email(userInput)
-if (!validateInput.email(email)) {
-  throw new Error('Invalid email')
+export function mapTemplateParameters(
+  templateType: keyof typeof WHATSAPP_TEMPLATES,
+  data: Record<string, string>
+): Array<{ type: 'text', value: string }> {
+  const template = WHATSAPP_TEMPLATES[templateType]
+  return template.parameters.map(param => ({
+    type: 'text' as const,
+    value: data[param] || ''
+  }))
 }
 ```
 
-#### 2. Enhanced Cookie Security
-- Strict cookie security settings
-- Comprehensive cookie cleanup on logout
-- Secure domain handling for production
+## Integration Points (incremental and optional)
 
-#### 3. Type Safety
-```typescript
-import { isValidUser, isCompleteProfile } from '@/lib/type-guards'
+- **Invitations** (`src/actions/invite.actions.ts`): After successful `sendInvitationEmail`, optionally call `sendInviteMessage` when `ENABLE_WHATSAPP_INVITES=true` and recipient phone is known. Email stays primary.
 
-if (isValidUser(user) && isCompleteProfile(profile)) {
-  // TypeScript now knows the exact types
-  console.log(user.id, profile.gym_id)
-}
-```
+- **Payments** (`src/app/api/payments/route.ts`): After successful payment/subscription creation, optionally send a WhatsApp confirmation with amount and plan name when `ENABLE_WHATSAPP_PAYMENTS=true`.
 
----
+- **Trials** (`src/hooks/use-trial.ts`): On trial nearing expiry or expired, optionally send WhatsApp reminder when `ENABLE_WHATSAPP_TRIALS=true`.
 
-## Development Guides
+All usage should preserve Supabase auth checks and never bypass RLS [[memory:5667666]].
 
-### Theme Integration
+## Security and Compliance
 
-The application supports multiple themes with seamless switching and persistence.
+- Keep `MSG91_API_KEY` and all provider secrets server-side only.
+- Sanitize phone numbers with `sanitizeInput.phone` before invoking MSG91.
+- API routes must verify authenticated user and, when applicable, gym-level permissions via existing RBAC utilities.
+- Ensure WhatsApp Business Terms compliance.
+- For auditability, consider adding a `communication_events` table with RLS in a future iteration (not required for initial rollout).
 
-#### Available Themes
-1. **Light** - Clean and minimal light theme (default)
-2. **Blue** - Professional blue theme
-3. **Green** - Fresh green theme
-4. **Purple** - Creative purple theme
-5. **Rose** - Elegant rose theme
+## WhatsApp-Specific Considerations
 
-#### Usage
-```typescript
-import { ThemeSelector } from '@/components/ui/theme-selector'
+### Template Approval Process
+1. Create templates in MSG91 dashboard
+2. Submit for WhatsApp approval (can take 24-48 hours)
+3. Use approved templates only in production
+4. Monitor template performance and delivery rates
 
-function MyComponent() {
-  return <ThemeSelector />
-}
-```
+### Phone Number Requirements
+- Recipients must have WhatsApp installed
+- Numbers should include country code (+91 for India)
+- Consider opt-in mechanisms for marketing messages
+- Handle delivery failures gracefully (fallback to email)
 
-#### Adding New Themes
-1. Define theme in theme selector
-2. Add CSS variables in `globals.css`
-3. Update theme provider configuration
+### Message Limitations
+- Template messages only for business-initiated conversations
+- 24-hour response window for free-form messages after user interaction
+- Character limits vary by template component
 
-### Logging System
+## Observability
 
-Use the centralized logging system for better debugging:
+- Use `src/lib/logger.ts` for structured logs (success/failure, userId, gymId, templateId).
+- Return normalized result shapes from the WhatsApp layer to keep call sites simple.
+- Track delivery rates and template performance.
+- Monitor WhatsApp Business API limits and quotas.
 
-```typescript
-import { logger } from '@/lib/logger'
+## Rollout Plan
 
-// Use structured logging
-logger.auth.login('User signed in', { userId, email })
-logger.error('Database error', { query, error: error.message })
-```
+1. Add new libs, config wiring, and (optional) API routes. Keep `ENABLE_WHATSAPP=false`.
+2. Create and submit WhatsApp templates for approval via MSG91 dashboard.
+3. Verify environment variables locally with development/test keys.
+4. Use the `/api/communications/whatsapp` route to send a template message to a verified number.
+5. Enable `ENABLE_WHATSAPP_INVITES=true` in development and test the invitation WhatsApp alongside existing email.
+6. Gradually enable for trials and payments as needed.
+7. Promote to production using production MSG91 keys and approved templates.
 
-### Error Handling
+## Testing Checklist
 
-Comprehensive error boundaries are implemented throughout the application:
+- Environment validation logs warnings but no runtime crashes when WhatsApp is disabled.
+- Sending a template WhatsApp message via the test route yields a success response.
+- All templates are approved and working in MSG91 dashboard.
+- Email flows (Resend/dev) are unaffected.
+- Phone number validation and formatting works correctly.
 
-```typescript
-import { ErrorBoundary } from '@/components/ErrorBoundary'
+## Acceptance Criteria
 
-function MyApp() {
-  return (
-    <ErrorBoundary>
-      <MyComponent />
-    </ErrorBoundary>
-  )
-}
-```
+- `WHATSAPP_PROVIDER=msg91` and server config in place; secrets not exposed to client.
+- `getWhatsAppService()` returns a working MSG91-backed service on the server.
+- Test route(s) function end-to-end for template messaging.
+- No regression to existing email behavior.
+- All routes follow existing auth patterns; no RLS bypass [[memory:5667666]].
+- Channel availability is gated by `subscription_plans.tier_level` (and optional `features[]`), enforcing:
+  - Tier 1: email only
+  - Tier 2: email + WhatsApp
+  - Tier 3: email + WhatsApp (+ premium features)
 
----
+## References
 
-## Migration Guides
-
-### Codebase Refactoring (Packages to Flattened Structure)
-
-The project has been refactored from a complex packages structure to a clean, single-codebase approach.
-
-#### Benefits Achieved
-- **Simplified Architecture**: Single, clean codebase with logical organization
-- **Reduced Complexity**: One package.json, one tsconfig.json
-- **Better Developer Experience**: Simple imports, better IDE support
-- **Maintained All Functionality**: All features preserved
-
-#### Migration Steps
-1. Update all import statements to use `@/` aliases
-2. Move configuration files to project root
-3. Consolidate dependencies in single package.json
-4. Test all functionality after migration
-
-### Authentication Architecture Migration
-
-Migration from Zustand-only auth to TanStack Query + Zustand separation:
-
-#### Before (Old)
-```tsx
-const { user, profile, isAuthenticated, logout } = useAuthStore()
-```
-
-#### After (New)
-```tsx
-// Server state from TanStack Query
-const { user, profile, isAuthenticated } = useAuth()
-const logoutMutation = useLogout()
-
-// UI state from Zustand
-const { showWelcomeMessage } = useAuthStore()
-```
-
-### Stripe React Migration
-
-Migration to modern Stripe React components:
-
-#### Key Improvements
-- **Embedded Payment Forms**: No redirects needed
-- **Express Checkout**: Built-in wallet support
-- **Better TypeScript Support**: Comprehensive type definitions
-- **Enhanced Appearance**: Improved styling with theme support
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-#### Real-time Updates Not Working
-1. Check Supabase Real-time is enabled in project settings
-2. Verify webhook endpoint is receiving events
-3. Check browser console for connection errors
-
-#### Stripe Integration Issues
-1. **"Stripe not configured"**: Check environment variables
-2. **Webhook verification failed**: Verify webhook secret
-3. **Payment fails**: Ensure using test cards in test mode
-
-#### Build/TypeScript Errors
-1. Run `npm run type-check` to validate TypeScript
-2. Check that all environment variables are set
-3. Verify all imports use correct paths
-
-#### PWA Installation Issues
-1. **Install prompt not showing**: Check PWA audit in DevTools
-2. **Service worker not registering**: Ensure HTTPS in production
-3. **Offline functionality not working**: Check service worker registration
-
-### Debug Commands
-
-```bash
-# Check if service worker is working
-console.log('serviceWorker' in navigator)
-
-# Test webhook endpoint
-curl -X POST localhost:3000/api/webhooks/stripe
-
-# Check environment variables
-console.log(process.env.NEXT_PUBLIC_SUPABASE_URL)
-
-# Validate Stripe configuration
-npm run stripe:validate
-```
-
-### Health Checks
-
-#### Database Connection
-```sql
--- Check if profile exists for user
-SELECT * FROM profiles WHERE id = 'user-id-here';
-```
-
-#### Real-time Subscriptions
-```typescript
-// Check subscription count
-console.log(`Active subscriptions: ${subscriptionCount}`)
-```
-
-#### Payment Flow
-1. Navigate to `/upgrade` page
-2. Complete test payment using `4242 4242 4242 4242`
-3. Verify webhook logs show successful processing
-4. Check database for updated subscription status
-
----
-
-## 🎉 Production Deployment
-
-### Pre-deployment Checklist
-
-- [ ] Environment variables configured for production
-- [ ] Stripe webhook endpoints updated to production URLs
-- [ ] Supabase RLS policies properly configured
-- [ ] PWA manifest and service worker configured
-- [ ] Database migrations applied
-- [ ] Error tracking and monitoring set up
-
-### Deployment Steps
-
-1. **Build and Test**
-   ```bash
-   npm run build
-   npm run start
-   ```
-
-2. **Environment Setup**
-   - Update all environment variables for production
-   - Configure production Stripe webhook endpoints
-   - Set up production domain for cookies
-
-3. **Database Setup**
-   - Run all database migrations
-   - Set up production Supabase project
-   - Configure RLS policies
-
-4. **Monitoring**
-   - Set up error tracking (Sentry, etc.)
-   - Configure performance monitoring
-   - Set up webhook monitoring
-
-### Post-deployment Verification
-
-- [ ] Authentication flow works correctly
-- [ ] Payment processing is functional
-- [ ] Real-time updates are working
-- [ ] PWA installation works on mobile devices
-- [ ] All webhooks are processing successfully
-- [ ] Error rates are within acceptable limits
-
----
-
-This consolidated documentation provides a comprehensive guide to the Gym SaaS MVP project. For specific technical details or troubleshooting not covered here, refer to the individual documentation files or reach out for support.
-
-**🚀 Your gym management SaaS is now ready for production deployment!** 🎯✨ 
+- MSG91 WhatsApp Documentation: [WhatsApp API](https://msg91.com/whatsapp)
+- WhatsApp Business Platform: [Template Guidelines](https://developers.facebook.com/docs/whatsapp/business-management-api/message-templates)
+- Existing email abstraction: `src/lib/email-service.ts`
+- Logger: `src/lib/logger.ts`

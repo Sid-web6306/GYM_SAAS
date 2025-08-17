@@ -23,7 +23,7 @@ class Logger {
     }
     
     // Use appropriate console method
-    const consoleMethod = level === 'debug' ? 'log' : level
+    const consoleMethod: keyof Console = level === 'debug' ? 'log' : level
     
     if (this.isDev) {
       // Pretty print in development

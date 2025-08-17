@@ -89,6 +89,7 @@ const SignUpPageComponent = () => {
   
   // Get invitation token from search params
   const inviteToken = searchParams.get('invite') || '';
+  console.log('inviteToken', inviteToken)
   
   // Use TanStack Query hooks for auth state
   const { isAuthenticated, isLoading } = useAuth();
@@ -132,9 +133,15 @@ const SignUpPageComponent = () => {
       );
       
       const origin = typeof window !== 'undefined' ? window.location.origin : ''
-      const redirectTo = origin 
-        ? `${origin}/auth/callback`
-        : undefined
+      let redirectTo: string|undefined = `${origin}/auth/callback` ;
+
+      if(inviteToken) {
+        redirectTo = `${origin}/auth/callback?invite=${inviteToken}`
+      } else {
+        redirectTo = origin 
+          ? `${origin}/auth/callback`
+          : undefined
+      }
 
       await loginWithSocialProvider(provider, {
         redirectTo,
@@ -169,6 +176,7 @@ const SignUpPageComponent = () => {
       
       // Include invitation token if present
       if (inviteToken) {
+        console.log('inviteToken', inviteToken)
         formData.append('inviteToken', inviteToken);
       }
       
@@ -300,10 +308,16 @@ const SignUpPageComponent = () => {
             </div>
           </form>
 
-          <div className="mt-4 text-center text-sm">
+          { inviteToken && <div className="mt-4 text-center text-sm">
             Already have an account?{" "}
             <Link href="/login" className="underline">
               Log in
+            </Link>
+          </div>}
+
+          <div className="mt-2 text-center text-sm">
+            <Link href="/" className="underline">
+              Go to home page
             </Link>
           </div>
         </CardContent>

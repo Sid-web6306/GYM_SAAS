@@ -21,6 +21,7 @@ export type AttendanceRow = {
   check_in_at: string
   check_out_at: string | null
   total_seconds: number | null | undefined
+  notes?: string | null
 }
 
 export function useMemberAttendance(gymId: string | null, filters?: AttendanceFilters) {
@@ -72,7 +73,7 @@ export function formatDurationFromSeconds(totalSeconds: number | null | undefine
   return `${hours}h ${minutes}m`
 }
 
-export function useStartAttendance() {
+export function useStartAttendance(gymId?: string | null) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (args: { subjectType: 'member' | 'staff'; memberId?: string; staffUserId?: string; method?: string; notes?: string }) => {
@@ -87,26 +88,113 @@ export function useStartAttendance() {
       if (error) throw error
       return data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+    onSuccess: (_, variables) => {
+      // Targeted invalidation based on attendance type and gym
+      if (gymId) {
+        if (variables.subjectType === 'member') {
+          queryClient.invalidateQueries({ 
+            queryKey: ['attendance', 'members', gymId],
+            exact: false // Allow partial matching for filtered queries
+          })
+        } else {
+          queryClient.invalidateQueries({ 
+            queryKey: ['attendance', 'staff', gymId],
+            exact: false
+          })
+        }
+        
+        // Also invalidate gym stats that depend on attendance
+        queryClient.invalidateQueries({ 
+          queryKey: ['gym', 'stats', gymId],
+          exact: true
+        })
+      } else {
+        // Fallback to broader invalidation if no gymId
+        queryClient.invalidateQueries({ queryKey: ['attendance'] })
+      }
     },
   })
 }
 
-export function useEndAttendance() {
+export function useEndAttendance(gymId?: string | null) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (args: { sessionId: string; checkoutAt?: string }) => {
       const supabase = createClient()
       const { data, error } = await supabase.rpc('end_attendance_session', {
         p_session_id: args.sessionId,
-        p_checkout_at: args.checkoutAt ?? null,
+        p_checkout_at: args.checkoutAt ?? new Date().toISOString(),
       })
       if (error) throw error
       return data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+      // Targeted invalidation - invalidate both member and staff attendance
+      // since we don't know which type the session was from sessionId alone
+      if (gymId) {
+        queryClient.invalidateQueries({ 
+          queryKey: ['attendance', 'members', gymId],
+          exact: false
+        })
+        queryClient.invalidateQueries({ 
+          queryKey: ['attendance', 'staff', gymId],
+          exact: false
+        })
+        
+        // Also invalidate gym stats that depend on attendance
+        queryClient.invalidateQueries({ 
+          queryKey: ['gym', 'stats', gymId],
+          exact: true
+        })
+      } else {
+        // Fallback to broader invalidation if no gymId
+        queryClient.invalidateQueries({ queryKey: ['attendance'] })
+      }
+    },
+  })
+}
+
+export function useUpdateAttendanceSession(gymId?: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { 
+      sessionId: string
+      checkInAt: string
+      checkOutAt?: string | null
+      notes?: string | null
+    }) => {
+      const supabase = createClient()
+      const { data, error } = await supabase.rpc('update_attendance_session', {
+        p_session_id: args.sessionId,
+        p_check_in_at: args.checkInAt,
+        p_check_out_at: args.checkOutAt ?? null,
+        p_notes: args.notes ?? null,
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      // Targeted invalidation - invalidate both member and staff attendance
+      // since we don't know which type the session was from sessionId alone
+      if (gymId) {
+        queryClient.invalidateQueries({ 
+          queryKey: ['attendance', 'members', gymId],
+          exact: false
+        })
+        queryClient.invalidateQueries({ 
+          queryKey: ['attendance', 'staff', gymId],
+          exact: false
+        })
+        
+        // Also invalidate gym stats that depend on attendance
+        queryClient.invalidateQueries({ 
+          queryKey: ['gym', 'stats', gymId],
+          exact: true
+        })
+      } else {
+        // Fallback to broader invalidation if no gymId
+        queryClient.invalidateQueries({ queryKey: ['attendance'] })
+      }
     },
   })
 }

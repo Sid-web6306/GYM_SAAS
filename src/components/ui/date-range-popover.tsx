@@ -133,11 +133,12 @@ const defaultPresets: DateRangePreset[] = [
 const defaultGetLabel = (
   value: DateRangeValue,
   presets: DateRangePreset[],
-  weekStartsOn: DateRangePopoverProps['weekStartsOn']
+  weekStartsOn: DateRangePopoverProps['weekStartsOn'],
+  now = new Date() // Allow passing current date to prevent repeated Date() calls
 ): string => {
   const { from, to } = value
   if (!from && !to) return 'All time'
-  const now = new Date()
+  
   for (const p of presets) {
     const r = p.computeRange(now, { weekStartsOn: weekStartsOn ?? 1 })
     if (r.from === from && r.to === to) return p.label
@@ -167,7 +168,14 @@ export function DateRangePopover(props: DateRangePopoverProps) {
   const [open, setOpen] = React.useState(false)
   const [staged, setStaged] = React.useState<DateRangeValue>(value)
   const [displayMonth, setDisplayMonth] = React.useState<Date | undefined>(undefined)
-  const label = (getLabel ?? ((v) => defaultGetLabel(v, presets, weekStartsOn)))(value)
+  
+  // Memoize current date to prevent repeated Date() calls
+  const now = React.useMemo(() => new Date(), [])
+  
+  // Memoize label computation
+  const label = React.useMemo(() => {
+    return (getLabel ?? ((v) => defaultGetLabel(v, presets, weekStartsOn, now)))(value)
+  }, [value, getLabel, presets, weekStartsOn, now])
 
   // Reset staged value whenever popover opens to reflect external value
   React.useEffect(() => {
@@ -177,13 +185,26 @@ export function DateRangePopover(props: DateRangePopoverProps) {
       setDisplayMonth(startOfMonth(initial))
     }
   }, [open, value])
-  const selectedRange: DateRange | undefined =
-    staged.from || staged.to
+  // Memoize selectedRange to prevent unnecessary re-computations
+  const selectedRange: DateRange | undefined = React.useMemo(() => {
+    return staged.from || staged.to
       ? { from: toDate(staged.from) ?? undefined, to: toDate(staged.to) ?? undefined }
       : undefined
+  }, [staged.from, staged.to])
 
-  const minDateObj = toDate(minDate ?? null)
-  const maxDateObj = toDate(maxDate ?? null)
+  // Memoize date constraints
+  const dateConstraints = React.useMemo(() => ({
+    minDateObj: toDate(minDate ?? null),
+    maxDateObj: toDate(maxDate ?? null)
+  }), [minDate, maxDate])
+  
+  // Extract disabled date logic
+  const disabledDates = React.useMemo(() => {
+    const matchers: Matcher[] = []
+    if (dateConstraints.minDateObj) matchers.push({ before: dateConstraints.minDateObj })
+    if (dateConstraints.maxDateObj) matchers.push({ after: dateConstraints.maxDateObj })
+    return matchers.length ? matchers : undefined
+  }, [dateConstraints])
   const handleSelect = (range: DateRange | undefined) => {
     if (!range) {
       setStaged({ from: null, to: null })
@@ -203,17 +224,55 @@ export function DateRangePopover(props: DateRangePopoverProps) {
     setStaged({ from: null, to: null })
     if (onClear) onClear()
     else onChange({ from: null, to: null })
+    setOpen(false) // Close popover after clearing
   }
+
+  // Improved scroll position management with cleanup
+  const scrollPositionRef = React.useRef<number>(0)
+  
+  React.useEffect(() => {
+    if (open) {
+      scrollPositionRef.current = window.scrollY
+    }
+  }, [open])
+  
+  // Cleanup function for scroll restoration
+  const restoreScrollPosition = React.useCallback(() => {
+    if (scrollPositionRef.current !== window.scrollY) {
+      // Use requestAnimationFrame for smoother scroll restoration
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPositionRef.current)
+      })
+    }
+  }, [])
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <Button variant={buttonVariant} disabled={disabled} className={cn('inline-flex items-center gap-2', className)}>
+        <Button 
+          variant={buttonVariant} 
+          disabled={disabled} 
+          className={cn('inline-flex items-center gap-2', className)}
+        >
           <CalendarIcon className="h-4 w-4" />
           <span className="text-sm">{label}</span>
         </Button>
       </Popover.Trigger>
-      <Popover.Content side="bottom" sideOffset={8} className="z-[10000] rounded-md border bg-popover p-2 shadow-md">
+      <Popover.Content 
+        side="bottom" 
+        sideOffset={8} 
+        className="z-[10000] rounded-md border bg-popover p-2 shadow-md"
+        avoidCollisions={true}
+        collisionPadding={10}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          restoreScrollPosition()
+        }}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          restoreScrollPosition()
+        }}
+      >
         <div className="flex gap-2">
           <div className="p-2">
             <DayPicker
@@ -232,12 +291,7 @@ export function DateRangePopover(props: DateRangePopoverProps) {
                 range_middle: 'bg-primary/10',
                 today: 'border border-primary',
               }}
-              disabled={((): Matcher[] | undefined => {
-                const matchers: Matcher[] = []
-                if (minDateObj) matchers.push({ before: minDateObj })
-                if (maxDateObj) matchers.push({ after: maxDateObj })
-                return matchers.length ? matchers : undefined
-              })()}
+              disabled={disabledDates}
             />
           </div>
           <div className="w-px bg-muted" />
@@ -249,11 +303,12 @@ export function DateRangePopover(props: DateRangePopoverProps) {
                 variant="ghost"
                 className="justify-start"
                 onClick={() => {
-                  const r = p.computeRange(new Date(), { weekStartsOn })
+                  const r = p.computeRange(now, { weekStartsOn })
                   setStaged(r)
                   onChange(r)
+                  // Smart month navigation
                   const target = startOfMonth(
-                    toDate(r.from) || toDate(r.to) || new Date()
+                    toDate(r.from) || toDate(r.to) || now
                   )
                   if (!displayMonth) {
                     setDisplayMonth(target)
@@ -264,6 +319,8 @@ export function DateRangePopover(props: DateRangePopoverProps) {
                       setDisplayMonth(target)
                     }
                   }
+                  // Close popover after preset selection for better UX
+                  setOpen(false)
                 }}
               >
                 {p.label}

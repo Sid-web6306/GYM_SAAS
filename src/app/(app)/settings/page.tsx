@@ -350,7 +350,7 @@ const SettingsPage = () => {
             <GymSettingsGuard action="update" fallback={
               <div className="p-8">
                 <AccessDenied 
-                  message="Gym settings can only be modified by managers and gym owners. Contact your gym owner if you need to make changes." 
+                  message="Gym settings can only be modified by gym owners. Contact your gym owner if you need to make changes." 
                 />
               </div>
             }>
@@ -436,7 +436,7 @@ const SettingsPage = () => {
             <BillingGuard action="read" fallback={
               <div className="p-8">
                 <AccessDenied 
-                  message="Subscription details are only available to staff members and above. Contact your gym manager for access." 
+                  message="Subscription details are only available to gym owners. Contact your gym owner for billing and subscription access." 
                 />
               </div>
             }>

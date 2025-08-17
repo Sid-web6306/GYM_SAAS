@@ -2,7 +2,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { type Database } from '@/types/database.types'
+import { type Database } from '@/types/supabase'
 
 // Get environment-specific cookie prefix to prevent cross-environment conflicts
 const getEnvironmentPrefix = () => {

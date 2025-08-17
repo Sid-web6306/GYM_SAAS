@@ -12,7 +12,7 @@ const UpgradePage = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center">
         <div className="max-w-md mx-auto p-8">
           <AccessDenied 
-            message="Subscription management is only available to staff members and above. Contact your gym manager to upgrade your plan or make billing changes." 
+            message="Subscription management is only available to gym owners. Contact your gym owner to upgrade your plan or make billing changes." 
           />
         </div>
       </div>

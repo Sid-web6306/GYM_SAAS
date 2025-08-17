@@ -273,9 +273,9 @@ export const DynamicOfflineStatus = dynamic(() => import('@/components/pwa/Offli
   ssr: false
 })
 
-export const DynamicUpdatePrompt = dynamic(() => import('@/components/pwa/UpdatePrompt').then(mod => ({ default: mod.UpdatePrompt })), {
-  ssr: false
-})
+// export const DynamicUpdatePrompt = dynamic(() => import('@/components/pwa/UpdatePrompt').then(mod => ({ default: mod.UpdatePrompt })), {
+//   ssr: false
+// })
 
 export const DynamicMemberGrowthChart = dynamic(() => import('@/components/charts/member-growth-chart').then(mod => ({ default: mod.MemberGrowthChart })), {
   ssr: false,

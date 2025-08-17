@@ -202,16 +202,12 @@ export const useInvitation = (invitationId: string) => {
           email,
           role,
           status,
+          token,
           expires_at,
           accepted_at,
           metadata,
           created_at,
           updated_at,
-          invited_by:profiles!gym_invitations_invited_by_fkey(
-            id,
-            full_name,
-            email
-          ),
           accepted_by:profiles!gym_invitations_accepted_by_fkey(
             id,
             full_name,
