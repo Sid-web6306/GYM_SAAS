@@ -21,22 +21,37 @@ export interface SendEmailOptions {
  * Email service interface - can be implemented with different providers
  */
 export interface EmailService {
-  sendEmail(options: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }>;
+  // sendEmail(options: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }>;
+  sendInvitationEmailWithTemplate(data: InvitationEmailData): Promise<{ success: boolean; messageId?: string; error?: string }>;
 }
 
 /**
  * Development email service - logs emails instead of sending them
  */
 export class DevEmailService implements EmailService {
-  async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  // async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  //   console.log('\n📧 === EMAIL SENT (Development Mode) ===');
+  //   console.log('To:', options.to);
+  //   console.log('Subject:', options.subject);
+  //   console.log('Preview:', options.preview || 'N/A');
+  //   console.log('\n--- TEXT VERSION ---');
+  //   console.log(options.text);
+  //   console.log('\n--- HTML VERSION ---');
+  //   console.log(options.html);
+  //   console.log('=====================================\n');
+    
+  //   return { 
+  //     success: true, 
+  //     messageId: `dev-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` 
+  //   };
+  // }
+  async sendInvitationEmailWithTemplate(data: InvitationEmailData): Promise<{ success: boolean; messageId?: string; error?: string }> {
     console.log('\n📧 === EMAIL SENT (Development Mode) ===');
-    console.log('To:', options.to);
-    console.log('Subject:', options.subject);
-    console.log('Preview:', options.preview || 'N/A');
-    console.log('\n--- TEXT VERSION ---');
-    console.log(options.text);
-    console.log('\n--- HTML VERSION ---');
-    console.log(options.html);
+    console.log('To:', data.recipientEmail);
+    console.log('Gym:', data.gymName);
+    console.log('Role:', data.role);
+    console.log('Inviter:', data.inviterName);
+    console.log('Message:', data.message || 'N/A');
     console.log('=====================================\n');
     
     return { 
@@ -47,42 +62,92 @@ export class DevEmailService implements EmailService {
 }
 
 /**
- * Resend email service implementation
+ * MSG91 email service implementation
  */
-import { Resend } from 'resend';
+import { sendTemplateEmailViaMSG91 } from './msg91';
 import { logger } from './logger';
+import { serverConfig } from './config';
 
-export class ResendEmailService implements EmailService {
-  private resend: Resend;
+export class MSG91EmailService implements EmailService {
+  // async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  //   try {
+  //     const fromAddress = serverConfig.systemFromEmail || 'noreply@yourgym.com'
+      
+  //     const result = await sendEmailViaMSG91({
+  //       to: [options.to],
+  //       from: fromAddress,
+  //       from_name: serverConfig.msg91BrandName, // Use registered brand name
+  //       reply_to: options.from && options.from !== fromAddress ? options.from : undefined,
+  //       subject: options.subject,
+  //       html: options.html,
+  //       text: options.text || options.html.replace(/<[^>]*>/g, '') // Strip HTML as fallback
+  //     });
 
-  constructor(apiKey: string) {
-    this.resend = new Resend(apiKey);
-  }
+  //     if (!result.success) {
+  //       logger.error('MSG91 email error:', { error: result.error });
+  //       return { success: false, error: result.error };
+  //     }
 
-  async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  //     logger.info('Email sent successfully via MSG91:', { messageId: result.messageId });
+  //     return { success: true, messageId: result.messageId };
+  //   } catch (error) {
+  //     logger.error('MSG91 email service error:', { error: String(error) });
+  //     return { 
+  //       success: false, 
+  //       error: error instanceof Error ? error.message : 'Unknown error' 
+  //     };
+  //   }
+  // }
+
+  async sendInvitationEmailWithTemplate(data: InvitationEmailData): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
-      const fromAddress = process.env.FROM_EMAIL || options.from || 'noreply@yourgym.com'
-      const result = await this.resend.emails.send({
-        from: fromAddress,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-        // Prefer a verified from; if the inviter is different, set replyTo for better deliverability
-        replyTo: options.from && options.from !== fromAddress ? options.from : undefined,
-      });
-
-      if (result.error) {
-        return { success: false, error: result.error.message };
+      const fromAddress = serverConfig.systemFromEmail || 'noreply@yourgym.com'
+      const { msg91InvitationTemplateId } = serverConfig
+      
+      if (!msg91InvitationTemplateId) {
+        return { success: false, error: 'MSG91 invitation template ID not configured' }
       }
 
-      return { success: true, messageId: result.data?.id };
+      // Prepare template variables for MSG91
+      const templateVariables = {
+        recipientEmail: data.recipientEmail,
+        inviterName: data.inviterName,
+        gymName: data.gymName,
+        role: data.role,
+        inviteUrl: data.inviteUrl,
+        expiresAt: data.expiresAt,
+        message: data.message || ''
+      }
+
+      const result = await sendTemplateEmailViaMSG91({
+        to: [{ email: data.recipientEmail, name: data.recipientName }],
+        from: { email: fromAddress, name: serverConfig.msg91BrandName || 'Gym Management' },
+        domain: serverConfig.msg91EmailDomain,
+        template_id: msg91InvitationTemplateId,
+        variables: templateVariables
+      })
+
+      if (!result.success) {
+        logger.error('MSG91 template email error:', { error: result.error })
+        return { success: false, error: result.error }
+      }
+
+      logger.info('Template invitation email sent successfully:', {
+        recipientEmail: data.recipientEmail,
+        template_id: msg91InvitationTemplateId,
+        messageId: result.messageId
+      })
+
+      return { 
+        success: true, 
+        messageId: result.messageId 
+      }
     } catch (error) {
-      console.error('Resend email error:', error);
+      logger.error('Error sending template invitation email:', { error: String(error) })
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Unknown error' 
-      };
+      }
     }
   }
 }
@@ -126,27 +191,28 @@ export class SendGridEmailService implements EmailService {
  * Get the configured email service
  */
 export function getEmailService(): EmailService {
-  const emailProvider = process.env.EMAIL_PROVIDER;
-
-  switch (emailProvider) {
-    case 'resend':
-      const resendApiKey = process.env.RESEND_API_KEY;
-      if (!resendApiKey) {
-        console.warn('RESEND_API_KEY not found, using dev service');
-        return new DevEmailService();
-      }
-      console.log('✅ Using Resend email service');
-      return new ResendEmailService(resendApiKey);
-    
-    case 'sendgrid':
-      // return new SendGridEmailService(process.env.SENDGRID_API_KEY!);
-      console.warn('SendGrid email service not configured, using dev service');
-      return new DevEmailService();
-    
-    default:
-      console.log('📧 Using development email service (emails logged to console)');
-      return new DevEmailService();
+  const { msg91ApiKey, msg91InvitationTemplateId } = serverConfig;
+  
+  // Check environment - use dev service in development unless explicitly configured
+  if (process.env.NODE_ENV === 'development' && !msg91ApiKey) {
+    console.log('📧 Using development email service (emails logged to console)');
+    return new DevEmailService();
   }
+
+  // Use MSG91 for production or when API key is configured
+  if (msg91ApiKey) {
+    if (!msg91InvitationTemplateId) {
+      console.warn('⚠️  MSG91_INVITATION_TEMPLATE_ID not configured. Create templates in MSG91 dashboard first.');
+      console.log('📧 Falling back to development email service');
+      return new DevEmailService();
+    }
+    console.log('✅ Using MSG91 email service with templates');
+    return new MSG91EmailService();
+  }
+
+  // Fallback to dev service
+  console.warn('MSG91_API_KEY not configured, using dev service');
+  return new DevEmailService();
 }
 
 /**
@@ -154,21 +220,44 @@ export function getEmailService(): EmailService {
  */
 export async function sendInvitationEmail(data: InvitationEmailData): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const emailService = getEmailService();
+  const { msg91InvitationTemplateId } = serverConfig;
   
+  logger.info('Sending invitation email to:', { recipientEmail: data.recipientEmail });
+
+  // Use template-based sending if MSG91 template is configured and service is MSG91EmailService
+  if (msg91InvitationTemplateId && emailService instanceof MSG91EmailService) {
+    logger.info('Using MSG91 template for invitation email:', { templateId: msg91InvitationTemplateId });
+    return emailService.sendInvitationEmailWithTemplate(data);
+  }
+
+  // Fallback to HTML-based email (for dev mode or when template not configured)
+  logger.info('Using HTML-based email (no template configured)');
   const subject = generateInvitationSubject(data.gymName, data.role);
   const preview = generateInvitationPreview(data.inviterName, data.gymName);
   const html = generateInvitationEmailHTML(data);
   const text = generateInvitationEmailText(data);
-  logger.info('Sending invitation email to:', { recipientEmail: data });
 
-  return emailService.sendEmail({
-    from: data.inviterEmail,
-    to: data.recipientEmail,
-    subject,
-    html,
-    text,
-    preview
-  });
+  // For development mode fallback, log the email data
+  if (emailService instanceof DevEmailService) {
+    console.log('\n📧 === EMAIL FALLBACK (HTML Mode) ===');
+    console.log('From:', data.inviterEmail);
+    console.log('To:', data.recipientEmail);
+    console.log('Subject:', subject);
+    console.log('Preview:', preview);
+    console.log('\n--- TEXT VERSION ---');
+    console.log(text);
+    console.log('\n--- HTML VERSION ---');
+    console.log(html);
+    console.log('=====================================\n');
+    
+    return { 
+      success: true, 
+      messageId: `dev-fallback-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` 
+    };
+  }
+
+  // For production mode, this shouldn't be reached since we should use templates
+  throw new Error('HTML-based email sending not supported in production mode. Use template-based sending instead.');
 }
 
 /**
@@ -210,44 +299,30 @@ export function validateEmailConfig(): { valid: boolean; errors: string[]; warni
   const errors: string[] = [];
   const warnings: string[] = [];
   
-  const emailProvider = process.env.EMAIL_PROVIDER;
-  const fromEmail = process.env.FROM_EMAIL;
+  const { msg91ApiKey, systemFromEmail } = serverConfig;
   
-  // Check email provider configuration
-  if (!emailProvider) {
-    warnings.push('EMAIL_PROVIDER not set - using development mode (emails logged to console)');
-  } else if (emailProvider === 'resend') {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      errors.push('RESEND_API_KEY environment variable required when EMAIL_PROVIDER=resend');
-    } else if (!apiKey.startsWith('re_')) {
-      warnings.push('RESEND_API_KEY should start with "re_" - please verify your API key');
+  // Check MSG91 configuration
+  if (!msg91ApiKey) {
+    if (process.env.NODE_ENV === 'production') {
+      errors.push('MSG91_API_KEY environment variable is required for production');
+    } else {
+      warnings.push('MSG91_API_KEY not set - using development mode (emails logged to console)');
     }
-  } else if (emailProvider === 'sendgrid') {
-    if (!process.env.SENDGRID_API_KEY) {
-      errors.push('SENDGRID_API_KEY environment variable required when EMAIL_PROVIDER=sendgrid');
-    }
-  } else {
-    warnings.push(`Unknown EMAIL_PROVIDER "${emailProvider}" - falling back to development mode`);
   }
   
-  // Check FROM_EMAIL configuration
-  if (!fromEmail) {
-    if (emailProvider && emailProvider !== 'dev') {
-      errors.push('FROM_EMAIL environment variable required for production email sending');
-    } else {
-      warnings.push('FROM_EMAIL not set - using default for development');
-    }
+  // Check SYSTEM_FROM_EMAIL configuration
+  if (!systemFromEmail || systemFromEmail === 'noreply@yourgym.com') {
+    warnings.push('SYSTEM_FROM_EMAIL not configured - using default address');
   } else {
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(fromEmail)) {
-      errors.push('FROM_EMAIL must be a valid email address');
+    if (!emailRegex.test(systemFromEmail)) {
+      errors.push('SYSTEM_FROM_EMAIL must be a valid email address');
     }
     
     // Check for common development domains
-    if (fromEmail.includes('example.com') || fromEmail.includes('test.com')) {
-      warnings.push('FROM_EMAIL appears to use a test domain - update for production');
+    if (systemFromEmail.includes('example.com') || systemFromEmail.includes('test.com')) {
+      warnings.push('SYSTEM_FROM_EMAIL appears to use a test domain - update for production');
     }
   }
   

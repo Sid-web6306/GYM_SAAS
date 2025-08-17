@@ -257,6 +257,10 @@ const OnboardingContent = () => {
     acceptInvitation
   } = useInviteVerification(inviteToken);
 
+  useEffect(( )=> {
+    console.log('Onboarding: useEffect')
+  });
+
   // Multi-tab redirect: if user already has gym (completed onboarding in another tab), redirect to dashboard
   useEffect(() => {
     if (!authLoading && hasGym) {
@@ -379,26 +383,18 @@ const OnboardingContent = () => {
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle className="w-5 h-5 text-yellow-600" />
-                    <span className="font-medium text-yellow-800">Sign In Required</span>
+                    <span className="font-medium text-yellow-800">Sign Up Required</span>
                   </div>
                   <p className="text-sm text-yellow-700">
-                    Please sign in or create an account to accept this invitation.
+                    Please create an account to accept this invitation.
                   </p>
                 </div>
 
                 {/* Auth Action Buttons */}
                 <div className="space-y-3">
                   <Button 
-                    onClick={() => router.push(`/login?redirect=${encodeURIComponent(window.location.href)}`)}
-                    className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white font-semibold py-3 cursor-pointer"
-                  >
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    Sign In to Accept Invitation
-                  </Button>
-                  
-                  <Button 
                     variant="outline"
-                    onClick={() => router.push(`/signup?redirect=${encodeURIComponent(window.location.href)}`)}
+                    onClick={() => router.push(`/signup?invite=${inviteToken}`)}
                     className="w-full cursor-pointer"
                   >
                     Create Account & Accept Invitation

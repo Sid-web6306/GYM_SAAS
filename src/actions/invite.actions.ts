@@ -27,6 +27,8 @@ const createInviteSchema = z.object({
 export interface CreateInviteResult {
   success: boolean
   error?: string
+  warning?: string
+  emailSent?: boolean
   invitation?: {
     id: string
     email: string
@@ -182,10 +184,35 @@ export async function createInvitation(formData: FormData): Promise<CreateInvite
           logger.info(`Invitation email sent to ${validatedData.email}`, { messageId: emailResult.messageId })
         } else {
           logger.error('Failed to send invitation email:', { error: emailResult.error || 'Unknown error' })
-      }
-    } catch (emailError) {
-      logger.error('Failed to send invitation email:', { error: String(emailError) })
-        // Don't fail the invitation creation if email fails
+          // Return partial success - invitation created but email failed
+          return {
+            success: true,
+            warning: `Invitation created but email failed to send: ${emailResult.error || 'Unknown error'}`,
+            invitation: {
+              id: invitation.id,
+              email: invitation.email,
+              role: invitation.role,
+              expires_at: invitation.expires_at,
+              invite_url: inviteUrl
+            },
+            emailSent: false
+          }
+        }
+      } catch (emailError) {
+        logger.error('Failed to send invitation email:', { error: String(emailError) })
+        // Return partial success - invitation created but email failed
+        return {
+          success: true,
+          warning: `Invitation created but email failed to send: ${String(emailError)}`,
+          invitation: {
+            id: invitation.id,
+            email: invitation.email,
+            role: invitation.role,
+            expires_at: invitation.expires_at,
+            invite_url: inviteUrl
+          },
+          emailSent: false
+        }
       }
     }
 
@@ -200,7 +227,8 @@ export async function createInvitation(formData: FormData): Promise<CreateInvite
         role: invitation.role,
         expires_at: invitation.expires_at,
         invite_url: inviteUrl
-      }
+      },
+      emailSent: true
     }
 
   } catch (error) {
@@ -437,7 +465,7 @@ export async function getGymInvitations(gym_id?: string) {
       return { success: false, error: 'Insufficient permissions', invitations: [] }
     }
 
-    // Fetch invitations
+    // Fetch invitations with explicit profile joins to avoid RLS issues
     const { data: invitations, error: fetchError } = await supabase
       .from('gym_invitations')
       .select(`
@@ -450,11 +478,6 @@ export async function getGymInvitations(gym_id?: string) {
         metadata,
         created_at,
         updated_at,
-        invited_by:profiles!gym_invitations_invited_by_fkey(
-          id,
-          full_name,
-          email
-        ),
         accepted_by:profiles!gym_invitations_accepted_by_fkey(
           id,
           full_name,
@@ -468,7 +491,6 @@ export async function getGymInvitations(gym_id?: string) {
       logger.error('Error fetching invitations:', { error: fetchError.message })
       return { success: false, error: 'Failed to fetch invitations', invitations: [] }
     }
-
     return {
       success: true,
       invitations: invitations || []

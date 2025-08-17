@@ -566,7 +566,7 @@ const MembersPage = () => {
                           <MemberManagementGuard action="create" fallback={
                             <div className="text-center py-8">
                               <AccessDenied 
-                                message="You need staff privileges to add members. Contact your gym manager to request access." 
+                                message="You need staff privileges or above to add members. Contact your gym manager to request access." 
                               />
                             </div>
                           }>

@@ -10,7 +10,7 @@ import { useEffect, useCallback, useMemo, useRef } from 'react'
 import { toastActions } from '@/stores/toast-store'
 import type { User } from '@supabase/supabase-js'
 import type { GymRole, Permission, UserPermissions, ProfileWithRBAC } from '@/types/rbac.types'
-import type { Database } from '@/types/database.types'
+import type { Database } from '@/types/supabase.ts'
 
 // ========== ENHANCED TYPES ==========
 

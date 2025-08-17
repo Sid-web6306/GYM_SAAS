@@ -154,6 +154,7 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
   }
 
   const copyInviteLink = async (invitation: InvitationWithDetails) => {
+    console.log('invitation', invitation)
     // Note: In production, you'd generate the actual invite URL
     const inviteUrl = `${window.location.origin}/onboarding?invite=${invitation.id}`
     try {
@@ -482,7 +483,6 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Invited By</TableHead>
                     <TableHead>Expires</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -498,14 +498,6 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(invitation.status)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div>{invitation.invited_by?.full_name || invitation.invited_by?.email || 'Unknown'}</div>
-                          <div className="text-muted-foreground">
-                            {formatDistanceToNow(new Date(invitation.created_at), { addSuffix: true })}
-                          </div>
-                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">

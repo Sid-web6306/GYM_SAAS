@@ -3,7 +3,7 @@
 import { 
   DynamicInstallPrompt as InstallPrompt,
   DynamicOfflineStatus as OfflineStatus,
-  DynamicUpdatePrompt as UpdatePrompt
+  // DynamicUpdatePrompt as UpdatePrompt
 } from '@/lib/dynamic-imports'
 
 export function PWAWrapper() {
@@ -11,7 +11,7 @@ export function PWAWrapper() {
     <>
       <OfflineStatus />
       <InstallPrompt />
-      <UpdatePrompt  intervalMs={1000}/>
+      {/* <UpdatePrompt  intervalMs={1000}/> */}
     </>
   )
 } 

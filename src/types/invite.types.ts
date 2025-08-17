@@ -6,7 +6,7 @@ export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue
 export interface Invitation {
   id: string
   gym_id: string
-  invited_by: string
+  invited_by: string  // Keep in DB but not displayed in UI
   email: string
   role: GymRole
   token: string
@@ -42,6 +42,8 @@ export interface CreateInvitationRequest {
 export interface CreateInvitationResponse {
   success: boolean
   error?: string
+  warning?: string
+  emailSent?: boolean
   invitation?: {
     id: string
     email: string
@@ -88,13 +90,9 @@ export interface AcceptInvitationResponse {
   }
 }
 
-// Database join types
-export interface InvitationWithDetails extends Omit<Invitation, 'invited_by' | 'accepted_by'> {
-  invited_by?: {
-    id: string
-    full_name?: string
-    email: string
-  }
+// Database join types  
+export interface InvitationWithDetails extends Omit<Invitation, 'accepted_by'> {
+
   accepted_by?: {
     id: string
     full_name?: string

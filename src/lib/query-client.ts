@@ -1,4 +1,30 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, QueryCache, MutationCache } from '@tanstack/react-query'
+
+// Global scroll position preservation
+let savedScrollPosition = 0
+let scrollPreservationTimer: NodeJS.Timeout | null = null
+
+function preserveScrollPosition() {
+  if (typeof window === 'undefined') return
+  savedScrollPosition = window.pageYOffset || document.documentElement.scrollTop
+}
+
+function restoreScrollPosition() {
+  if (typeof window === 'undefined') return
+  
+  // Clear any existing timer
+  if (scrollPreservationTimer) {
+    clearTimeout(scrollPreservationTimer)
+  }
+  
+  // Restore scroll after a brief delay to allow DOM updates
+  scrollPreservationTimer = setTimeout(() => {
+    window.scrollTo({
+      top: savedScrollPosition,
+      behavior: 'instant' // No smooth scrolling during refetches
+    })
+  }, 50)
+}
 
 function makeQueryClient() {
   return new QueryClient({
@@ -11,11 +37,41 @@ function makeQueryClient() {
         refetchOnWindowFocus: false, // Don't refetch on window focus
         refetchOnMount: true, // Refetch when component mounts
         refetchOnReconnect: true, // Refetch when network reconnects
+        
+        // Scroll preservation and layout stability
+        refetchInterval: false, // Disable automatic refetching to reduce scroll jumps
+        placeholderData: (previousData: unknown) => previousData, // Prevents layout shifts during refetches
       },
       mutations: {
         retry: 1, // Retry failed mutations once
       },
     },
+    // Add global listeners for scroll preservation during queries and mutations
+    mutationCache: new MutationCache({
+      onMutate: () => {
+        preserveScrollPosition()
+      },
+      onSuccess: () => {
+        restoreScrollPosition()
+      },
+      onError: () => {
+        restoreScrollPosition()
+      },
+      onSettled: () => {
+        restoreScrollPosition()
+      },
+    }),
+    queryCache: new QueryCache({
+      onSuccess: () => {
+        restoreScrollPosition()
+      },
+      onError: () => {
+        restoreScrollPosition()
+      },
+      onSettled: () => {
+        restoreScrollPosition()
+      },
+    }),
   })
 }
 

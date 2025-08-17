@@ -67,6 +67,12 @@ const ForgotPasswordPage = () => {
               Back to login
             </Link>
           </div>
+
+          <div className="mt-2 text-center text-sm">
+            <Link href="/" className="underline">
+              Go to home
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>

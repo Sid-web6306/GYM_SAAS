@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import type { User, SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/types/database.types'
+import type { Database } from '@/types/supabase'
 
 // Types for better type safety
 interface SocialProfileData {

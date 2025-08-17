@@ -1,9 +1,10 @@
 'use client'
-
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useDeferredValue, useCallback, memo } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useDebounce } from '@/hooks/use-debounce'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { QuickActions } from '@/components/attendance/QuickActions'
 import { Input } from '@/components/ui/input'
 import { 
   Table,
@@ -14,7 +15,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { CalendarDays, Users, BookUser, Search } from 'lucide-react'
+import { CalendarDays, Users, BookUser, Search, Edit3 } from 'lucide-react'
+import { EditSessionModal } from '@/components/attendance/EditSessionModal'
 import { StaffManagementGuard, MemberManagementGuard, AccessDenied } from '@/components/rbac/rbac-guards'
 import { useAuth } from '@/hooks/use-auth'
 import { useMemberAttendance, useStaffAttendance, formatDurationFromSeconds, useEndAttendance } from '@/hooks/use-attendance'
@@ -22,6 +24,7 @@ import type { AttendanceRow } from '@/hooks/use-attendance'
 import { Button } from '@/components/ui/button'
 import DateRangePopover from '@/components/ui/date-range-popover'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 export default function AttendancePage() {
   const [memberSearch, setMemberSearch] = useState('')
@@ -30,6 +33,7 @@ export default function AttendancePage() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [currentPage, setCurrentPage] = useState(0)
+  const [editingSession, setEditingSession] = useState<AttendanceRow | null>(null)
   const pageSize = 50
   const router = useRouter()
   const pathname = usePathname()
@@ -38,25 +42,78 @@ export default function AttendancePage() {
   const { profile } = useAuth()
   const gymId = profile?.gym_id || null
 
+  // Debounced values to reduce query frequency and eliminate scroll jumps
+  const debouncedMemberSearch = useDebounce(memberSearch, 300)
+  const debouncedStaffSearch = useDebounce(staffSearch, 300)
+  const debouncedFromDate = useDebounce(fromDate, 500) // Longer delay for date changes
+  const debouncedToDate = useDebounce(toDate, 500)
+
+  // Deferred values for non-urgent updates (React 18 concurrent feature)
+  const deferredCurrentPage = useDeferredValue(currentPage)
+
   const memberFilters = useMemo(() => ({
-    search: memberSearch || undefined,
-    from: fromDate || undefined,
-    to: toDate || undefined,
+    search: debouncedMemberSearch || undefined,
+    from: debouncedFromDate || undefined,
+    to: debouncedToDate || undefined,
     limit: pageSize,
-    offset: currentPage * pageSize,
-  }), [memberSearch, fromDate, toDate, currentPage])
+    offset: deferredCurrentPage * pageSize,
+  }), [debouncedMemberSearch, debouncedFromDate, debouncedToDate, deferredCurrentPage])
 
   const staffFilters = useMemo(() => ({
-    search: staffSearch || undefined,
-    from: fromDate || undefined,
-    to: toDate || undefined,
+    search: debouncedStaffSearch || undefined,
+    from: debouncedFromDate || undefined,
+    to: debouncedToDate || undefined,
     limit: pageSize,
-    offset: currentPage * pageSize,
-  }), [staffSearch, fromDate, toDate, currentPage])
+    offset: deferredCurrentPage * pageSize,
+  }), [debouncedStaffSearch, debouncedFromDate, debouncedToDate, deferredCurrentPage])
 
   const { data: memberAttendance = [], isLoading: membersLoading, error: membersError } = useMemberAttendance(gymId, memberFilters)
   const { data: staffAttendance = [], isLoading: staffLoading, error: staffError } = useStaffAttendance(gymId, staffFilters)
-  const endAttendance = useEndAttendance()
+  const endAttendance = useEndAttendance(gymId)
+
+  // Memoized present count calculations to avoid redundant filtering
+  const presentCounts = useMemo(() => {
+    const membersPresentCount = (memberAttendance || []).filter(r => !r.check_out_at).length
+    const staffPresentCount = (staffAttendance || []).filter(r => !r.check_out_at).length
+    const totalPresentCount = membersPresentCount + staffPresentCount
+    return { membersPresentCount, staffPresentCount, totalPresentCount }
+  }, [memberAttendance, staffAttendance])
+
+  // Memoized event handlers to prevent re-creation on every render
+  const handleToggleView = useCallback((view: 'members' | 'staff') => {
+    if (view === activeView) return // Prevent unnecessary state updates
+    setActiveView(view)
+    setCurrentPage(0)
+  }, [activeView])
+
+  const handleSearchChange = useCallback((value: string) => {
+    if (activeView === 'members') {
+      setMemberSearch(value)
+    } else {
+      setStaffSearch(value)
+    }
+    setCurrentPage(0)
+  }, [activeView])
+
+  const handleDateRangeChange = useCallback(({ from, to }: { from: string | null; to: string | null }) => {
+    setFromDate(from || '')
+    setToDate(to || '')
+    setCurrentPage(0)
+  }, [])
+
+  const handlePageChange = useCallback((direction: 'prev' | 'next') => {
+    setCurrentPage(prev => direction === 'prev' ? Math.max(0, prev - 1) : prev + 1)
+  }, [])
+
+  const handleCheckout = useCallback(async (sessionId: string, type: 'member' | 'staff') => {
+    try {
+      await endAttendance.mutateAsync({ sessionId })
+      toast.success(`${type === 'member' ? 'Member' : 'Staff'} checked out successfully! 👋`)
+    } catch (error) {
+      console.error('Checkout failed:', error)
+      toast.error('Failed to check out. Please try again.')
+    }
+  }, [endAttendance])
 
   // Initialize state from URL on first render
   useEffect(() => {
@@ -78,24 +135,42 @@ export default function AttendancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Persist state to URL when filters change
-  useEffect(() => {
-    if (!initializedFromUrl.current) return
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('view', activeView)
-    const q = activeView === 'members' ? memberSearch : staffSearch
-    if (q) params.set('q', q); else params.delete('q')
-    if (fromDate) params.set('from', fromDate); else params.delete('from')
-    if (toDate) params.set('to', toDate); else params.delete('to')
-    if (currentPage > 0) params.set('page', String(currentPage)); else params.delete('page')
-    router.replace(`${pathname}?${params.toString()}`)
+  // Debounced URL updates to prevent excessive router calls
+  const debouncedUrlUpdate = useMemo(() => {
+    let timeoutId: NodeJS.Timeout
+    return () => {
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => {
+        if (!initializedFromUrl.current) return
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('view', activeView)
+        const q = activeView === 'members' ? memberSearch : staffSearch
+        if (q) params.set('q', q); else params.delete('q')
+        if (fromDate) params.set('from', fromDate); else params.delete('from')
+        if (toDate) params.set('to', toDate); else params.delete('to')
+        if (currentPage > 0) params.set('page', String(currentPage)); else params.delete('page')
+        router.replace(`${pathname}?${params.toString()}`)
+      }, 150) // 150ms debounce
+    }
   }, [activeView, memberSearch, staffSearch, fromDate, toDate, currentPage, router, pathname, searchParams])
+
+  // Trigger debounced URL updates when filters change
+  useEffect(() => {
+    debouncedUrlUpdate()
+  }, [debouncedUrlUpdate])
 
   return (
     <div className="space-y-8 p-6 md:p-8">
       <PageHeader
         title="Attendance"
         description="Track daily attendance of members and staff"
+      />
+
+      {/* Quick Actions Section - includes both actions and live stats */}
+      <QuickActions
+        membersPresentCount={presentCounts.membersPresentCount}
+        staffPresentCount={presentCounts.staffPresentCount}
+        totalPresentCount={presentCounts.totalPresentCount}
       />
 
       <Card>
@@ -105,9 +180,9 @@ export default function AttendancePage() {
               <CalendarDays className="h-5 w-5 text-muted-foreground" />
               <div>
                 <CardTitle>
-                  All {activeView === 'members' ? 'Members' : 'Staff'} Attendance ({(activeView === 'members' ? memberAttendance.length : staffAttendance.length).toLocaleString()})
+                  {activeView === 'members' ? 'Members' : 'Staff'} Attendance ({(activeView === 'members' ? memberAttendance.length : staffAttendance.length).toLocaleString()})
                 </CardTitle>
-                <CardDescription>Review today’s check-ins and check-outs</CardDescription>
+                <CardDescription>Review check-ins and check-outs • Real-time updates</CardDescription>
               </div>
             </div>
           </div>
@@ -124,7 +199,7 @@ export default function AttendancePage() {
                   )}
                 />
                 <button
-                  onClick={() => { setActiveView('members'); setCurrentPage(0) }}
+                  onClick={() => handleToggleView('members')}
                   className={cn(
                     'relative z-10 px-8 py-3 text-sm font-medium rounded-md transition-all duration-500 ease-in-out flex items-center gap-2',
                     activeView === 'members' ? 'text-primary-foreground scale-105 font-semibold' : 'text-muted-foreground hover:text-foreground'
@@ -133,7 +208,7 @@ export default function AttendancePage() {
                   <Users className="h-4 w-4" /> Members
                 </button>
                 <button
-                  onClick={() => { setActiveView('staff'); setCurrentPage(0) }}
+                  onClick={() => handleToggleView('staff')}
                   className={cn(
                     'relative z-10 px-8 py-3 text-sm font-medium rounded-md transition-all duration-500 ease-in-out flex items-center gap-2',
                     activeView === 'staff' ? 'text-primary-foreground scale-105 font-semibold' : 'text-muted-foreground hover:text-foreground'
@@ -145,36 +220,7 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          {/* Quick Stats */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-medium">Members Present</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-2xl font-bold">{(memberAttendance || []).filter(r => !r.check_out_at).length}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-medium">Staff Present</CardTitle>
-                <BookUser className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-2xl font-bold">{(staffAttendance || []).filter(r => !r.check_out_at).length}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-medium">Total Present</CardTitle>
-                <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-2xl font-bold">{((memberAttendance || []).filter(r => !r.check_out_at).length) + ((staffAttendance || []).filter(r => !r.check_out_at).length)}</div>
-              </CardContent>
-            </Card>
-          </div>
+
 
           {/* Filters - search and date side-by-side */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-3">
@@ -183,10 +229,7 @@ export default function AttendancePage() {
               <Input
                 placeholder={`Search ${activeView === 'members' ? 'members' : 'staff'}...`}
                 value={activeView === 'members' ? memberSearch : staffSearch}
-                onChange={(e) => {
-                  if (activeView === 'members') setMemberSearch(e.target.value); else setStaffSearch(e.target.value)
-                  setCurrentPage(0)
-                }}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -194,148 +237,146 @@ export default function AttendancePage() {
               <DateRangePopover
                 value={{ from: fromDate || null, to: toDate || null }}
                 weekStartsOn={1}
-                onChange={({ from, to }) => {
-                  setFromDate(from || '')
-                  setToDate(to || '')
-                  setCurrentPage(0)
-                }}
+                onChange={handleDateRangeChange}
               />
             </div>
           </div>
 
-            {/* Members Attendance View */}
-            {activeView === 'members' && (
-              <MemberManagementGuard
-                action="read"
-                fallback={<AccessDenied message="You don't have permission to view member attendance." />}
-              >
-                <div className="space-y-4">
-                  <AttendanceList
-                    rows={memberAttendance || []}
-                    loading={membersLoading}
-                    error={!!membersError}
-                    onCheckout={(sessionId) => endAttendance.mutateAsync({ sessionId })}
-                  />
-                  <AttendancePager
-                    page={currentPage}
-                    pageSize={pageSize}
-                    hasMore={(memberAttendance || []).length === pageSize}
-                    onPrev={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                    onNext={() => setCurrentPage(currentPage + 1)}
-                  />
-                </div>
-              </MemberManagementGuard>
-            )}
-
-            {/* Staff Attendance View */}
-            {activeView === 'staff' && (
-              <StaffManagementGuard
-                action="read"
-                fallback={<AccessDenied message="You don't have permission to view staff attendance." />}
-              >
-                <div className="space-y-4">
-                  <AttendanceList
-                    rows={staffAttendance || []}
-                    loading={staffLoading}
-                    error={!!staffError}
-                    onCheckout={(sessionId) => endAttendance.mutateAsync({ sessionId })}
-                    showRole
-                  />
-                  <AttendancePager
-                    page={currentPage}
-                    pageSize={pageSize}
-                    hasMore={(staffAttendance || []).length === pageSize}
-                    onPrev={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                    onNext={() => setCurrentPage(currentPage + 1)}
-                  />
-                </div>
-              </StaffManagementGuard>
-            )}
+          {/* Attendance Views */}
+          <AttendanceViews
+            activeView={activeView}
+            memberAttendance={memberAttendance || []}
+            staffAttendance={staffAttendance || []}
+            membersLoading={membersLoading}
+            staffLoading={staffLoading}
+            membersError={!!membersError}
+            staffError={!!staffError}
+            isCheckingOut={endAttendance.isPending}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            onCheckout={handleCheckout}
+            onEdit={setEditingSession}
+            onPageChange={handlePageChange}
+          />
         </CardContent>
       </Card>
+
+      {/* Edit Session Modal */}
+      {gymId && (
+        <EditSessionModal
+          session={editingSession}
+          open={!!editingSession}
+          onClose={() => setEditingSession(null)}
+          gymId={gymId}
+        />
+      )}
 
     </div>
   )
 }
 
 
-function AttendanceList({
+const AttendanceList = memo(function AttendanceList({
   rows,
   loading,
   error,
   onCheckout,
+  onEdit,
+  isCheckingOut = false,
   showRole = false,
 }: {
   rows: AttendanceRow[]
   loading: boolean
   error: boolean
   onCheckout: (sessionId: string) => void
+  onEdit: (session: AttendanceRow) => void
+  isCheckingOut?: boolean
   showRole?: boolean
 }) {
-  if (loading) {
-    return (
-      <div className="rounded-md border p-8 text-center text-muted-foreground">
-        Loading attendance...
-      </div>
-    )
-  }
-  if (error) {
-    return (
-      <div className="rounded-md border p-8 text-center text-destructive">
-        Failed to load attendance.
-      </div>
-    )
-  }
-  if (!rows || rows.length === 0) {
-    return (
-      <div className="rounded-md border p-8 text-center text-muted-foreground">
-        No attendance records found.
-      </div>
-    )
-  }
-
+  // In-place loading: Always render table structure, use overlay and states instead of replacement
   return (
-    <div className="rounded-md border overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[240px]">Name</TableHead>
-            {showRole && <TableHead className="w-[160px]">Role</TableHead>}
-            <TableHead className="w-[200px]">Check-in</TableHead>
-            <TableHead className="w-[200px]">Check-out</TableHead>
-            <TableHead className="w-[140px]">Total Time</TableHead>
-            <TableHead className="w-[140px] text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.session_id}>
-              <TableCell className="font-medium">{row.name}</TableCell>
-              {showRole && <TableCell className="capitalize">{row.role}</TableCell>}
-              <TableCell>{new Date(row.check_in_at).toLocaleString()}</TableCell>
-              <TableCell>{row.check_out_at ? new Date(row.check_out_at).toLocaleString() : '—'}</TableCell>
-              <TableCell>{formatDurationFromSeconds(row.total_seconds)}</TableCell>
-              <TableCell className="text-right">
-                {!row.check_out_at ? (
-                  <Button
-                    size="sm"
-                    onClick={() => onCheckout(row.session_id)}
-                  >
-                    Check-out
-                  </Button>
-                ) : (
-                  <Badge variant="secondary">Completed</Badge>
-                )}
-              </TableCell>
+    <div className="relative">
+      {/* Loading overlay - appears over content without replacing it */}
+      {loading && (
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-md">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+            <span className="text-sm">Loading attendance...</span>
+          </div>
+        </div>
+      )}
+      
+      <div className={`rounded-md border overflow-x-auto transition-opacity duration-200 ${loading ? 'opacity-40' : 'opacity-100'}`}>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[240px]">Name</TableHead>
+              {showRole && <TableHead className="w-[160px]">Role</TableHead>}
+              <TableHead className="w-[200px]">Check-in</TableHead>
+              <TableHead className="w-[200px]">Check-out</TableHead>
+              <TableHead className="w-[140px]">Total Time</TableHead>
+              <TableHead className="w-[180px] text-right">Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {error ? (
+              // Error state: single row with error message
+              <TableRow>
+                <TableCell colSpan={showRole ? 6 : 5} className="text-center py-8 text-destructive">
+                  Failed to load attendance. Please try again.
+                </TableCell>
+              </TableRow>
+            ) : !rows || rows.length === 0 ? (
+              // Empty state: single row with no data message
+              <TableRow>
+                <TableCell colSpan={showRole ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                  No attendance records found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              // Data state: render actual rows
+              rows.map((row) => (
+                <TableRow key={row.session_id}>
+                  <TableCell className="font-medium">{row.name}</TableCell>
+                  {showRole && <TableCell className="capitalize">{row.role}</TableCell>}
+                  <TableCell>{new Date(row.check_in_at).toLocaleString()}</TableCell>
+                  <TableCell>{row.check_out_at ? new Date(row.check_out_at).toLocaleString() : '—'}</TableCell>
+                  <TableCell>{formatDurationFromSeconds(row.total_seconds)}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onEdit(row)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </Button>
+                      {!row.check_out_at ? (
+                        <Button
+                          size="sm"
+                          onClick={() => onCheckout(row.session_id)}
+                          disabled={isCheckingOut}
+                          className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                        >
+                          {isCheckingOut ? 'Checking out...' : 'Check-out'}
+                        </Button>
+                      ) : (
+                        <Badge variant="secondary">Completed</Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
-}
+})
 
-function AttendancePager({
+const AttendancePager = memo(function AttendancePager({
   page,
   pageSize,
   hasMore,
@@ -363,6 +404,88 @@ function AttendancePager({
       </div>
     </div>
   )
-}
+})
 
-// QuickDatePresets removed in favor of unified DateRangeControl
+// Memoized view components to prevent cross-contamination between member and staff views
+const AttendanceViews = memo(function AttendanceViews({
+  activeView,
+  memberAttendance,
+  staffAttendance,
+  membersLoading,
+  staffLoading,
+  membersError,
+  staffError,
+  isCheckingOut,
+  currentPage,
+  pageSize,
+  onCheckout,
+  onEdit,
+  onPageChange,
+}: {
+  activeView: 'members' | 'staff'
+  memberAttendance: AttendanceRow[]
+  staffAttendance: AttendanceRow[]
+  membersLoading: boolean
+  staffLoading: boolean
+  membersError: boolean
+  staffError: boolean
+  isCheckingOut: boolean
+  currentPage: number
+  pageSize: number
+  onCheckout: (sessionId: string, type: 'member' | 'staff') => Promise<void>
+  onEdit: (session: AttendanceRow | null) => void
+  onPageChange: (direction: 'prev' | 'next') => void
+}) {
+  if (activeView === 'members') {
+    return (
+      <MemberManagementGuard
+        action="read"
+        fallback={<AccessDenied message="You don't have permission to view member attendance." />}
+      >
+        <div className="space-y-4">
+          <AttendanceList
+            rows={memberAttendance}
+            loading={membersLoading}
+            error={membersError}
+            isCheckingOut={isCheckingOut}
+            onCheckout={(sessionId) => onCheckout(sessionId, 'member')}
+            onEdit={onEdit}
+          />
+          <AttendancePager
+            page={currentPage}
+            pageSize={pageSize}
+            hasMore={memberAttendance.length === pageSize}
+            onPrev={() => onPageChange('prev')}
+            onNext={() => onPageChange('next')}
+          />
+        </div>
+      </MemberManagementGuard>
+    )
+  }
+
+  return (
+    <StaffManagementGuard
+      action="read"
+      fallback={<AccessDenied message="You don't have permission to view staff attendance." />}
+    >
+      <div className="space-y-4">
+        <AttendanceList
+          rows={staffAttendance}
+          loading={staffLoading}
+          error={staffError}
+          isCheckingOut={isCheckingOut}
+          onCheckout={(sessionId) => onCheckout(sessionId, 'staff')}
+          onEdit={onEdit}
+          showRole
+        />
+        <AttendancePager
+          page={currentPage}
+          pageSize={pageSize}
+          hasMore={staffAttendance.length === pageSize}
+          onPrev={() => onPageChange('prev')}
+          onNext={() => onPageChange('next')}
+        />
+      </div>
+    </StaffManagementGuard>
+  )
+})

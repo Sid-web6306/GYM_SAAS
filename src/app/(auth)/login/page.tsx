@@ -349,6 +349,12 @@ const LoginPageComponent = () => {
               Sign up
             </Link>
           </div>
+
+          <div className="mt-2 text-center text-sm">
+            <Link href="/" className="underline">
+              Go to home page
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -9,6 +9,12 @@ const serverEnvVars = {
   RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
   RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
   RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET,
+  // MSG91 Email service configuration
+  MSG91_API_KEY: process.env.MSG91_API_KEY,
+  MSG91_EMAIL_DOMAIN: process.env.MSG91_EMAIL_DOMAIN,
+  MSG91_BRAND_NAME: process.env.MSG91_BRAND_NAME, // Registered brand name in MSG91 (e.g., "virtuefit")
+  MSG91_INVITATION_TEMPLATE_ID: process.env.MSG91_INVITATION_TEMPLATE_ID, // Template ID for invitations
+  SYSTEM_FROM_EMAIL: process.env.SYSTEM_FROM_EMAIL, // e.g., noreply@yourdomain.com
 } as const
 
 // Validate required client-side environment variables
@@ -55,6 +61,12 @@ export const serverConfig = {
   razorpayKeyId: serverEnvVars.RAZORPAY_KEY_ID || '',
   razorpayKeySecret: serverEnvVars.RAZORPAY_KEY_SECRET || '',
   razorpayWebhookSecret: serverEnvVars.RAZORPAY_WEBHOOK_SECRET || '',
+  // MSG91 Email configuration
+  msg91ApiKey: serverEnvVars.MSG91_API_KEY || '',
+  msg91EmailDomain: serverEnvVars.MSG91_EMAIL_DOMAIN || '',
+  msg91BrandName: serverEnvVars.MSG91_BRAND_NAME || 'Virtuefit',
+  msg91InvitationTemplateId: serverEnvVars.MSG91_INVITATION_TEMPLATE_ID || '',
+  systemFromEmail: serverEnvVars.SYSTEM_FROM_EMAIL || 'noreply@yourgym.com',
   // Optional Razorpay Plan IDs (stored in database now)
   razorpayPlanIds: {
     starterMonthly: process.env.RAZORPAY_STARTER_MONTHLY_PLAN_ID,

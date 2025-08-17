@@ -42,11 +42,11 @@ export default function StaffPage() {
         .from('profiles')
         .select('id, full_name, email, avatar_url, default_role')
         .eq('gym_id', gymId)
-        .in('default_role', ['staff', 'trainer', 'owner'])
+        .in('default_role', ['staff', 'manager','trainer', 'owner'])
         .order('full_name', { ascending: true })
       if (error) throw error
-      return (data || []) as StaffProfile[]
-    }
+      return (data || []) as StaffProfile[];
+    },
   })
 
   const [search, setSearch] = useState('')
@@ -133,6 +133,12 @@ export default function StaffPage() {
                                 <>
                                   <Users className="h-4 w-4 text-muted-foreground" />
                                   <Badge variant="outline" className={`${ROLE_COLORS.staff} capitalize`}>Staff</Badge>
+                                </>
+                              )}
+                              {p.default_role === 'manager' && (
+                                <>
+                                  <Users className="h-4 w-4 text-muted-foreground" />
+                                  <Badge variant="outline" className={`${ROLE_COLORS.manager} capitalize`}>Manager</Badge>
                                 </>
                               )}
                               {p.default_role === 'owner' && (

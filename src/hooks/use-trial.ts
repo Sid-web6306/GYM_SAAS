@@ -326,15 +326,6 @@ export function useTrialInitialization() {
       logger.info('Trial initialization successful - queries invalidated')
     },
     onError: (error) => {
-      // Show appropriate error message
-      if (error.code === 'TRIAL_EXISTS') {
-        toastActions.info('Trial Active', 'You already have an active trial subscription.')
-      } else if (error.code === 'NO_PLANS') {
-        toastActions.error('Setup Issue', 'No subscription plans are available. Please contact support.')
-      } else {
-        toastActions.error('Trial Setup Failed', error.message || 'Unable to start your trial. Please try again.')
-      }
-      
       logger.error('Trial initialization failed', { error: error.message })
     },
     // Prevent multiple simultaneous trial initialization attempts

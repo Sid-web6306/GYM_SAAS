@@ -19,9 +19,14 @@ import { z } from 'zod'
 import { toastActions } from '@/stores/toast-store'
 
 // Form schema
+const phoneE164Regex = /^\+?[1-9]\d{1,14}$/
+
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(100, 'Name must be less than 100 characters'),
   email: z.string().email('Invalid email address'),
+  phone_number: z.string().optional().refine((v) => !v || phoneE164Regex.test(v), {
+    message: 'Invalid phone number. Use E.164 format, e.g. +911234567890',
+  }),
 })
 
 type ProfileFormData = z.infer<typeof profileSchema>
@@ -36,6 +41,7 @@ export const ProfileTab = () => {
     defaultValues: {
       full_name: profile?.full_name || '',
       email: user?.email || '',
+      phone_number: profile?.phone_number || '',
     },
   })
 
@@ -45,6 +51,7 @@ export const ProfileTab = () => {
       profileForm.reset({
         full_name: profile.full_name || '',
         email: user?.email || '',
+        phone_number: profile.phone_number || '',
       })
     }
   }, [profile, user, profileForm])
@@ -56,6 +63,7 @@ export const ProfileTab = () => {
     try {
       await updateProfileMutation.mutateAsync({
         full_name: data.full_name,
+        phone_number: data.phone_number || null,
       })
       toastActions.success('Profile Updated', 'Your profile has been updated successfully.')
     } catch (error) {
@@ -104,6 +112,24 @@ export const ProfileTab = () => {
               />
               <p className="text-sm text-muted-foreground">
                 Email cannot be changed. Contact support if you need to update your email.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone_number">Mobile Number</Label>
+              <Input
+                id="phone_number"
+                placeholder="Enter your mobile number (E.164)"
+                {...profileForm.register('phone_number')}
+              />
+              {profileForm.formState.errors.phone_number && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  {profileForm.formState.errors.phone_number.message}
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                Add your mobile number to enable SMS verification and 2FA.
               </p>
             </div>
           </div>

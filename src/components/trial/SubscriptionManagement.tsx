@@ -41,7 +41,7 @@ export function SubscriptionManagement() {
     <BillingGuard action="read" fallback={
       <div className="p-8">
         <AccessDenied 
-          message="Subscription management is only available to staff members and above. Contact your gym manager for billing and subscription changes." 
+          message="Subscription management is only available to gym owners. Contact your gym owner for billing and subscription changes." 
         />
       </div>
     }>

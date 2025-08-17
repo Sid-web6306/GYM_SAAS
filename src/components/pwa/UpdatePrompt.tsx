@@ -55,7 +55,7 @@ function setStoredSig(sig: string) {
 }
 
 export function UpdatePrompt({
-  intervalMs = 60000,
+  intervalMs = 60_000,
   snoozeMs = 4 * 60 * 60 * 1000, // 4 hours
 }: {
   intervalMs?: number

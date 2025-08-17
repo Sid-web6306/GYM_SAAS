@@ -1,6 +1,6 @@
 // src/utils/supabase/client.ts
 import { createBrowserClient, type CookieOptions } from '@supabase/ssr'
-import { type Database } from '@/types/database.types'
+import { type Database } from '@/types/supabase'
 
 // Get environment-specific cookie prefix to prevent cross-environment conflicts
 export const getEnvironmentPrefix = () => {

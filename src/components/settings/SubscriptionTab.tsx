@@ -15,7 +15,7 @@ export const SubscriptionTab = () => {
           </p>
         </div>
         <AccessDenied 
-          message="Subscription details are only available to staff members and above. Contact your gym manager for billing information." 
+          message="Subscription details are only available to gym owners. Contact your gym owner for billing information." 
         />
       </div>
     }>
