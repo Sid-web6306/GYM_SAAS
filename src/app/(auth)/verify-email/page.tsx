@@ -84,7 +84,6 @@ const VerifyEmailContent = () => {
         <CardContent className="pt-0">
           <OTPVerification
             email={email}
-            type="signup"
             redirectTo="/onboarding"
           />
         </CardContent>

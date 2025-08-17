@@ -1,23 +1,20 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mail, CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { OTPInput } from '@/components/ui/otp-input'
 import { toastActions } from '@/stores/toast-store'
 
 interface OTPVerificationProps {
   email: string
-  type?: 'signup' | 'signin'
   onVerificationSuccess?: () => void
   redirectTo?: string
 }
 
 export const OTPVerification: React.FC<OTPVerificationProps> = ({
   email,
-  type = 'signup',
   onVerificationSuccess,
   redirectTo = '/onboarding'
 }) => {
@@ -37,14 +34,7 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
     }
   }, [timeLeft])
 
-  // Auto-verify when OTP is complete
-  useEffect(() => {
-    if (otp.length === 6) {
-      handleVerifyOTP()
-    }
-  }, [otp])
-
-  const handleVerifyOTP = async () => {
+  const handleVerifyOTP = useCallback(async () => {
     if (otp.length !== 6) {
       setError('Please enter a complete 6-digit code')
       return
@@ -96,7 +86,14 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
     } finally {
       setIsVerifying(false)
     }
-  }
+  }, [otp, email, attempts, onVerificationSuccess, router, redirectTo])
+
+  // Auto-verify when OTP is complete
+  useEffect(() => {
+    if (otp.length === 6) {
+      handleVerifyOTP()
+    }
+  }, [otp, handleVerifyOTP])
 
   const handleResendOTP = async () => {
     if (isResending) return
