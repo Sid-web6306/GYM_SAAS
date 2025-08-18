@@ -82,9 +82,7 @@ export const isValidEmail = (email: unknown): email is string => {
   return emailRegex.test(email)
 }
 
-export const isValidPassword = (password: unknown): password is string => {
-  return typeof password === 'string' && password.length >= 6
-}
+// Password validation removed - using passwordless authentication
 
 export const isValidGymName = (gymName: unknown): gymName is string => {
   return typeof gymName === 'string' && 

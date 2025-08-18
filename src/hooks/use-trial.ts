@@ -272,7 +272,36 @@ export function useTrialInitialization() {
         throw { message: 'Authentication required' }
       }
 
-      logger.info('Initializing trial subscription', { userId: user.id })
+      logger.info('Checking for existing trial subscription', { userId: user.id })
+
+      // First, check if user already has a trial subscription
+      const { data: existingSubscription, error: subscriptionError } = await supabase
+        .from('subscriptions')
+        .select('id, trial_start_date, trial_end_date, trial_status')
+        .eq('user_id', user.id)
+        .not('trial_start_date', 'is', null)
+        .single()
+
+      if (subscriptionError && subscriptionError.code !== 'PGRST116') {
+        logger.error('Error checking existing trial', { error: subscriptionError.message })
+        // Continue with initialization if it's not a "no rows" error
+      }
+
+      if (existingSubscription) {
+        logger.info('Trial subscription already exists', { 
+          userId: user.id, 
+          subscriptionId: existingSubscription.id,
+          trialStatus: existingSubscription.trial_status
+        })
+        
+        return {
+          subscriptionId: existingSubscription.id,
+          success: true,
+          message: 'Trial subscription already active!'
+        }
+      }
+
+      logger.info('No existing trial found, initializing new trial subscription', { userId: user.id })
 
       // Call the RPC function to initialize trial subscription
       const { data: subscriptionId, error } = await supabase.rpc('initialize_trial_subscription', {
@@ -288,7 +317,13 @@ export function useTrialInitialization() {
         
         // Handle specific error cases
         if (errorMessage.includes('already has a trial subscription')) {
-          throw { message: 'You already have an active trial subscription', code: 'TRIAL_EXISTS' }
+          // This shouldn't happen now since we check first, but handle gracefully
+          logger.warn('Trial exists error caught after check - returning success')
+          return {
+            subscriptionId: 'existing',
+            success: true,
+            message: 'Trial subscription already active!'
+          }
         }
         
         if (errorMessage.includes('No active subscription plan found')) {
@@ -320,8 +355,12 @@ export function useTrialInitialization() {
       queryClient.invalidateQueries({ queryKey: ['subscriptions-consolidated'] })
       queryClient.invalidateQueries({ queryKey: ['auth'] })
       
-      // Show success message
-      toastActions.success('Trial Started!', data.message || 'Your 14-day free trial has begun.')
+      // Show appropriate success message
+      if (data.message?.includes('already active')) {
+        toastActions.info('Trial Active', 'Your trial subscription is already active.')
+      } else {
+        toastActions.success('Trial Started!', data.message || 'Your 14-day free trial has begun.')
+      }
       
       logger.info('Trial initialization successful - queries invalidated')
     },
@@ -331,8 +370,8 @@ export function useTrialInitialization() {
     // Prevent multiple simultaneous trial initialization attempts
     networkMode: 'offlineFirst',
     retry: (failureCount, error) => {
-      // Don't retry if user already has trial or no plans available
-      if (error.code === 'TRIAL_EXISTS' || error.code === 'NO_PLANS') {
+      // Don't retry if no plans available (TRIAL_EXISTS is now handled gracefully)
+      if (error.code === 'NO_PLANS') {
         return false
       }
       // Retry up to 2 times for other errors

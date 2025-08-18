@@ -7,14 +7,13 @@ import { useRouter } from 'next/navigation'
 import { Mail, Building2, CheckCircle, Loader2, AlertCircle } from 'lucide-react'
 
 import { toastActions } from '@/stores/toast-store'
-import { completeOnboarding, type OnboardingFormState } from '@/actions/auth.actions'
+import { completeOnboarding, type AuthResult } from '@/actions/auth.actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/hooks/use-auth'
 import { RequireAuth } from '@/components/auth/AuthGuard'
-import { authUIActions } from '@/stores/auth-store'
 import { useTrialInitialization } from '@/hooks/use-trial'
 import { useInviteVerification } from '@/hooks/use-invitations'
 import { useSearchParams } from 'next/navigation'
@@ -154,7 +153,7 @@ const GymSetupForm = ({ user, formAction }: {
           </Label>
           <Input
             id="gymName"
-            name="gym-name"
+            name="gymName"
             type="text"
             placeholder="e.g., FitZone Gym, PowerHouse Fitness"
             value={gymName}
@@ -212,7 +211,7 @@ const GymSetupForm = ({ user, formAction }: {
 
 // Inner content that uses useSearchParams must be wrapped in Suspense
 const OnboardingContent = () => {
-  const { user, hasGym, isLoading: authLoading } = useAuth()
+  const { user, hasGym, isLoading: authLoading, profile } = useAuth()
   // Handle invite acceptance directly (bypassing gym creation)
   const handleInviteAcceptance = async () => {
     if (!inviteToken || !isValidInvite) return
@@ -228,7 +227,7 @@ const OnboardingContent = () => {
     }
   }
 
-  const [state, formAction] = useActionState<OnboardingFormState | null, FormData>(completeOnboarding, null)
+  const [state, formAction] = useActionState<AuthResult | null, FormData>(completeOnboarding, null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const { mutateAsync: initializeTrial, isIdle: trialNotStarted } = useTrialInitialization();
@@ -245,24 +244,18 @@ const OnboardingContent = () => {
     acceptInvitation
   } = useInviteVerification(inviteToken);
 
-  useEffect(( )=> {
-    console.log('Onboarding: useEffect')
+
+
+  useEffect(() => {
+    console.log('Onboarding: useEffect', { user: !!user, hasGym, authLoading, profile: !!profile })
   });
 
-  // Multi-tab redirect: if user already has gym (completed onboarding in another tab), redirect to dashboard
-  useEffect(() => {
-    if (!authLoading && hasGym) {
-      console.log('Onboarding: User already has gym profile, redirecting to dashboard (multi-tab sync)')
-      toastActions.success('Welcome Back!', 'You have already completed onboarding.')
-      router.replace('/dashboard')
-      return
-    }
-  }, [hasGym, authLoading, router])
+  // Middleware redirects users with gym, so this effect is not needed
 
   // Handle server-side errors with toast notifications
   useEffect(() => {
     if (state?.error) {
-      toastActions.error('Setup Failed', state.error.message)
+      toastActions.error('Setup Failed', state.error)
     }
   }, [state])
 
@@ -277,7 +270,7 @@ const OnboardingContent = () => {
       
       if (isNewUser) {
         console.log('Onboarding: Detected new user, marking as new')
-        authUIActions.setIsNewUser(true)
+        // authUIActions.setIsNewUser(true)
         
         // Initialize trial subscription for new users
         console.log('Onboarding: Initializing trial subscription for new user')
@@ -287,7 +280,7 @@ const OnboardingContent = () => {
         })
       }
     }
-  }, [user, trialNotStarted, initializeTrial])
+  }, [user, trialNotStarted]) // Removed initializeTrial to prevent multiple calls
 
   // Show loading state while auth is loading or verifying invite
   if (authLoading || (inviteToken && isVerifyingInvite)) {
@@ -305,17 +298,7 @@ const OnboardingContent = () => {
     )
   }
 
-  // Show loading state while redirecting if user already has gym
-  if (hasGym) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-          <p className="text-gray-600">Redirecting to dashboard...</p>
-        </div>
-      </div>
-    )
-  }
+  // Middleware handles redirect when hasGym = true, so this shouldn't render
 
   // If we have a valid invitation, show invitation acceptance interface (even for unauthenticated users)
   if (inviteToken && isValidInvite && invitation) {
@@ -513,14 +496,31 @@ const OnboardingContent = () => {
     )
   }
 
-  // Show loading state if no user and no invitation
+  // If auth loading is complete but no user, show error
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-          <p className="text-gray-600">Loading your profile...</p>
-        </div>
+        <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Authentication Error</h2>
+                <p className="text-gray-600 mt-2">
+                  Unable to load your profile. Please refresh the page or try logging in again.
+                </p>
+              </div>
+              <Button 
+                onClick={() => window.location.reload()} 
+                className="mt-4"
+              >
+                Refresh Page
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -559,8 +559,8 @@ const OnboardingContent = () => {
   }
 
   // Check if email is confirmed for authenticated users  
-  const isEmailConfirmed = Boolean(user.email_confirmed_at)
-  const userEmail = user.email || ''
+  const isEmailConfirmed = Boolean(user?.email_confirmed_at)
+  const userEmail = user?.email || ''
 
   return (
     <RequireAuth>
@@ -584,7 +584,7 @@ const OnboardingContent = () => {
           </CardHeader>
           
           <CardContent className="pt-0">
-            {isEmailConfirmed ? (
+            {isEmailConfirmed && user ? (
               <GymSetupForm 
                 user={user} 
                 formAction={formAction}

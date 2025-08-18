@@ -17,27 +17,10 @@ export const AUTH_MESSAGES = {
     type: 'error' as const,
   },
 
-  // Password reset
-  'password-reset-sent': {
-    title: 'Reset Link Sent',
-    message: 'Check your email for a password reset link. Make sure to check your spam folder too.',
-    type: 'info' as const,
-  },
-  'password-updated': {
-    title: 'Password Updated',
-    message: 'Your password has been successfully updated. You can now log in with your new password.',
-    type: 'success' as const,
-  },
-  'password-reset-failed': {
-    title: 'Reset Failed',
-    message: 'Unable to reset your password. The link may have expired. Please request a new reset link.',
-    type: 'error' as const,
-  },
-
   // Authentication errors
   'invalid-credentials': {
     title: 'Invalid Credentials',
-    message: 'The email or password you entered is incorrect. Please check your credentials and try again.',
+    message: 'The email you entered is incorrect or the account does not exist. Please check your email and try again.',
     type: 'error' as const,
   },
   'email-not-confirmed': {
@@ -47,7 +30,7 @@ export const AUTH_MESSAGES = {
   },
   'account-exists': {
     title: 'Account Already Exists',
-    message: 'An account with this email already exists. Please sign in instead or use password reset if you forgot your password.',
+    message: 'An account with this email already exists. Please sign in instead.',
     type: 'warning' as const,
   },
   'signup-disabled': {
@@ -70,6 +53,26 @@ export const AUTH_MESSAGES = {
   'social-auth-invalid': {
     title: 'Invalid Request',
     message: 'The social login request was invalid. Please try again.',
+    type: 'error' as const,
+  },
+  'social-auth-server-error': {
+    title: 'Server Error',
+    message: 'The social login provider experienced an error. Please try again in a few moments.',
+    type: 'error' as const,
+  },
+  'social-auth-missing-code': {
+    title: 'Authentication Failed',
+    message: 'No authorization code was received from the social login provider. Please try again.',
+    type: 'error' as const,
+  },
+  'social-auth-expired': {
+    title: 'Login Expired',
+    message: 'The social login session has expired. Please try logging in again.',
+    type: 'warning' as const,
+  },
+  'social-auth-no-session': {
+    title: 'Session Error',
+    message: 'Unable to establish a session after social login. Please try again.',
     type: 'error' as const,
   },
   'social-auth-timeout': {

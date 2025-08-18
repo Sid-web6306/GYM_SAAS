@@ -6,6 +6,7 @@ import { Mail, CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react
 import { Button } from '@/components/ui/button'
 import { OTPInput } from '@/components/ui/otp-input'
 import { toastActions } from '@/stores/toast-store'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface OTPVerificationProps {
   email: string
@@ -21,10 +22,11 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
   const [otp, setOtp] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
   const [isResending, setIsResending] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(300) // 5 minutes
+  const [timeLeft, setTimeLeft] = useState(30) // 30 seconds
   const [error, setError] = useState('')
   const [attempts, setAttempts] = useState(0)
   const router = useRouter()
+  const queryClient = useQueryClient()
 
   // Countdown timer
   useEffect(() => {
@@ -44,15 +46,15 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
     setError('')
 
     try {
-      const response = await fetch('/api/auth/verify-otp', {
+      const response = await fetch('/api/auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          action: 'verify-otp',
           email,
-          token: otp,
-          type: 'email'
+          token: otp
         }),
       })
 
@@ -61,14 +63,18 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
       if (response.ok && result.success) {
         toastActions.success('Email Verified!', 'Your email has been successfully verified.')
         
-        // Small delay to ensure auth state updates, then redirect
+        // Force refresh auth queries to ensure profile is loaded
+        queryClient.invalidateQueries({ queryKey: ['auth-session'] })
+        queryClient.refetchQueries({ queryKey: ['auth-session'] })
+
+        // Small delay to allow auth state to update before redirect
         setTimeout(() => {
           if (onVerificationSuccess) {
             onVerificationSuccess()
           } else {
             router.push(redirectTo)
           }
-        }, 1000)
+        }, 100)
       } else {
         setAttempts(prev => prev + 1)
         setError(result.error || 'Invalid verification code. Please try again.')
@@ -86,7 +92,7 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
     } finally {
       setIsVerifying(false)
     }
-  }, [otp, email, attempts, onVerificationSuccess, router, redirectTo])
+  }, [otp, email, attempts, onVerificationSuccess, router, redirectTo, queryClient])
 
   // Auto-verify when OTP is complete
   useEffect(() => {
@@ -102,21 +108,21 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
     setError('')
 
     try {
-      const response = await fetch('/api/auth/resend-otp', {
+      const response = await fetch('/api/auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email,
-          type: 'email'
+          action: 'resend-otp',
+          email
         }),
       })
 
       const result = await response.json()
 
       if (response.ok && result.success) {
-        setTimeLeft(300) // Reset timer
+        setTimeLeft(30) // Reset timer to 30 seconds
         setAttempts(0) // Reset attempts
         setOtp('') // Clear current OTP
         toastActions.success('Code Sent!', 'A new verification code has been sent to your email.')
@@ -185,13 +191,6 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
           </div>
         )}
 
-        {isVerifying && (
-          <div className="flex items-center gap-2 text-blue-600 text-sm bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
-            <span>Verifying your code...</span>
-          </div>
-        )}
-
         <div className="space-y-3">
           {/* Timer and Resend */}
           <div className="flex items-center justify-between text-sm">
@@ -202,7 +201,7 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
               variant="ghost"
               size="sm"
               onClick={handleResendOTP}
-              disabled={isResending || (!isExpired && timeLeft > 240)} // Allow resend only after 1 minute or if expired
+              disabled={isResending || (!isExpired && timeLeft > 0)} // Allow resend only after 1 minute or if expired
               className="h-auto p-0 text-blue-600 hover:text-blue-700"
             >
               {isResending ? (

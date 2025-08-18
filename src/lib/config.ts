@@ -15,6 +15,7 @@ const serverEnvVars = {
   MSG91_BRAND_NAME: process.env.MSG91_BRAND_NAME, // Registered brand name in MSG91 (e.g., "virtuefit")
   MSG91_INVITATION_TEMPLATE_ID: process.env.MSG91_INVITATION_TEMPLATE_ID, // Template ID for invitations
   SYSTEM_FROM_EMAIL: process.env.SYSTEM_FROM_EMAIL, // e.g., noreply@yourdomain.com
+  // Supabase service role (for admin operations)
 } as const
 
 // Validate required client-side environment variables

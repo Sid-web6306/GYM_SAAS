@@ -15,22 +15,27 @@ import {
   Timer,
   Database
 } from 'lucide-react';
-import { useAuth, usePostOnboardingSync, useAuthMetrics, useAuthSession } from '@/hooks/use-auth';
+import { useAuth, usePostOnboardingSync, useAuthSession, useAuthMetrics } from '@/hooks/use-auth';
 import { useGymStats, useGymAnalytics } from '@/hooks/use-gym-data';
 import { useRecentActivity } from '@/hooks/use-members-data';
-import { useAuthStore } from '@/stores/auth-store';
+
 import { MemberGrowthChart } from '@/components/charts/member-growth-chart';
 import { RevenueChart } from '@/components/charts/revenue-chart';
 import { CheckinTrendsChart } from '@/components/charts/checkin-trends-chart';
 import { DashboardHeader } from '@/components/layout/PageHeader';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toastActions } from '@/stores/toast-store'
 import React from 'react';
+import { 
+  StatsCardSkeleton, 
+  ChartSkeleton, 
+  RecentActivitySkeleton
+} from '@/components/ui/skeletons';
 
 const DashboardPage = () => {
   const searchParams = useSearchParams()
-  
+  const router = useRouter()
   // Get auth state from TanStack Query with enhanced features
   const { profile, hasGym, isAuthenticated, isLoading: authLoading, error: authError } = useAuth()
   const gymId = profile?.gym_id
@@ -40,8 +45,8 @@ const DashboardPage = () => {
   const { sessionId, lastRefresh } = useAuthSession()
   const metrics = useAuthMetrics()
 
-  // Get UI state from Zustand
-  const { showWelcomeMessage, isNewUser } = useAuthStore()
+  // UI state (simplified - no longer using Zustand store)
+  const showWelcomeMessage = false
 
   // Check if this is a welcome redirect from onboarding
   const isWelcomeRedirect = searchParams?.get('welcome') === 'true'
@@ -51,26 +56,19 @@ const DashboardPage = () => {
   const paymentSuccess = searchParams?.get('payment_success') === 'true'
   const subscriptionId = searchParams?.get('subscription_id')
 
-  // Enhanced auth error handling
+  // Handle auth errors
   React.useEffect(() => {
     if (authError) {
-      console.error('Dashboard: Auth error detected:', authError)
-      // Could trigger additional error recovery actions here
+      console.error('Auth error:', authError)
     }
   }, [authError])
 
-  // Handle welcome redirect and new user detection
+  // Clean up URL parameters
   React.useEffect(() => {
-    if (isWelcomeRedirect || isNewUser) {
-      // Mark onboarding as complete and show welcome for new users
-      useAuthStore.getState().markOnboardingComplete()
-      
-      // Remove welcome param from URL
-      if (isWelcomeRedirect) {
-        window.history.replaceState({}, '', '/dashboard')
-      }
+    if (isWelcomeRedirect) {
+      router.replace('/dashboard')
     }
-  }, [isWelcomeRedirect, isNewUser])
+  }, [isWelcomeRedirect, router])
 
   // Handle payment success notification
   React.useEffect(() => {
@@ -85,40 +83,15 @@ const DashboardPage = () => {
     }
   }, [paymentSuccess, subscriptionId])
 
-  // CRITICAL: Force complete auth sync when coming from onboarding
+  // Sync auth data when coming from onboarding
   React.useEffect(() => {
-    // If we're coming from onboarding but don't have gym, force complete sync
     if (isWelcomeRedirect && !authLoading && !hasGym && !isRefreshing) {
-      console.log('Dashboard: Force syncing auth session after onboarding')
       setIsRefreshing(true)
       postOnboardingSync().finally(() => {
         setIsRefreshing(false)
       })
     }
   }, [isWelcomeRedirect, authLoading, hasGym, postOnboardingSync, isRefreshing])
-
-  // FALLBACK: Detect stale data and refresh if needed
-  React.useEffect(() => {
-    let timeoutId: NodeJS.Timeout
-    
-    // If we're authenticated but don't have gym (and not already refreshing)
-    // Wait a bit to see if the data resolves naturally, then force refresh
-    if (isAuthenticated && !hasGym && !authLoading && !isRefreshing && !isWelcomeRedirect) {
-      timeoutId = setTimeout(() => {
-        console.log('Dashboard: Detected potential stale data, forcing refresh')
-        setIsRefreshing(true)
-        postOnboardingSync().finally(() => {
-          setIsRefreshing(false)
-        })
-      }, 2000) // Wait 2 seconds before forcing refresh
-    }
-    
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-    }
-  }, [isAuthenticated, hasGym, authLoading, isRefreshing, isWelcomeRedirect, postOnboardingSync])
 
   // Use TanStack Query hooks for all server state
   const { 
@@ -138,17 +111,13 @@ const DashboardPage = () => {
     isLoading: activityLoading 
   } = useRecentActivity(gymId || null)
   
-  const isLoading = authLoading || statsLoading || analyticsLoading || activityLoading || isRefreshing
-
-  // Show auth loading state or refreshing state
-  if (authLoading || !isAuthenticated || isRefreshing) {
+  // Show auth loading state only for critical auth issues
+  if (authLoading || !isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">
-            {isRefreshing ? 'Syncing account data...' : 'Loading Dashboard...'}
-          </p>
+          <p className="text-muted-foreground">Loading Dashboard...</p>
         </div>
       </div>
     )
@@ -264,8 +233,9 @@ const DashboardPage = () => {
                 variant="ghost" 
                 size="sm"
                 onClick={() => {
-                  useAuthStore.getState().setShowWelcomeMessage(false)
-                  useAuthStore.getState().setIsNewUser(false) // Clear new user status
+                  // Clear welcome message (simplified - no longer using Zustand store)
+                  // useAuthStore.getState().setShowWelcomeMessage(false)
+                  // useAuthStore.getState().setIsNewUser(false)
                 }}
                 className="text-primary hover:text-primary/80"
               >
@@ -278,65 +248,76 @@ const DashboardPage = () => {
 
       {/* Enhanced Stats Cards with Session Health */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium">Active Members</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-bold">
-              {isLoading ? '...' : (stats?.activeMembers || 0).toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {stats?.newMembersThisMonth || 0} new this month
-            </p>
-          </CardContent>
-        </Card>
+        {statsLoading || isRefreshing ? (
+          <>
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+            <StatsCardSkeleton />
+          </>
+        ) : (
+          <>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <CardTitle className="text-sm font-medium">Active Members</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-2xl font-bold">
+                  {(stats?.activeMembers || 0).toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats?.newMembersThisMonth || 0} new this month
+                </p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-primary">
-              {isLoading ? '...' : `$${(stats?.monthlyRevenue || 0).toLocaleString()}`}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Projected: ${(stats?.projectedMonthlyRevenue || 0).toLocaleString()}
-            </p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
+                <DollarSign className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-2xl font-bold text-primary">
+                  ${(stats?.monthlyRevenue || 0).toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Projected: ${(stats?.projectedMonthlyRevenue || 0).toLocaleString()}
+                </p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium">Today&apos;s Check-ins</CardTitle>
-            <Activity className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-primary">
-              {isLoading ? '...' : (stats?.todayCheckins || 0).toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Avg: {stats?.averageDailyCheckins || 0}/day
-            </p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <CardTitle className="text-sm font-medium">Today&apos;s Check-ins</CardTitle>
+                <Activity className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-2xl font-bold text-primary">
+                  {(stats?.todayCheckins || 0).toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Avg: {stats?.averageDailyCheckins || 0}/day
+                </p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium">Session Health</CardTitle>
-            <Database className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-primary">
-              {getSessionHealthScore().toFixed(0)}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {metrics.errorCount} errors, {metrics.refreshCount} refreshes
-            </p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <CardTitle className="text-sm font-medium">Session Health</CardTitle>
+                <Database className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-2xl font-bold text-primary">
+                  {getSessionHealthScore().toFixed(0)}%
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {metrics.errorCount} errors, {metrics.refreshCount} refreshes
+                </p>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Session Information (Development Only) */}
@@ -379,61 +360,73 @@ const DashboardPage = () => {
 
       {/* Charts Section */}
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Member Growth</CardTitle>
-            <CardDescription>
-              Track your gym&apos;s membership growth over time
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <MemberGrowthChart data={analytics?.memberGrowthData} />
-          </CardContent>
-        </Card>
+        {analyticsLoading ? (
+          <>
+            <ChartSkeleton />
+            <ChartSkeleton />
+          </>
+        ) : (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle>Member Growth</CardTitle>
+                <CardDescription>
+                  Track your gym&apos;s membership growth over time
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <MemberGrowthChart data={analytics?.memberGrowthData} />
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Revenue Trends</CardTitle>
-            <CardDescription>
-              Monitor your monthly revenue and growth
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RevenueChart data={analytics?.revenueData} />
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Revenue Trends</CardTitle>
+                <CardDescription>
+                  Monitor your monthly revenue and growth
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RevenueChart data={analytics?.revenueData} />
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Check-in Trends */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Check-in Activity</CardTitle>
-          <CardDescription>
-            Daily check-in patterns and member engagement
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <CheckinTrendsChart data={analytics?.checkinData} />
-        </CardContent>
-      </Card>
+      {analyticsLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Check-in Activity</CardTitle>
+            <CardDescription>
+              Daily check-in patterns and member engagement
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CheckinTrendsChart data={analytics?.checkinData} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent Activity */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Recent Activity
-          </CardTitle>
-          <CardDescription>
-            Latest member check-ins and updates
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {activityLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-            </div>
-          ) : recentActivity && recentActivity.length > 0 ? (
+      {activityLoading ? (
+        <RecentActivitySkeleton />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Recent Activity
+            </CardTitle>
+            <CardDescription>
+              Latest member check-ins and updates
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {recentActivity && recentActivity.length > 0 ? (
             <div className="space-y-4">
               {recentActivity.map((activity, index) => (
                 <div key={index} className="flex items-center justify-between py-2">
@@ -454,13 +447,14 @@ const DashboardPage = () => {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No recent activity to display
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                No recent activity to display
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Performance Metrics */}
       {stats && (

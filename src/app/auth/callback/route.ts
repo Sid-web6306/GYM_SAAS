@@ -25,47 +25,62 @@ interface ProfileData {
 }
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
+  const requestUrl = new URL(request.url)
+  const { searchParams, origin } = requestUrl
   const code = searchParams.get('code')
   const error = searchParams.get('error')
   const errorDescription = searchParams.get('error_description')
   const inviteToken = searchParams.get('invite')
   
-  console.log('Auth callback received:', { code: !!code, error, errorDescription })
+  console.log('Auth callback received:', { 
+    code: !!code, 
+    error, 
+    errorDescription,
+    inviteToken: !!inviteToken,
+    origin 
+  })
   
-  // Handle OAuth errors
+  // Handle OAuth errors per Supabase documentation
   if (error) {
     console.error('OAuth error in callback:', { error, errorDescription })
     
     // Map OAuth errors to user-friendly messages
-    if (error === 'access_denied') {
-      return NextResponse.redirect(`${origin}/login?message=social-auth-cancelled`)
-    } else if (error === 'invalid_request') {
-      return NextResponse.redirect(`${origin}/login?message=social-auth-invalid`)
-    } else {
-      return NextResponse.redirect(`${origin}/login?message=social-auth-error&details=${encodeURIComponent(errorDescription || error)}`)
+    switch (error) {
+      case 'access_denied':
+        return NextResponse.redirect(`${origin}/login?message=social-auth-cancelled`)
+      case 'invalid_request':
+      case 'invalid_client':
+        return NextResponse.redirect(`${origin}/login?message=social-auth-invalid`)
+      case 'server_error':
+        return NextResponse.redirect(`${origin}/login?message=social-auth-server-error`)
+      default:
+        return NextResponse.redirect(`${origin}/login?message=social-auth-error&details=${encodeURIComponent(errorDescription || error)}`)
     }
   }
   
   if (!code) {
     console.error('Auth callback: No authorization code received')
-    return NextResponse.redirect(`${origin}/login?message=social-auth-error`)
+    return NextResponse.redirect(`${origin}/login?message=social-auth-missing-code`)
   }
   
   try {
-    const supabase = await createClient() // Use the shared, async client
+    const supabase = await createClient()
 
     console.log('Exchanging code for session...')
     const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
     
     if (sessionError) {
       console.error('Session exchange error:', sessionError)
+      // Handle specific session exchange errors
+      if (sessionError.message.includes('Invalid or expired code')) {
+        return NextResponse.redirect(`${origin}/login?message=social-auth-expired`)
+      }
       return NextResponse.redirect(`${origin}/login?message=social-auth-error&details=${encodeURIComponent(sessionError.message)}`)
     }
     
     if (!data.session || !data.user) {
       console.error('Auth callback: No session or user data received')
-      return NextResponse.redirect(`${origin}/login?message=social-auth-error`)
+      return NextResponse.redirect(`${origin}/login?message=social-auth-no-session`)
     }
 
     const { user } = data

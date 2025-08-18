@@ -1,15 +1,14 @@
 'use client'
 
-import { useInitializeAuth, useAuth } from '@/hooks/use-auth'
 import { LoadingSpinner } from '@/components/layout/LoadingSpinner'
+import { useAuth } from '@/hooks/use-auth'
 
 interface SessionProviderProps {
   children: React.ReactNode
 }
 
 export function SessionProvider({ children }: SessionProviderProps) {
-  // Initialize auth system
-  useInitializeAuth()
+  // Auth system is automatically initialized when useAuth is called in components
   
   return (
     <>

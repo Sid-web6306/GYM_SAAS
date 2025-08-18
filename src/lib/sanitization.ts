@@ -162,43 +162,7 @@ export const validateInput = {
     return emailRegex.test(email)
   },
 
-  /**
-   * Validate password strength
-   */
-  password: (password: string): { isValid: boolean; errors: string[] } => {
-    const errors: string[] = []
-    
-    if (password.length < 6) {
-      errors.push('Password must be at least 6 characters long')
-    }
-    
-    if (password.length > 128) {
-      errors.push('Password must be less than 128 characters')
-    }
-    
-    if (!/[a-z]/.test(password)) {
-      errors.push('Password must contain at least one lowercase letter')
-    }
-    
-    if (!/[A-Z]/.test(password)) {
-      errors.push('Password must contain at least one uppercase letter')
-    }
-    
-    if (!/[0-9]/.test(password)) {
-      errors.push('Password must contain at least one number')
-    }
-    
-    // Check for common weak passwords
-    const commonPasswords = ['password', '123456', 'qwerty', 'abc123', 'password123']
-    if (commonPasswords.includes(password.toLowerCase())) {
-      errors.push('Password is too common and easily guessable')
-    }
-    
-    return {
-      isValid: errors.length === 0,
-      errors
-    }
-  },
+  // Password validation removed - using passwordless authentication
 
   /**
    * Validate phone number format

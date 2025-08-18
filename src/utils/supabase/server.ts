@@ -1,6 +1,6 @@
 // src/utils/supabase/server.ts
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'  // ← For SSR with cookies
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'  // ← For service role (no cookies needed)
 import { cookies } from 'next/headers'
 import { type Database } from '@/types/supabase'
 

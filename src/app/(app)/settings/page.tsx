@@ -18,8 +18,6 @@ import {
   AlertCircle,
   CheckCircle,
   Settings,
-  Eye,
-  EyeOff,
   Palette,
   CreditCard,
   Crown
@@ -29,43 +27,39 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toastActions } from '@/stores/toast-store'
-import { changePassword } from '@/actions/auth.actions'
+
 import dynamic from 'next/dynamic'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { RoleContextIndicator } from '@/components/layout/RoleContextIndicator'
 import { GymSettingsGuard, BillingGuard, AccessDenied } from '@/components/rbac/rbac-guards'
+import { 
+  ProfileSectionSkeleton,
+  FormFieldSkeleton 
+} from '@/components/ui/skeletons'
 // Form schemas
-const phoneE164Regex = /^\+?[1-9]\d{1,14}$/
+// const phoneE164Regex = /^\+?[1-9]\d{1,14}$/
 
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(100, 'Name must be less than 100 characters'),
   email: z.string().email('Invalid email address'),
-  phone_number: z.string().optional().refine((v) => !v || phoneE164Regex.test(v), {
-    message: 'Invalid phone number. Use E.164 format, e.g. +911234567890',
-  }),
+  // phone_number removed - not available in profiles table
 })
 
 const gymSchema = z.object({
   name: z.string().min(2, 'Gym name must be at least 2 characters').max(100, 'Name must be less than 100 characters'),
 })
 
-const passwordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(6, 'Password must be at least 6 characters'),
-  confirmPassword: z.string().min(6, 'Password confirmation is required'),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-})
-
 type ProfileFormData = z.infer<typeof profileSchema>
 type GymFormData = z.infer<typeof gymSchema>
-type PasswordFormData = z.infer<typeof passwordSchema>
+// Password schema removed - using passwordless authentication
 
 const SettingsPage = () => {
   const { user, profile, hasGym } = useAuth()
   const updateProfileMutation = useUpdateProfile()
   const updateGymMutation = useUpdateGym()
+  
+  // Preload heavy tabs for better performance
+  useTabPreloading()
   
   // Get gym data for populating the form
   const { data: gymData, isLoading: gymLoading } = useGymData(profile?.gym_id || null)
@@ -76,9 +70,6 @@ const SettingsPage = () => {
   const { selectedTab, setSelectedTab } = useSettingsStore()
   const [, startTransition] = useTransition()
   const deferredTab = useDeferredValue(selectedTab)
-  const [showCurrentPassword, setShowCurrentPassword] = React.useState(false)
-  const [showNewPassword, setShowNewPassword] = React.useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false)
   
   // Detect if user is using social authentication
   const authProvider = user?.app_metadata?.provider
@@ -91,7 +82,7 @@ const SettingsPage = () => {
     defaultValues: {
       full_name: profile?.full_name || '',
       email: user?.email || '',
-      phone_number: profile?.phone_number || '',
+      // phone_number removed - not available in profiles table
     },
   })
 
@@ -109,7 +100,7 @@ const SettingsPage = () => {
       profileForm.reset({
         full_name: profile.full_name || '',
         email: user?.email || '',
-        phone_number: profile.phone_number || '',
+        // phone_number: profile.phone_number || '',
       })
     }
   }, [profile, user, profileForm])
@@ -122,16 +113,6 @@ const SettingsPage = () => {
     }
   }, [gymData, gymForm])
 
-  // Password form (only for email auth users)
-  const passwordForm = useForm<PasswordFormData>({
-    resolver: zodResolver(passwordSchema),
-    defaultValues: {
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    },
-  })
-
   // Handle profile update
   const handleProfileUpdate = async (data: ProfileFormData) => {
     if (!user?.id) return
@@ -139,7 +120,7 @@ const SettingsPage = () => {
     try {
       await updateProfileMutation.mutateAsync({
         full_name: data.full_name,
-        phone_number: data.phone_number || null,
+        // phone_number: data.phone_number || null,
       })
       toastActions.success('Profile Updated', 'Your profile has been updated successfully.')
     } catch (error) {
@@ -166,26 +147,6 @@ const SettingsPage = () => {
     }
   }
 
-  // Handle password change (only for email auth users)
-  const handlePasswordChange = async (data: PasswordFormData) => {
-    try {
-      const formData = new FormData()
-      formData.append('currentPassword', data.currentPassword)
-      formData.append('newPassword', data.newPassword)
-      
-      const result = await changePassword(null, formData)
-      
-      if (result.error) {
-        toastActions.error('Password Change Failed', result.error)
-      } else if (result.success) {
-        toastActions.success('Password Changed', result.success)
-        passwordForm.reset()
-      }
-    } catch (error) {
-      console.error('Password change error:', error)
-      toastActions.error('Update Failed', 'Failed to change password. Please try again.')
-    }
-  }
 
   const tabs = [
     { id: 'profile' as const, label: 'Profile', icon: User },
@@ -212,6 +173,7 @@ const SettingsPage = () => {
               <button
                 key={tab.id}
                 onClick={() => startTransition(() => setSelectedTab(tab.id))}
+                onMouseEnter={() => preloadOnHover(tab.id)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors cursor-pointer w-full lg:w-[220px] ${
                   selectedTab === tab.id
                     ? 'bg-primary text-primary-foreground'
@@ -228,17 +190,20 @@ const SettingsPage = () => {
         {/* Tab Content */}
         <div className="flex-1">
           {deferredTab === 'profile' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Profile Information
-                </CardTitle>
-                <CardDescription>
-                  Update your personal information and account details
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
+            !user || !profile ? (
+              <ProfileSectionSkeleton />
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Profile Information
+                  </CardTitle>
+                  <CardDescription>
+                    Update your personal information and account details
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
                 {/* Avatar Upload Section */}
                 <div className="flex flex-col items-center">
                   <h3 className="text-lg font-medium mb-4">Profile Picture</h3>
@@ -334,25 +299,9 @@ const SettingsPage = () => {
                         Email cannot be changed. Contact support if you need to update your email.
                       </p>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="phone_number">Mobile Number</Label>
-                      <Input
-                        id="phone_number"
-                        placeholder="Enter your mobile number (E.164)"
-                        {...profileForm.register('phone_number')}
-                      />
-                      {profileForm.formState.errors.phone_number && (
-                        <p className="text-sm text-destructive flex items-center gap-1">
-                          <AlertCircle className="h-4 w-4" />
-                          {profileForm.formState.errors.phone_number.message}
-                        </p>
-                      )}
-                      <p className="text-sm text-muted-foreground">
-                        Add your mobile number to enable SMS verification and 2FA.
-                      </p>
-                    </div>
                   </div>
+
+                    {/* Phone number field removed - not available in profiles table */}
 
                   <Separator />
 
@@ -384,7 +333,8 @@ const SettingsPage = () => {
                   </div>
                 </form>
               </CardContent>
-            </Card>
+                </Card>
+              )
           )}
 
           {deferredTab === 'gym' && (
@@ -406,14 +356,22 @@ const SettingsPage = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {hasGym ? (
+                  {gymLoading ? (
+                    <div className="space-y-6">
+                      <FormFieldSkeleton />
+                      <FormFieldSkeleton />
+                      <div className="flex justify-end">
+                        <div className="h-10 w-24 bg-muted rounded animate-pulse"></div>
+                      </div>
+                    </div>
+                  ) : hasGym ? (
                   <form onSubmit={gymForm.handleSubmit(handleGymUpdate)} className="space-y-6">
                     <div className="space-y-2">
                       <Label htmlFor="gym_name">Gym Name</Label>
                       <Input
                         id="gym_name"
                         placeholder="Enter your gym name"
-                        disabled={gymLoading}
+                        disabled={false}
                         {...gymForm.register('name')}
                       />
                      {gymForm.formState.errors.name && (
@@ -525,108 +483,6 @@ const SettingsPage = () => {
                    )}
                  </div>
                </div>
-
-               <Separator />
-
-               {/* Password Management - Only for email auth users */}
-               {!isSocialAuth && (
-                 <form onSubmit={passwordForm.handleSubmit(handlePasswordChange)} className="space-y-6">
-                   <div className="space-y-4">
-                     <h3 className="font-medium">Change Password</h3>
-                     <p className="text-sm text-muted-foreground">
-                       Update your current password for enhanced security.
-                     </p>
-                   </div>
-
-                   <div className="space-y-4">
-                     <div className="space-y-2">
-                       <Label htmlFor="currentPassword">Current Password</Label>
-                       <div className="relative">
-                         <Input
-                           id="currentPassword"
-                           type={showCurrentPassword ? "text" : "password"}
-                           placeholder="Enter your current password"
-                           {...passwordForm.register('currentPassword')}
-                         />
-                         <button
-                           type="button"
-                           onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                         >
-                           {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                         </button>
-                       </div>
-                       {passwordForm.formState.errors.currentPassword && (
-                         <p className="text-sm text-destructive flex items-center gap-1">
-                           <AlertCircle className="h-4 w-4" />
-                           {passwordForm.formState.errors.currentPassword.message}
-                         </p>
-                       )}
-                     </div>
-
-                     <div className="space-y-2">
-                       <Label htmlFor="newPassword">New Password</Label>
-                       <div className="relative">
-                         <Input
-                           id="newPassword"
-                           type={showNewPassword ? "text" : "password"}
-                           placeholder="Enter your new password"
-                           {...passwordForm.register('newPassword')}
-                         />
-                         <button
-                           type="button"
-                           onClick={() => setShowNewPassword(!showNewPassword)}
-                           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                         >
-                           {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                         </button>
-                       </div>
-                       {passwordForm.formState.errors.newPassword && (
-                         <p className="text-sm text-destructive flex items-center gap-1">
-                           <AlertCircle className="h-4 w-4" />
-                           {passwordForm.formState.errors.newPassword.message}
-                         </p>
-                       )}
-                     </div>
-
-                     <div className="space-y-2">
-                       <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                       <div className="relative">
-                         <Input
-                           id="confirmPassword"
-                           type={showConfirmPassword ? "text" : "password"}
-                           placeholder="Confirm your new password"
-                           {...passwordForm.register('confirmPassword')}
-                         />
-                         <button
-                           type="button"
-                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                         >
-                           {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                         </button>
-                       </div>
-                       {passwordForm.formState.errors.confirmPassword && (
-                         <p className="text-sm text-destructive flex items-center gap-1">
-                           <AlertCircle className="h-4 w-4" />
-                           {passwordForm.formState.errors.confirmPassword.message}
-                         </p>
-                       )}
-                     </div>
-                   </div>
-
-                   <div className="flex justify-end">
-                     <Button 
-                       type="submit" 
-                       className="min-w-[140px]"
-                     >
-                       <Lock className="h-4 w-4 mr-2" />
-                       Change Password
-                     </Button>
-                   </div>
-                 </form>
-               )}
-
                <Separator />
 
                <div className="space-y-4">
@@ -664,15 +520,43 @@ const SettingsPage = () => {
  )
 }
 
-export default SettingsPage 
-
-// Lazy-loaded heavy tabs for better responsiveness
+// Preload important tabs for faster transitions
 const LazyAppearanceTab = dynamic(
   () => import('@/components/settings/AppearanceTab').then((m) => m.AppearanceTab),
-  { ssr: false, loading: () => <div className="p-8 text-muted-foreground">Loading appearance settings...</div> }
+  { 
+    ssr: false, 
+    loading: () => <div className="p-8 text-muted-foreground">Loading appearance settings...</div>
+  }
 )
 
 const LazySubscriptionTab = dynamic(
   () => import('@/components/settings/SubscriptionTab').then((m) => m.SubscriptionTab),
-  { ssr: false, loading: () => <div className="p-8 text-muted-foreground">Loading subscription details...</div> }
+  { 
+    ssr: false, 
+    loading: () => <div className="p-8 text-muted-foreground">Loading subscription details...</div>
+  }
 )
+
+// Preload hook for better tab performance
+function useTabPreloading() {
+  useEffect(() => {
+    // Preload heavy tabs after initial render for faster transitions
+    const preloadTimer = setTimeout(() => {
+      import('@/components/settings/AppearanceTab').catch(() => {})
+      import('@/components/settings/SubscriptionTab').catch(() => {})
+    }, 1500) // Delay to not interfere with initial page load
+
+    return () => clearTimeout(preloadTimer)
+  }, [])
+}
+
+// Hover preloading for instant tab switches
+const preloadOnHover = (tabId: string) => {
+  if (tabId === 'appearance') {
+    import('@/components/settings/AppearanceTab').catch(() => {})
+  } else if (tabId === 'subscription') {
+    import('@/components/settings/SubscriptionTab').catch(() => {})
+  }
+}
+
+export default SettingsPage
