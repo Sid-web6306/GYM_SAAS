@@ -46,15 +46,15 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
     setError('')
 
     try {
-      const response = await fetch('/api/auth/verify-otp', {
+      const response = await fetch('/api/auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          action: 'verify-otp',
           email,
-          token: otp,
-          type: 'email'
+          token: otp
         }),
       })
 
@@ -64,17 +64,17 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
         toastActions.success('Email Verified!', 'Your email has been successfully verified.')
         
         // Force refresh auth queries to ensure profile is loaded
-        queryClient.invalidateQueries({ queryKey: ['auth'] })
-        queryClient.refetchQueries({ queryKey: ['auth'] })
-        
-        // Wait longer for database trigger to create profile, then redirect
+        queryClient.invalidateQueries({ queryKey: ['auth-session'] })
+        queryClient.refetchQueries({ queryKey: ['auth-session'] })
+
+        // Small delay to allow auth state to update before redirect
         setTimeout(() => {
           if (onVerificationSuccess) {
             onVerificationSuccess()
           } else {
             router.push(redirectTo)
           }
-        }, 2000) // Longer delay to ensure profile creation
+        }, 100)
       } else {
         setAttempts(prev => prev + 1)
         setError(result.error || 'Invalid verification code. Please try again.')
@@ -108,14 +108,14 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
     setError('')
 
     try {
-      const response = await fetch('/api/auth/resend-otp', {
+      const response = await fetch('/api/auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email,
-          type: 'email'
+          action: 'resend-otp',
+          email
         }),
       })
 

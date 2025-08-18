@@ -55,6 +55,26 @@ export const AUTH_MESSAGES = {
     message: 'The social login request was invalid. Please try again.',
     type: 'error' as const,
   },
+  'social-auth-server-error': {
+    title: 'Server Error',
+    message: 'The social login provider experienced an error. Please try again in a few moments.',
+    type: 'error' as const,
+  },
+  'social-auth-missing-code': {
+    title: 'Authentication Failed',
+    message: 'No authorization code was received from the social login provider. Please try again.',
+    type: 'error' as const,
+  },
+  'social-auth-expired': {
+    title: 'Login Expired',
+    message: 'The social login session has expired. Please try logging in again.',
+    type: 'warning' as const,
+  },
+  'social-auth-no-session': {
+    title: 'Session Error',
+    message: 'Unable to establish a session after social login. Please try again.',
+    type: 'error' as const,
+  },
   'social-auth-timeout': {
     title: 'Login Timeout',
     message: 'Social login took too long. Please try again.',

@@ -17,15 +17,14 @@ import { FcGoogle } from "react-icons/fc";
 import { FaFacebook } from "react-icons/fa";
 import { Loader2 } from "lucide-react";
 
-import { loginWithSocialProvider, signupWithEmail } from "@/actions/auth.actions";
+import { signupWithEmail, loginWithSocialProvider } from "@/actions/auth.actions";
 import React from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import {  useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from '@/hooks/use-auth';
 import { toastActions } from "@/stores/toast-store";
-import { authUIActions } from "@/stores/auth-store";
 import { withSuspense } from "@/components/providers/suspense-provider";
 
 // Zod schema for client-side validation (passwordless)
@@ -83,7 +82,6 @@ const SocialButton = ({
 // Note: SubmitButton component replaced with inline button
 
 const SignUpPageComponent = () => {
-  const router = useRouter();
   const searchParams = useSearchParams();
   
   // Get invitation token from search params
@@ -100,12 +98,7 @@ const SignUpPageComponent = () => {
   }>({ google: false, facebook: false });
 
   // Redirect authenticated users to dashboard
-  React.useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      console.log('Signup page: User is authenticated, redirecting to dashboard');
-      router.replace('/dashboard');
-    }
-  }, [isLoading, isAuthenticated, router]);
+  // Middleware handles authentication redirects - no client redirect needed
 
   // React Hook Form setup
   const signupForm = useForm<SignupFormData>({
@@ -117,46 +110,51 @@ const SignUpPageComponent = () => {
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  // Enhanced social login handler
+  // Create bound server actions for social login
+  const handleGoogleLogin = loginWithSocialProvider.bind(null, 'google', {
+    inviteToken: inviteToken || undefined
+  });
+  
+  const handleFacebookLogin = loginWithSocialProvider.bind(null, 'facebook', {
+    inviteToken: inviteToken || undefined
+  });
+
+  // Social login handler
   const handleSocialLogin = async (provider: 'google' | 'facebook') => {
     setSocialLoading(prev => ({ ...prev, [provider]: true }));
     
     try {
-      // Mark user as new for social auth
-      authUIActions.setIsNewUser(true);
-      
       toastActions.info(
         'Redirecting...', 
         `Redirecting to ${provider === 'google' ? 'Google' : 'Facebook'} for authentication.`
       );
       
-      const origin = typeof window !== 'undefined' ? window.location.origin : ''
-      let redirectTo: string|undefined = `${origin}/auth/callback` ;
-
-      if(inviteToken) {
-        redirectTo = `${origin}/auth/callback?invite=${inviteToken}`
+      // Call the bound server action
+      if (provider === 'google') {
+        await handleGoogleLogin();
       } else {
-        redirectTo = origin 
-          ? `${origin}/auth/callback`
-          : undefined
+        await handleFacebookLogin();
       }
-
-      await loginWithSocialProvider(provider, {
-        redirectTo,
-        scopes: provider === 'google' 
-          ? 'email profile openid' 
-          : 'email public_profile'
-      });
+      
+      // Server action will handle redirect, so this code won't be reached
+      // unless there's an error
+      
     } catch (error) {
-      console.error(`${provider} login error:`, error);
-      toastActions.error(
-        'Authentication Error', 
-        `Failed to connect with ${provider === 'google' ? 'Google' : 'Facebook'}. Please try again.`
-      );
-    } finally {
-      setTimeout(() => {
-        setSocialLoading(prev => ({ ...prev, [provider]: false }));
-      }, 3000);
+      console.error(`${provider} OAuth error:`, error);
+      
+      // Provide more specific error messages
+      let errorMessage = `Failed to connect with ${provider === 'google' ? 'Google' : 'Facebook'}. Please try again.`;
+      
+      if (error instanceof Error) {
+        if (error.message.includes('popup_blocked')) {
+          errorMessage = 'Pop-up was blocked. Please allow pop-ups for this site and try again.';
+        } else if (error.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        }
+      }
+      
+      toastActions.error('Authentication Error', errorMessage);
+      setSocialLoading(prev => ({ ...prev, [provider]: false }));
     }
   };
 
@@ -165,8 +163,8 @@ const SignUpPageComponent = () => {
     setIsSubmitting(true);
     
     try {
-      // Mark user as new for email signup
-      authUIActions.setIsNewUser(true);
+      // Mark user as new for email signup (simplified - no longer using auth store)
+      // authUIActions.setIsNewUser(true);
       
       const formData = new FormData();
       formData.append('email', data.email);
@@ -177,22 +175,29 @@ const SignUpPageComponent = () => {
         formData.append('inviteToken', inviteToken);
       }
       
-      const result = await signupWithEmail(null, formData);
+      const result = await signupWithEmail(formData);
       
       if (result?.error) {
-        toastActions.error("Error", result.error.message);
+        toastActions.error("Error", result.error);
         
-        // Set form errors if they exist
-        if (result.error.details) {
+        // Set form errors if they exist (simplified - no longer has details)
+        /*if (result.error.details) {
           if (result.error.details.email) {
             signupForm.setError('email', { message: result.error.details.email[0] });
           }
-        }
+        }*/
       }
       // If no error, the server action will handle the redirect
       
     } catch (error) {
       console.error('Signup form error:', error);
+      
+      // Check if this is a Next.js redirect (not a real error)
+      if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
+        console.log('🔧 SIGNUP: Redirect successful, not an error')
+        return // Don't show error toast for redirects
+      }
+      
       toastActions.error("Error", "An unexpected error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);

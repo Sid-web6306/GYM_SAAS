@@ -1,1006 +1,277 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  UseMutationResult,
-} from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
-import { useEffect, useCallback, useMemo, useRef } from 'react'
-import { toastActions } from '@/stores/toast-store'
+import { useEffect } from 'react'
 import type { User } from '@supabase/supabase-js'
-import type { GymRole, Permission, UserPermissions, ProfileWithRBAC } from '@/types/rbac.types'
-import type { Database } from '@/types/supabase.ts'
+import type { ProfileWithRBAC } from '@/types/rbac.types'
+import type { Database } from '@/types/supabase'
+import { toastActions } from '@/stores/toast-store'
 
-// ========== ENHANCED TYPES ==========
-
-export interface AuthSession {
+export interface AuthData {
   user: User | null
   profile: ProfileWithRBAC | null
   isLoading: boolean
-  isInitialized: boolean
-  sessionId?: string
-  lastRefresh?: number
-  // RBAC data
-  role?: GymRole
-  permissions?: Permission[]
-  roleLevel?: number
-  rbacContext?: UserPermissions
+  isAuthenticated: boolean
+  hasGym: boolean
+  error: Error | null
 }
 
-export interface AuthError extends Error {
-  code?: string
-  status?: number
-  details?: Record<string, unknown>
-}
-
-export interface AuthMetrics {
-  sessionDuration: number
-  refreshCount: number
-  errorCount: number
-  lastActivity: number
-}
-
-export interface AuthConfig {
-  enableMultiTab: boolean
-  enableMetrics: boolean
-  enableAutoRefresh: boolean
-  sessionTimeout: number
-  maxRetries: number
-  retryDelay: number
-  staleTime: number
-  gcTime: number
-}
-
-// ========== UTILITY FUNCTIONS ==========
-
-// Get environment-specific prefix for cleanup
-const getEnvironmentPrefix = () => {
-  // Check NODE_ENV first (most reliable)
-  if (process.env.NODE_ENV === 'development') return 'dev'
-  if (process.env.NODE_ENV === 'test') return 'test'
-
-  // Check for explicit environment variable
-  const explicitEnv = process.env.NEXT_PUBLIC_APP_ENV
-  if (explicitEnv) {
-    if (explicitEnv === 'development') return 'dev'
-    if (explicitEnv === 'staging') return 'staging'
-    if (explicitEnv === 'production') return 'prod'
-  }
-
-  // Fallback to URL detection
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (url?.includes('dev') || url?.includes('localhost')) return 'dev'
-  if (url?.includes('staging')) return 'staging'
-
-  // Default to prod for production builds
-  return process.env.NODE_ENV === 'production' ? 'prod' : 'dev'
-}
-
-// Replace lodash throttle with native implementation
-function throttle<T extends (...args: Parameters<T>) => ReturnType<T>>(
-  func: T,
-  delay: number
-): T {
-  let timeoutId: NodeJS.Timeout | null = null
-  let lastExecTime = 0
-
-  return ((...args: Parameters<T>) => {
-    const currentTime = Date.now()
-
-    if (currentTime - lastExecTime > delay) {
-      func(...args)
-      lastExecTime = currentTime
-    } else {
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-      timeoutId = setTimeout(() => {
-        func(...args)
-        lastExecTime = Date.now()
-      }, delay - (currentTime - lastExecTime))
-    }
-  }) as T
-}
-
-// Replace lodash debounce with native implementation
-function debounce<T extends (...args: Parameters<T>) => ReturnType<T>>(
-  func: T,
-  delay: number
-): T {
-  let timeoutId: NodeJS.Timeout | null = null
-
-  return ((...args: Parameters<T>) => {
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-    }
-    timeoutId = setTimeout(() => {
-      func(...args)
-    }, delay)
-  }) as T
-}
-
-// ========== ENHANCED QUERY KEYS ==========
-
-export const authKeys = {
-  all: ['auth'] as const,
-  session: () => [...authKeys.all, 'session'] as const,
-  profile: (userId: string) => [...authKeys.all, 'profile', userId] as const,
-  metrics: () => [...authKeys.all, 'metrics'] as const,
-} as const
-
-// ========== LOGOUT COORDINATION MANAGER ==========
-
-class LogoutCoordinator {
-  private static instance: LogoutCoordinator
-  private isLoggingOut = false
-  private logoutSource: 'manual' | 'auth_state' | 'multi_tab' | null = null
-  private logoutPromise: Promise<void> | null = null
-
-  static getInstance(): LogoutCoordinator {
-    if (!LogoutCoordinator.instance) {
-      LogoutCoordinator.instance = new LogoutCoordinator()
-    }
-    return LogoutCoordinator.instance
-  }
-
-  async executeLogout(
-    source: 'manual' | 'auth_state' | 'multi_tab',
-    logoutFn: () => Promise<void>
-  ): Promise<boolean> {
-    // If already logging out, wait for completion
-    if (this.isLoggingOut) {
-      console.log(
-        `Logout (${source}): Already in progress (${this.logoutSource}), waiting...`
-      )
-      if (this.logoutPromise) {
-        await this.logoutPromise
-      }
-      return false // Indicate this was a duplicate
-    }
-
-    console.log(`Logout (${source}): Starting logout process`)
-    this.isLoggingOut = true
-    this.logoutSource = source
-
-    try {
-      this.logoutPromise = logoutFn()
-      await this.logoutPromise
-      console.log(`Logout (${source}): Completed successfully`)
-      return true
-    } catch (error) {
-      console.error(`Logout (${source}): Error during logout:`, error)
-      throw error
-    } finally {
-      this.isLoggingOut = false
-      this.logoutSource = null
-      this.logoutPromise = null
-    }
-  }
-
-  isInProgress(): boolean {
-    return this.isLoggingOut
-  }
-
-  getSource(): string | null {
-    return this.logoutSource
-  }
-}
-
-// ========== ENHANCED MULTI-TAB MANAGER ==========
-
-class EnhancedTabManager {
-  private static instance: EnhancedTabManager
-  private checkInterval: NodeJS.Timeout | null = null
-  private lastAuthCheck: string | null = null
-  private callbacks: Map<string, () => void> = new Map()
-  private metrics: AuthMetrics = {
-    sessionDuration: 0,
-    refreshCount: 0,
-    errorCount: 0,
-    lastActivity: Date.now(),
-  }
-  private config: AuthConfig
-  private isActive = false
-
-  constructor(config: AuthConfig) {
-    this.config = config
-  }
-
-  static getInstance(config?: AuthConfig): EnhancedTabManager {
-    if (!EnhancedTabManager.instance) {
-      EnhancedTabManager.instance = new EnhancedTabManager(
-        config || {
-          enableMultiTab: true,
-          enableMetrics: true,
-          enableAutoRefresh: true,
-          sessionTimeout: 30 * 60 * 1000, // 30 minutes
-          maxRetries: 3,
-          retryDelay: 1000,
-          staleTime: 30 * 1000, // 30 seconds
-          gcTime: 5 * 60 * 1000, // 5 minutes
-        }
-      )
-    }
-    return EnhancedTabManager.instance
-  }
-
-  startMonitoring(id: string, onLogoutDetected: () => void) {
-    if (!this.config.enableMultiTab) return
-
-    this.callbacks.set(id, onLogoutDetected)
-
-    if (this.checkInterval) return // Already monitoring
-
-    this.isActive = true
-    this.metrics.lastActivity = Date.now()
-
-    // Enhanced cookie monitoring with throttling
-    const checkAuthState = throttle(() => {
-      if (!this.isActive || typeof window === 'undefined') return
-
-      try {
-        const envPrefix = getEnvironmentPrefix()
-        const hasAuthCookies = document.cookie
-          .split(';')
-          .some(cookie => cookie.trim().startsWith(`${envPrefix}-`))
-
-        const currentStatus = hasAuthCookies ? 'authenticated' : 'logged_out'
-
-        if (
-          this.lastAuthCheck === 'authenticated' &&
-          currentStatus === 'logged_out'
-        ) {
-          console.log('EnhancedTabManager: Multi-tab logout detected')
-          this.metrics.errorCount++
-          this.triggerLogout()
-        }
-
-        this.lastAuthCheck = currentStatus
-        this.metrics.lastActivity = Date.now()
-      } catch (error) {
-        console.error('EnhancedTabManager: Error in auth monitoring:', error)
-        this.metrics.errorCount++
-      }
-    }, 1000) // Throttle to prevent excessive calls
-
-    this.checkInterval = setInterval(checkAuthState, 2000)
-
-    // Add visibility change listener for better performance
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        this.pauseMonitoring()
-      } else {
-        this.resumeMonitoring()
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    console.log('EnhancedTabManager: Started monitoring with enhanced features')
-  }
-
-  private pauseMonitoring() {
-    if (this.checkInterval) {
-      clearInterval(this.checkInterval)
-      this.checkInterval = null
-    }
-  }
-
-  private resumeMonitoring() {
-    if (!this.checkInterval && this.isActive) {
-      // Restart monitoring when tab becomes visible
-      this.startMonitoring('resume', () => {})
-    }
-  }
-
-  private triggerLogout() {
-    this.callbacks.forEach((callback, id) => {
-      try {
-        callback()
-      } catch (error) {
-        console.error(
-          `EnhancedTabManager: Error in logout callback for ${id}:`,
-          error
-        )
-      }
-    })
-  }
-
-  stopMonitoring(id?: string) {
-    if (id) {
-      this.callbacks.delete(id)
-    }
-
-    if (this.callbacks.size === 0) {
-      this.isActive = false
-      if (this.checkInterval) {
-        clearInterval(this.checkInterval)
-        this.checkInterval = null
-      }
-      this.lastAuthCheck = null
-      console.log('EnhancedTabManager: Stopped monitoring')
-    }
-  }
-
-  getMetrics(): AuthMetrics {
-    return { ...this.metrics }
-  }
-
-  updateMetrics(updates: Partial<AuthMetrics>) {
-    this.metrics = { ...this.metrics, ...updates }
-  }
-
-  destroy() {
-    this.isActive = false
-    this.callbacks.clear()
-    this.stopMonitoring()
-    document.removeEventListener('visibilitychange', this.resumeMonitoring)
-  }
-}
-
-// ========== ENHANCED ERROR HANDLING ==========
-
-export class AuthErrorHandler {
-  private static retryDelays = [1000, 2000, 4000, 8000]
-
-  static createAuthError(error: unknown, context: string): AuthError {
-    const errorObj = error as Error
-    const authError = new Error(
-      errorObj?.message || 'Authentication error'
-    ) as AuthError
-    authError.code = (error as { code?: string })?.code || 'UNKNOWN_ERROR'
-    authError.status = (error as { status?: number })?.status || 500
-    authError.details = { context, originalError: error }
-    authError.name = 'AuthError'
-    return authError
-  }
-
-  static shouldRetry(error: unknown, attemptNumber: number): boolean {
-    if (attemptNumber >= 3) return false
-
-    const errorObj = error as {
-      code?: string
-      message?: string
-      status?: number
-    }
-
-    // Don't retry on specific auth errors
-    if (
-      errorObj?.code?.includes('JWT') ||
-      errorObj?.code?.includes('session') ||
-      errorObj?.message?.includes('Invalid login') ||
-      errorObj?.status === 401
-    ) {
-      return false
-    }
-
-    // Don't retry on profile not found errors (PGRST116) - these are expected for new users
-    if (errorObj?.code === 'PGRST116') {
-      return false
-    }
-
-    // Don't retry on network errors after 2 attempts (reduced from 3)
-    if (errorObj?.code === 'NETWORK_ERROR' && attemptNumber >= 1) {
-      return false
-    }
-
-    return true
-  }
-
-  static getRetryDelay(attemptNumber: number): number {
-    return AuthErrorHandler.retryDelays[
-      Math.min(attemptNumber, AuthErrorHandler.retryDelays.length - 1)
-    ]
-  }
-
-  static handleAuthError(error: unknown, context: string) {
-    const authError = AuthErrorHandler.createAuthError(error, context)
-
-    // Log error with context
-    console.error(`AuthError in ${context}:`, {
-      error: authError,
-      code: authError.code,
-      details: authError.details,
-      timestamp: new Date().toISOString(),
-    })
-
-    // Report to monitoring service (if available)
-    if (typeof window !== 'undefined' && 'gtag' in window) {
-      const gtag = (
-        window as unknown as {
-          gtag: (
-            event: string,
-            action: string,
-            params: Record<string, unknown>
-          ) => void
-        }
-      ).gtag
-      gtag('event', 'auth_error', {
-        error_code: authError.code,
-        error_context: context,
-        error_message: authError.message,
-      })
-    }
-
-    return authError
-  }
-}
-
-// ========== PERFORMANCE OPTIMIZATIONS ==========
-
-// Memoized query function
-const createAuthQueryFn = (config: AuthConfig) => {
-  return async (): Promise<AuthSession> => {
-    const supabase = createClient()
-    const startTime = Date.now()
-
-    try {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession()
-
-      if (error) {
-        throw AuthErrorHandler.createAuthError(error, 'session_fetch')
-      }
-
-      const user = session?.user || null
-
-      if (!user) {
-        return {
-          user: null,
-          profile: null,
-          isLoading: false,
-          isInitialized: true,
-          sessionId: undefined,
-          lastRefresh: Date.now(),
-        }
-      }
-
-      // Parallel profile fetch for better performance
-      const profilePromise = supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      const { data: profile, error: profileError } = await profilePromise
-
-      if (profileError) {
-        if (profileError.code === 'PGRST116') {
-          // No profile found - this is expected for new users during profile creation
-          console.log('Profile not found for user (may be new user):', { 
-            userId: user.id, 
-            email: user.email,
-            userCreated: user.created_at,
-            userConfirmed: user.email_confirmed_at
-          })
-        } else {
-          console.warn('Profile fetch error:', profileError)
-          // For critical profile errors, don't block the auth flow
-          console.warn('Continuing auth flow despite profile error')
-        }
-      }
-
-      const sessionData: AuthSession = {
-        user,
-        profile: profile as ProfileWithRBAC | null,
-        isLoading: false,
-        isInitialized: true,
-        sessionId: session?.access_token?.slice(-10) || undefined,
-        lastRefresh: Date.now(),
-      }
-
-      // Update metrics
-      const tabManager = EnhancedTabManager.getInstance(config)
-      tabManager.updateMetrics({
-        refreshCount: tabManager.getMetrics().refreshCount + 1,
-        lastActivity: Date.now(),
-      })
-
-      const duration = Date.now() - startTime
-      if (duration > 1000) {
-        console.warn(`Auth query took ${duration}ms - consider optimization`)
-      }
-
-      return sessionData
-    } catch (error) {
-      throw AuthErrorHandler.handleAuthError(error, 'auth_query')
-    }
-  }
-}
-
-// ========== ENHANCED CORE AUTH HOOK ==========
-
-export const useAuth = (customConfig?: Partial<AuthConfig>) => {
-  const queryClient = useQueryClient()
-  const router = useRouter()
-  const hookId = useRef(`auth-${Math.random().toString(36).substr(2, 9)}`)
-
-  // Merge config with defaults
-  const config = useMemo(
-    (): AuthConfig => ({
-      enableMultiTab: true,
-      enableMetrics: true,
-      enableAutoRefresh: true,
-      sessionTimeout: 30 * 60 * 1000,
-      maxRetries: 3,
-      retryDelay: 1000,
-      staleTime: 30 * 1000,
-      gcTime: 5 * 60 * 1000,
-      ...customConfig,
-    }),
-    [customConfig]
-  )
-
-  const tabManager = useMemo(
-    () => EnhancedTabManager.getInstance(config),
-    [config]
-  )
-
-  // Memoized query function
-  const queryFn = useMemo(() => createAuthQueryFn(config), [config])
-
-  // Enhanced auth session query
-  const authQuery = useQuery({
-    queryKey: authKeys.session(),
-    queryFn,
-    retry: (failureCount, error) =>
-      AuthErrorHandler.shouldRetry(error, failureCount),
-    retryDelay: attemptIndex => AuthErrorHandler.getRetryDelay(attemptIndex),
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    staleTime: config.staleTime,
-    gcTime: config.gcTime,
-    meta: {
-      errorMessage: 'Failed to fetch authentication session',
-    },
-  })
-
-  // Memoized derived values for performance
-  const derivedValues = useMemo(() => {
-    const user = authQuery.data?.user || null
-    const profile = authQuery.data?.profile || null
-    const isAuthenticated = !!user
-    const hasGym = !!profile?.gym_id
-    const sessionId = authQuery.data?.sessionId
-    const lastRefresh = authQuery.data?.lastRefresh
-
-    return {
-      user,
-      profile,
-      isAuthenticated,
-      hasGym,
-      sessionId,
-      lastRefresh,
-      isLoading: authQuery.isLoading,
-      isInitialized: authQuery.data?.isInitialized || false,
-      error: authQuery.error,
-      refetch: authQuery.refetch,
-    }
-  }, [authQuery])
-
-  // Enhanced auth state change handler with improved error recovery
-  const handleAuthStateChange = useCallback((event: string, session: { user?: User } | null) => {
-    console.log('Auth state change:', event, session?.user?.email || 'no user');
+// Core auth query
+async function fetchAuthSession(): Promise<AuthData> {
+  const supabase = createClient()
   
-    if (event === 'SIGNED_OUT') {
-      const coordinator = LogoutCoordinator.getInstance();
-      coordinator.executeLogout('auth_state', async () => {
-        await performLogoutCleanup(queryClient, router, 'auth_state');
-      }).catch(error => {
-        console.error('Auth state change: Coordinated logout failed:', error);
-        router.push('/login');
-      });
-      return;
-    }
-  
-    if (event === 'SIGNED_IN') {
-      queryClient.invalidateQueries({ queryKey: authKeys.session() });
-      console.log('Auth state change: SIGNED_IN - refreshing auth data');
-    }
-  
-    if (event === 'TOKEN_REFRESHED') {
-      queryClient.invalidateQueries({ queryKey: authKeys.session() });
-      console.log('Auth state change: TOKEN_REFRESHED - session invalidated');
-    }
-  }, [queryClient, router]);
-
-  // Debounced version for actual usage
-  const debouncedHandleAuthStateChange = useMemo(
-    () => debounce(handleAuthStateChange, 300),
-    [handleAuthStateChange]
-  );
-
-  // Enhanced auth state subscription
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const supabase = createClient()
-    let lastEventTime = 0
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      const now = Date.now()
-
-      // Enhanced deduplication
-      if (now - lastEventTime < 500) {
-        return
-      }
-      lastEventTime = now
-
-      debouncedHandleAuthStateChange(event, session)
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [debouncedHandleAuthStateChange])
-
-  // Enhanced multi-tab monitoring with comprehensive cleanup
-  useEffect(() => {
-    if (!config.enableMultiTab || typeof window === 'undefined') return
-
-    const handleLogoutDetected = () => {
-      console.log('Multi-tab logout detected - using coordinated cleanup')
-
-      const coordinator = LogoutCoordinator.getInstance()
-
-      coordinator
-        .executeLogout('multi_tab', async () => {
-          await performLogoutCleanup(queryClient, router, 'multi_tab')
-        })
-        .catch(error => {
-          console.error('Multi-tab logout: Coordinated logout failed:', error)
-          // Fallback: still redirect to login
-          router.push('/login')
-        })
-    }
-
-    const currentHookId = hookId.current
-    tabManager.startMonitoring(currentHookId, handleLogoutDetected)
-
-    return () => {
-      tabManager.stopMonitoring(currentHookId)
-    }
-  }, [config.enableMultiTab, queryClient, router, tabManager])
-
-  // Session timeout monitoring
-  useEffect(() => {
-    if (!config.enableAutoRefresh || !derivedValues.isAuthenticated) return
-
-    const timeoutId = setTimeout(() => {
-      console.log('Session timeout - refreshing auth')
-      authQuery.refetch()
-    }, config.sessionTimeout)
-
-    return () => clearTimeout(timeoutId)
-  }, [
-    config.enableAutoRefresh,
-    config.sessionTimeout,
-    derivedValues.isAuthenticated,
-    authQuery,
-  ])
-
-  // Performance monitoring
-  useEffect(() => {
-    if (!config.enableMetrics) return
-
-    const metrics = tabManager.getMetrics()
-
-    // Log performance metrics periodically
-    const metricsInterval = setInterval(() => {
-      const currentMetrics = tabManager.getMetrics()
-      if (currentMetrics.errorCount > metrics.errorCount) {
-        console.warn('Auth errors detected:', currentMetrics)
-      }
-    }, 60000) // Every minute
-
-    return () => clearInterval(metricsInterval)
-  }, [config.enableMetrics, tabManager])
-
-  return derivedValues
-}
-
-// ========== SHARED LOGOUT CLEANUP ==========
-
-const performLogoutCleanup = async (
-  queryClient: ReturnType<typeof useQueryClient>,
-  router: ReturnType<typeof useRouter>,
-  source: 'manual' | 'auth_state' | 'multi_tab'
-): Promise<void> => {
   try {
-    // Clear auth session data
-    queryClient.setQueryData(authKeys.session(), {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError) throw sessionError
+    if (!session?.user) {
+      return {
+        user: null,
+        profile: null,
+        isLoading: false,
+        isAuthenticated: false,
+        hasGym: false,
+        error: null
+      }
+    }
+
+    // Fetch profile for authenticated user
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single()
+
+    console.log('🔧 CLIENT AUTH: Profile fetch result:', {
+      profile,
+      profileError: profileError?.message,
+      profileCode: profileError?.code,
+      hasGymId: !!(profile?.gym_id),
+      userId: session.user.id
+    })
+
+    // Profile not existing is not an error for new users
+    const profileData = profileError?.code === 'PGRST116' ? null : profile
+
+    const result = {
+      user: session.user,
+      profile: profileData as ProfileWithRBAC | null,
+      isLoading: false,
+      isAuthenticated: true,
+      hasGym: !!(profileData?.gym_id),
+      error: profileError?.code !== 'PGRST116' ? profileError : null
+    }
+
+    console.log('🔧 CLIENT AUTH: Final auth result:', { 
+      hasGym: result.hasGym, 
+      hasProfile: !!result.profile,
+      gymId: result.profile?.gym_id 
+    })
+
+    return result
+  } catch (error) {
+    console.error('Auth session fetch error:', error)
+    return {
       user: null,
       profile: null,
       isLoading: false,
-      isInitialized: true,
-      sessionId: undefined,
-      lastRefresh: Date.now(),
-    })
-
-    // More targeted query removal instead of clearing the whole cache
-    queryClient.removeQueries({ queryKey: authKeys.all })
-    queryClient.removeQueries({ queryKey: ['gym'] })
-    queryClient.removeQueries({ queryKey: ['members'] })
-
-    // Clear environment-specific client storage
-    if (typeof window !== 'undefined') {
-      const envPrefix = getEnvironmentPrefix()
-
-      // Clear environment-specific storage
-      localStorage.removeItem(`${envPrefix}-auth-ui-store`)
-      localStorage.removeItem(`${envPrefix}-supabase.auth.token`)
-
-      // Clear environment-specific cookies
-      const cookies = document.cookie.split(';')
-      cookies.forEach(cookie => {
-        const [name] = cookie.split('=')
-        if (name.trim().startsWith(`${envPrefix}-`)) {
-          document.cookie = `${name.trim()}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
-        }
-      })
-
-      console.log(
-        `Logout cleanup (${source}): Environment-specific cleanup complete for ${envPrefix}`
-      )
+      isAuthenticated: false,
+      hasGym: false,
+      error: error as Error
     }
-
-    // Show success message only for manual logout
-    if (source === 'manual') {
-      toastActions.success('Signed Out', 'You have been signed out successfully.')
-    }
-
-    // Redirect to login
-    router.push('/login')
-
-    console.log(`Logout cleanup (${source}): Complete`)
-  } catch (error) {
-    console.error(`Logout cleanup (${source}): Error:`, error)
-    // Always redirect even if cleanup fails
-    router.push('/login')
   }
 }
 
-// ========== ENHANCED MUTATIONS ==========
+// Main auth hook
+export function useAuth() {
+  const queryClient = useQueryClient()
 
-export const useUpdateProfile = (): UseMutationResult<
-  ProfileWithRBAC,
-  AuthError,
-  Partial<ProfileWithRBAC>
-> => {
+  const authQuery = useQuery({
+    queryKey: ['auth-session'],
+    queryFn: fetchAuthSession,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  })
+
+  // Handle auth state changes
+  useEffect(() => {
+    const supabase = createClient()
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        queryClient.invalidateQueries({ queryKey: ['auth-session'] })
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [queryClient])
+
+  return {
+    user: authQuery.data?.user || null,
+    profile: authQuery.data?.profile || null,
+    isLoading: authQuery.isLoading,
+    isAuthenticated: authQuery.data?.isAuthenticated || false,
+    hasGym: authQuery.data?.hasGym || false,
+    error: authQuery.error,
+    refetch: authQuery.refetch,
+  }
+}
+
+// Logout mutation
+export function useLogout() {
+  const queryClient = useQueryClient()
+  const router = useRouter()
+
+  return useMutation({
+    mutationFn: async () => {
+      console.log('🔧 LOGOUT: Starting logout process...')
+      const supabase = createClient()
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('🔧 LOGOUT: Supabase signOut error:', error)
+        throw error
+      }
+      console.log('🔧 LOGOUT: Supabase signOut successful')
+      return { success: true, message: 'Logged out successfully' }
+    },
+    onSuccess: (result) => {
+      console.log('🔧 LOGOUT: onSuccess called with:', result)
+      
+      // Show success toast using toastActions
+      toastActions.success('Logged Out', 'You have been successfully logged out')
+      
+      queryClient.clear() // Clear all cached data
+      
+      // Delay redirect slightly to show toast
+      setTimeout(() => {
+        router.push('/login')
+      }, 500)
+    },
+    onError: (error) => {
+      console.error('🔧 LOGOUT: onError called with:', error)
+      
+      // Show error toast using toastActions
+      toastActions.error('Logout Failed', error.message || 'An error occurred during logout')
+      
+      // Force redirect even on error
+      queryClient.clear()
+      setTimeout(() => {
+        router.push('/login')
+      }, 500)
+    }
+  })
+}
+
+// Auth guard hook for conditional rendering (middleware handles redirects)
+export function useAuthGuard(options: {
+  requireAuth?: boolean
+  requireGym?: boolean
+} = {}) {
+  const { requireAuth = true, requireGym = false } = options
+  const { isAuthenticated, hasGym, isLoading } = useAuth()
+
+  return {
+    isAuthenticated,
+    hasGym,
+    isLoading,
+    canAccess: !isLoading && (!requireAuth || isAuthenticated) && (!requireGym || hasGym),
+  }
+}
+
+// Update profile mutation
+export function useUpdateProfile() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (updates: Partial<ProfileWithRBAC>) => {
+    mutationFn: async (updates: Database['public']['Tables']['profiles']['Update']) => {
       const supabase = createClient()
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
 
       if (userError || !user) {
-        throw AuthErrorHandler.createAuthError(userError, 'profile_update_auth')
+        throw new Error('Authentication required')
       }
 
       const { data, error } = await supabase
         .from('profiles')
-        .update(updates as Database['public']['Tables']['profiles']['Update'])
+        .update(updates)
         .eq('id', user.id)
         .select()
         .single()
 
       if (error) {
-        throw AuthErrorHandler.createAuthError(error, 'profile_update')
+        throw error
       }
 
       return data as ProfileWithRBAC
     },
-    onMutate: async updates => {
+    onMutate: async (updates) => {
       // Optimistic update
-      await queryClient.cancelQueries({ queryKey: authKeys.session() })
-
-      const previousAuth = queryClient.getQueryData(authKeys.session())
-
-      queryClient.setQueryData(
-        authKeys.session(),
-        (old: AuthSession | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            profile: old.profile ? { ...old.profile, ...updates } : null,
-          }
+      await queryClient.cancelQueries({ queryKey: ['auth-session'] })
+      
+      const previousAuth = queryClient.getQueryData(['auth-session'])
+      
+      queryClient.setQueryData(['auth-session'], (old: AuthData | undefined) => {
+        if (!old) return old
+        return {
+          ...old,
+          profile: old.profile ? { ...old.profile, ...updates } : null,
         }
-      )
+      })
 
       return { previousAuth }
     },
     onError: (error, _updates, context) => {
       // Rollback optimistic update
       if (context?.previousAuth) {
-        queryClient.setQueryData(authKeys.session(), context.previousAuth)
+        queryClient.setQueryData(['auth-session'], context.previousAuth)
       }
-
+      
       console.error('Profile update error:', error)
-      toastActions.error(
-        'Update Failed',
-        'Failed to update profile. Please try again.'
-      )
+      toastActions.error('Update Failed', 'Failed to update profile. Please try again.')
     },
     onSuccess: () => {
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: authKeys.session() })
-      toastActions.success(
-        'Profile Updated',
-        'Your profile has been updated successfully.'
-      )
-    },
-    onSettled: () => {
-      // Ensure data is fresh
-      queryClient.invalidateQueries({ queryKey: authKeys.session() })
+      queryClient.invalidateQueries({ queryKey: ['auth-session'] })
+      toastActions.success('Profile Updated', 'Your profile has been updated successfully.')
     },
   })
 }
 
-export const useLogout = (): UseMutationResult<
-  { success: boolean; error?: string },
-  AuthError,
-  void
-> => {
-  const queryClient = useQueryClient()
-  const router = useRouter()
-
-  return useMutation({
-    mutationFn: async () => {
-      const coordinator = LogoutCoordinator.getInstance()
-
-      // Execute coordinated logout
-      const wasExecuted = await coordinator.executeLogout('manual', async () => {
-        // Let server handle the heavy lifting
-        const { logout } = await import('@/actions/auth.actions')
-        const result = await logout()
-
-        if (!result.success) {
-          throw AuthErrorHandler.createAuthError(
-            new Error(result.error || 'Server logout failed'),
-            'server_logout'
-          )
-        }
-
-        // Perform cleanup
-        await performLogoutCleanup(queryClient, router, 'manual')
-      })
-
-      if (!wasExecuted) {
-        // This was a duplicate logout request
-        return { success: true, message: 'Logout already in progress' }
-      }
-
-      return { success: true }
-    },
-    retry: (failureCount, error) => {
-      // Only retry network errors, not auth errors
-      if (failureCount >= 2) return false
-
-      const errorMessage = error?.message || ''
-      if (errorMessage.includes('Server logout failed')) {
-        return false // Don't retry server-side failures
-      }
-
-      return true // Retry network errors
-    },
-    meta: {
-      errorMessage: 'Failed to logout',
-    },
-  })
-}
-
-// ========== ENHANCED UTILITY HOOKS ==========
-
-export function useAuthGuard(
-  options: {
-    requireAuth?: boolean
-    requireGym?: boolean
-    redirectTo?: string
-  } = {}
-) {
-  const { requireAuth = true, requireGym = false, redirectTo = '/login' } =
-    options
-  const { isAuthenticated, hasGym, isLoading } = useAuth()
-  const router = useRouter()
-
-  const navigate = useCallback(
-    (path: string) => {
-      router.replace(path)
-    },
-    [router]
-  )
-
-  useEffect(() => {
-    if (!isLoading) {
-      if (requireAuth && !isAuthenticated) {
-        navigate(redirectTo)
-      } else if (requireGym && isAuthenticated && !hasGym) {
-        navigate('/onboarding')
-      }
-    }
-  }, [
-    isAuthenticated,
-    hasGym,
-    isLoading,
-    requireAuth,
-    requireGym,
-    redirectTo,
-    navigate,
-  ])
-
-  return {
-    isAuthenticated,
-    hasGym,
-    isLoading,
-    canAccess:
-      !isLoading &&
-      (!requireAuth || isAuthenticated) &&
-      (!requireGym || hasGym),
-  }
-}
-
-export function useInitializeAuth() {
-  const { refetch } = useAuth()
-
-  useEffect(() => {
-    refetch()
-  }, [refetch])
-}
-
+// Post-onboarding sync for refreshing data
 export function usePostOnboardingSync() {
   const { refetch } = useAuth()
   const queryClient = useQueryClient()
 
-  return useCallback(async () => {
-    console.log('Post-onboarding sync: Clearing auth cache and refetching')
-
-    queryClient.removeQueries({ queryKey: authKeys.all })
-
-    // Force refetch with fresh data and return the promise
+  return async () => {
+    queryClient.removeQueries({ queryKey: ['auth-session'] })
     const result = await refetch()
-
+    
     queryClient.removeQueries({ queryKey: ['gym'] })
     queryClient.removeQueries({ queryKey: ['members'] })
-
+    
     return result
-  }, [refetch, queryClient])
+  }
 }
 
-// ========== ENHANCED CONVENIENCE HOOKS ==========
-
-export function useAuthUser() {
-  const { user } = useAuth()
-  return user
-}
-
-export function useAuthProfile() {
-  const { profile } = useAuth()
-  return profile
-}
-
-export function useAuthMetrics() {
-  const tabManager = EnhancedTabManager.getInstance()
-  return tabManager.getMetrics()
-}
-
+// Simplified auth session hook for backward compatibility
 export function useAuthSession() {
-  const { user, sessionId, lastRefresh } = useAuth()
-  return { user, sessionId, lastRefresh }
+  const { user } = useAuth()
+  return { 
+    user, 
+    sessionId: user?.id?.slice(-10), // Simple session ID from user ID
+    lastRefresh: Date.now() 
+  }
 }
 
-// ========== CLEANUP ==========
-
-// Global cleanup function
-export const cleanupAuth = () => {
-  const tabManager = EnhancedTabManager.getInstance()
-  tabManager.destroy()
-} 
+// Simplified auth metrics hook for backward compatibility
+export function useAuthMetrics() {
+  return {
+    refreshCount: 1,
+    lastActivity: Date.now(),
+    tabCount: 1,
+    isHealthy: true,
+    errorCount: 0,
+    sessionDuration: 300000 // 5 minutes in milliseconds
+  }
+}

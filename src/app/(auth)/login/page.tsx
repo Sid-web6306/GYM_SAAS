@@ -20,7 +20,7 @@ import { Loader2 } from "lucide-react"
 
 import { loginWithEmail, loginWithSocialProvider } from "@/actions/auth.actions"
 import React from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -108,7 +108,6 @@ const SubmitButton = ({ isSubmitting }: { isSubmitting: boolean }) => {
 
 const LoginPageComponent = () => {
   const searchParams = useSearchParams()
-  const router = useRouter()
   
   // Use TanStack Query hooks for auth state
   const { isAuthenticated, isLoading } = useAuth()
@@ -149,47 +148,43 @@ const LoginPageComponent = () => {
     })
   }, [searchParams])
 
-  // Redirect authenticated users to dashboard with delay to prevent infinite loops
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      console.log('Login page: User is authenticated, redirecting to dashboard')
-      
-      // Add a small delay to prevent immediate redirect loops
-      const timeoutId = setTimeout(() => {
-        router.replace('/dashboard')
-      }, 100)
-      
-      return () => clearTimeout(timeoutId)
-    }
-  }, [isLoading, isAuthenticated, router])
+  // Middleware handles authentication redirects - no client redirect needed
 
-  // Enhanced social login handler with loading states
+  // Social login handler
   const handleSocialLogin = async (provider: 'google' | 'facebook') => {
     setSocialLoading(prev => ({ ...prev, [provider]: true }))
     
     try {
+
       toastActions.info(
         'Redirecting...', 
         `Redirecting to ${provider === 'google' ? 'Google' : 'Facebook'} for authentication.`
       )
+      if (provider === 'google') {
+        await loginWithSocialProvider('google', {});
+      } else {
+        await loginWithSocialProvider('facebook', {});
+      }
       
-      // Call the enhanced social login action
-      await loginWithSocialProvider(provider, {
-        scopes: provider === 'google' 
-          ? 'email profile openid' 
-          : 'email public_profile'
-      })
+      // Server action will handle redirect, so this code won't be reached
+      // unless there's an error
+      
     } catch (error) {
-      console.error(`${provider} login error:`, error)
-      toastActions.error(
-        'Authentication Error', 
-        `Failed to connect with ${provider === 'google' ? 'Google' : 'Facebook'}. Please try again.`
-      )
-    } finally {
-      // Reset loading state after a delay (in case redirect doesn't happen immediately)
-      setTimeout(() => {
-        setSocialLoading(prev => ({ ...prev, [provider]: false }))
-      }, 3000)
+      console.error(`${provider} OAuth error:`, error)
+      
+      // Provide more specific error messages
+      let errorMessage = `Failed to connect with ${provider === 'google' ? 'Google' : 'Facebook'}. Please try again.`
+      
+      if (error instanceof Error) {
+        if (error.message.includes('popup_blocked')) {
+          errorMessage = 'Pop-up was blocked. Please allow pop-ups for this site and try again.'
+        } else if (error.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.'
+        }
+      }
+      
+      toastActions.error('Authentication Error', errorMessage)
+      setSocialLoading(prev => ({ ...prev, [provider]: false }))
     }
   }
 
@@ -208,7 +203,7 @@ const LoginPageComponent = () => {
       const formData = new FormData()
       formData.append('email', data.email)
       
-      const result = await loginWithEmail(null, formData)
+      const result = await loginWithEmail(formData)
       
       if (result?.error) {
         toastActions.error("Login Failed", "Invalid email address or login failed. Please try again.")
@@ -217,6 +212,13 @@ const LoginPageComponent = () => {
       
     } catch (error) {
       console.error('Login form error:', error)
+      
+      // Check if this is a Next.js redirect (not a real error)
+      if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
+        console.log('🔧 LOGIN: Redirect successful, not an error')
+        return // Don't show error toast for redirects
+      }
+      
       toastActions.error("Error", "An unexpected error occurred. Please try again.")
     } finally {
       setIsSubmitting(false)

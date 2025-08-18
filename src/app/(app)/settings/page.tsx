@@ -32,15 +32,17 @@ import dynamic from 'next/dynamic'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { RoleContextIndicator } from '@/components/layout/RoleContextIndicator'
 import { GymSettingsGuard, BillingGuard, AccessDenied } from '@/components/rbac/rbac-guards'
+import { 
+  ProfileSectionSkeleton,
+  FormFieldSkeleton 
+} from '@/components/ui/skeletons'
 // Form schemas
-const phoneE164Regex = /^\+?[1-9]\d{1,14}$/
+// const phoneE164Regex = /^\+?[1-9]\d{1,14}$/
 
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(100, 'Name must be less than 100 characters'),
   email: z.string().email('Invalid email address'),
-  phone_number: z.string().optional().refine((v) => !v || phoneE164Regex.test(v), {
-    message: 'Invalid phone number. Use E.164 format, e.g. +911234567890',
-  }),
+  // phone_number removed - not available in profiles table
 })
 
 const gymSchema = z.object({
@@ -55,6 +57,9 @@ const SettingsPage = () => {
   const { user, profile, hasGym } = useAuth()
   const updateProfileMutation = useUpdateProfile()
   const updateGymMutation = useUpdateGym()
+  
+  // Preload heavy tabs for better performance
+  useTabPreloading()
   
   // Get gym data for populating the form
   const { data: gymData, isLoading: gymLoading } = useGymData(profile?.gym_id || null)
@@ -77,7 +82,7 @@ const SettingsPage = () => {
     defaultValues: {
       full_name: profile?.full_name || '',
       email: user?.email || '',
-      phone_number: profile?.phone_number || '',
+      // phone_number removed - not available in profiles table
     },
   })
 
@@ -95,7 +100,7 @@ const SettingsPage = () => {
       profileForm.reset({
         full_name: profile.full_name || '',
         email: user?.email || '',
-        phone_number: profile.phone_number || '',
+        // phone_number: profile.phone_number || '',
       })
     }
   }, [profile, user, profileForm])
@@ -115,7 +120,7 @@ const SettingsPage = () => {
     try {
       await updateProfileMutation.mutateAsync({
         full_name: data.full_name,
-        phone_number: data.phone_number || null,
+        // phone_number: data.phone_number || null,
       })
       toastActions.success('Profile Updated', 'Your profile has been updated successfully.')
     } catch (error) {
@@ -168,6 +173,7 @@ const SettingsPage = () => {
               <button
                 key={tab.id}
                 onClick={() => startTransition(() => setSelectedTab(tab.id))}
+                onMouseEnter={() => preloadOnHover(tab.id)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors cursor-pointer w-full lg:w-[220px] ${
                   selectedTab === tab.id
                     ? 'bg-primary text-primary-foreground'
@@ -184,17 +190,20 @@ const SettingsPage = () => {
         {/* Tab Content */}
         <div className="flex-1">
           {deferredTab === 'profile' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Profile Information
-                </CardTitle>
-                <CardDescription>
-                  Update your personal information and account details
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
+            !user || !profile ? (
+              <ProfileSectionSkeleton />
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Profile Information
+                  </CardTitle>
+                  <CardDescription>
+                    Update your personal information and account details
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
                 {/* Avatar Upload Section */}
                 <div className="flex flex-col items-center">
                   <h3 className="text-lg font-medium mb-4">Profile Picture</h3>
@@ -290,25 +299,9 @@ const SettingsPage = () => {
                         Email cannot be changed. Contact support if you need to update your email.
                       </p>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="phone_number">Mobile Number</Label>
-                      <Input
-                        id="phone_number"
-                        placeholder="Enter your mobile number (E.164)"
-                        {...profileForm.register('phone_number')}
-                      />
-                      {profileForm.formState.errors.phone_number && (
-                        <p className="text-sm text-destructive flex items-center gap-1">
-                          <AlertCircle className="h-4 w-4" />
-                          {profileForm.formState.errors.phone_number.message}
-                        </p>
-                      )}
-                      <p className="text-sm text-muted-foreground">
-                        Add your mobile number to enable SMS verification and 2FA.
-                      </p>
-                    </div>
                   </div>
+
+                    {/* Phone number field removed - not available in profiles table */}
 
                   <Separator />
 
@@ -340,7 +333,8 @@ const SettingsPage = () => {
                   </div>
                 </form>
               </CardContent>
-            </Card>
+                </Card>
+              )
           )}
 
           {deferredTab === 'gym' && (
@@ -362,14 +356,22 @@ const SettingsPage = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {hasGym ? (
+                  {gymLoading ? (
+                    <div className="space-y-6">
+                      <FormFieldSkeleton />
+                      <FormFieldSkeleton />
+                      <div className="flex justify-end">
+                        <div className="h-10 w-24 bg-muted rounded animate-pulse"></div>
+                      </div>
+                    </div>
+                  ) : hasGym ? (
                   <form onSubmit={gymForm.handleSubmit(handleGymUpdate)} className="space-y-6">
                     <div className="space-y-2">
                       <Label htmlFor="gym_name">Gym Name</Label>
                       <Input
                         id="gym_name"
                         placeholder="Enter your gym name"
-                        disabled={gymLoading}
+                        disabled={false}
                         {...gymForm.register('name')}
                       />
                      {gymForm.formState.errors.name && (
@@ -518,15 +520,43 @@ const SettingsPage = () => {
  )
 }
 
-export default SettingsPage 
-
-// Lazy-loaded heavy tabs for better responsiveness
+// Preload important tabs for faster transitions
 const LazyAppearanceTab = dynamic(
   () => import('@/components/settings/AppearanceTab').then((m) => m.AppearanceTab),
-  { ssr: false, loading: () => <div className="p-8 text-muted-foreground">Loading appearance settings...</div> }
+  { 
+    ssr: false, 
+    loading: () => <div className="p-8 text-muted-foreground">Loading appearance settings...</div>
+  }
 )
 
 const LazySubscriptionTab = dynamic(
   () => import('@/components/settings/SubscriptionTab').then((m) => m.SubscriptionTab),
-  { ssr: false, loading: () => <div className="p-8 text-muted-foreground">Loading subscription details...</div> }
+  { 
+    ssr: false, 
+    loading: () => <div className="p-8 text-muted-foreground">Loading subscription details...</div>
+  }
 )
+
+// Preload hook for better tab performance
+function useTabPreloading() {
+  useEffect(() => {
+    // Preload heavy tabs after initial render for faster transitions
+    const preloadTimer = setTimeout(() => {
+      import('@/components/settings/AppearanceTab').catch(() => {})
+      import('@/components/settings/SubscriptionTab').catch(() => {})
+    }, 1500) // Delay to not interfere with initial page load
+
+    return () => clearTimeout(preloadTimer)
+  }, [])
+}
+
+// Hover preloading for instant tab switches
+const preloadOnHover = (tabId: string) => {
+  if (tabId === 'appearance') {
+    import('@/components/settings/AppearanceTab').catch(() => {})
+  } else if (tabId === 'subscription') {
+    import('@/components/settings/SubscriptionTab').catch(() => {})
+  }
+}
+
+export default SettingsPage

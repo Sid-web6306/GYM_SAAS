@@ -88,7 +88,7 @@ export const useToastStore = create<ToastStore>((set, get) => ({
     // Show the toast
     const toastOptions = {
       description: state._sanitize(description),
-      duration: 8000,
+      duration: 3000,
     }
     
     switch (type) {

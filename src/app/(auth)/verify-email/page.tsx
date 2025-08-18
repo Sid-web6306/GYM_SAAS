@@ -1,7 +1,7 @@
 'use client'
 
-import { Suspense, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { OTPVerification } from '@/components/auth/OTPVerification'
 import { useAuth } from '@/hooks/use-auth'
@@ -9,20 +9,20 @@ import { Loader2, Building2 } from 'lucide-react'
 import { toastActions } from '@/stores/toast-store'
 
 const VerifyEmailContent = () => {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const { user, isLoading, isAuthenticated } = useAuth()
   
+  // Get email from URL params first (for unauthenticated users), then from user
   const email = searchParams.get('email') || user?.email || ''
 
-  // Redirect if user is already verified and authenticated
-  useEffect(() => {
-    if (!isLoading && isAuthenticated && user?.email_confirmed_at) {
-      console.log('Email already verified, redirecting to onboarding')
-      toastActions.success('Email Verified!', 'Your email is already verified.')
-      router.replace('/onboarding')
-    }
-  }, [isLoading, isAuthenticated, user, router])
+  // Don't show toast for already verified users - middleware will redirect them
+  // The OTPVerification component handles success toasts when verification completes
+
+  // Handle case where user is not authenticated but has email from URL
+  // This happens during login flow with unverified email
+  if (!isLoading && !isAuthenticated && email) {
+    console.log('🔧 VERIFY EMAIL: Unauthenticated user with email from URL:', email)
+  }
 
   // No need for custom callback - let component handle redirect
 
@@ -50,15 +50,14 @@ const VerifyEmailContent = () => {
     )
   }
 
-  // If no email available, redirect to signup
+  // If no email available, show error - middleware will handle redirect
   if (!email) {
     toastActions.error('Missing Email', 'No email address found. Please sign up again.')
-    router.replace('/signup')
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950">
         <div className="text-center">
           <Loader2 className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-          <p className="text-sm text-muted-foreground">Redirecting...</p>
+          <p className="text-sm text-muted-foreground">No email found. Redirecting...</p>
         </div>
       </div>
     )
