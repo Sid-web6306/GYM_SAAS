@@ -14,9 +14,10 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/hooks/use-auth'
 import { RequireAuth } from '@/components/auth/AuthGuard'
-import { useTrialInitialization } from '@/hooks/use-trial'
+
 import { useInviteVerification } from '@/hooks/use-invitations'
 import { useSearchParams } from 'next/navigation'
+import { InviteVerificationErrorBoundary } from '@/components/invites/InvitationErrorBoundary'
 
 // Enhanced submit button with improved loading states
 const SubmitButton = ({ isValid }: { isValid: boolean }) => {
@@ -32,12 +33,12 @@ const SubmitButton = ({ isValid }: { isValid: boolean }) => {
       {pending ? (
         <div className="flex items-center gap-3">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Setting up your gym...</span>
+          <span>Setting up your gym & starting trial...</span>
         </div>
       ) : (
         <div className="flex items-center gap-3">
           <Building2 className="h-5 w-5" />
-          <span>Complete Setup</span>
+          <span>Complete Setup & Start Trial</span>
         </div>
       )}
     </Button>
@@ -127,7 +128,7 @@ const GymSetupForm = ({ user, formAction }: {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Welcome to your Gym SaaS!</h2>
           <p className="text-gray-600 mt-2">
-            Let&apos;s set up your gym profile to get started.
+            Let&apos;s set up your gym profile and start your free trial.
           </p>
         </div>
       </div>
@@ -200,9 +201,12 @@ const GymSetupForm = ({ user, formAction }: {
       </form>
       
       {/* Help text */}
-      <div className="text-center">
+      <div className="text-center space-y-2">
         <p className="text-sm text-gray-500">
           You can always change your gym name later in settings.
+        </p>
+        <p className="text-xs text-blue-600">
+          🎉 Your 14-day free trial starts when you complete setup!
         </p>
       </div>
     </div>
@@ -230,7 +234,6 @@ const OnboardingContent = () => {
   const [state, formAction] = useActionState<AuthResult | null, FormData>(completeOnboarding, null)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { mutateAsync: initializeTrial, isIdle: trialNotStarted } = useTrialInitialization();
 
   // Get invite token from URL or user metadata
   const inviteToken = searchParams.get('invite') || user?.user_metadata?.pendingInviteToken || '';
@@ -243,6 +246,21 @@ const OnboardingContent = () => {
     error: inviteError,
     acceptInvitation
   } = useInviteVerification(inviteToken);
+
+  // Debug logging for invitation flow
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎯 ONBOARDING: Invitation state', {
+        hasInviteToken: !!inviteToken,
+        isValidInvite,
+        hasInvitation: !!invitation,
+        isVerifying: isVerifyingInvite,
+        error: inviteError,
+        userAuthenticated: !!user,
+        userEmail: user?.email
+      })
+    }
+  }, [inviteToken, isValidInvite, invitation, isVerifyingInvite, inviteError, user])
 
 
 
@@ -259,28 +277,8 @@ const OnboardingContent = () => {
     }
   }, [state])
 
-  // Detect and mark new users, initialize trial for new users
-  useEffect(() => {
-    if (user && trialNotStarted) {
-      // Check if this is a new user (account created recently)
-      const userCreatedAt = new Date(user.created_at);
-      const now = new Date();
-      const timeDiffMinutes = (now.getTime() - userCreatedAt.getTime()) / (1000 * 60);
-      const isNewUser = timeDiffMinutes < 30; // Consider new if created within 30 minutes
-      
-      if (isNewUser) {
-        console.log('Onboarding: Detected new user, marking as new')
-        // authUIActions.setIsNewUser(true)
-        
-        // Initialize trial subscription for new users
-        console.log('Onboarding: Initializing trial subscription for new user')
-        initializeTrial().catch((error) => {
-          console.error('Onboarding: Failed to initialize trial:', error)
-          // Don't block onboarding if trial initialization fails
-        })
-      }
-    }
-  }, [user, trialNotStarted]) // Removed initializeTrial to prevent multiple calls
+  // Note: Trial initialization now happens when user clicks "Complete Setup" 
+  // This ensures users actively choose to start their trial rather than auto-starting
 
   // Show loading state while auth is loading or verifying invite
   if (authLoading || (inviteToken && isVerifyingInvite)) {
@@ -298,15 +296,15 @@ const OnboardingContent = () => {
     )
   }
 
-  // Middleware handles redirect when hasGym = true, so this shouldn't render
-
-  // If we have a valid invitation, show invitation acceptance interface (even for unauthenticated users)
-  if (inviteToken && isValidInvite && invitation) {
+  // PRIORITY 1: If we have a valid invitation, ALWAYS show invitation acceptance interface 
+  // This takes precedence over gym setup flow to ensure invited users see invitation UI
+  if (inviteToken && !isVerifyingInvite && isValidInvite && invitation) {
     // If user is not authenticated, show invitation with login/signup options
     if (!user) {
       return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+        <InviteVerificationErrorBoundary>
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
             <CardHeader className="pb-6">
               <div className="flex items-center justify-center mb-4">
                 <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-green-600 rounded-xl flex items-center justify-center">
@@ -389,6 +387,7 @@ const OnboardingContent = () => {
             </CardContent>
           </Card>
         </div>
+        </InviteVerificationErrorBoundary>
       )
     }
 
@@ -409,8 +408,9 @@ const OnboardingContent = () => {
 
     // User is authenticated and email confirmed, show acceptance interface
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+      <InviteVerificationErrorBoundary>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm">
           <CardHeader className="pb-6">
             <div className="flex items-center justify-center mb-4">
               <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-green-600 rounded-xl flex items-center justify-center">
@@ -479,20 +479,21 @@ const OnboardingContent = () => {
               {/* Alternative Action */}
               <div className="text-center pt-4 border-t">
                 <p className="text-sm text-gray-600 mb-3">
-                  Want to create your own gym instead?
+                  Want to decline this invitation and create your own gym instead?
                 </p>
                 <Button 
                   variant="outline" 
                   onClick={() => router.push('/onboarding')}
                   className="cursor-pointer"
                 >
-                  Create My Own Gym
+                  Decline & Create My Own Gym
                 </Button>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
+      </InviteVerificationErrorBoundary>
     )
   }
 
@@ -558,6 +559,34 @@ const OnboardingContent = () => {
     )
   }
 
+  // SAFETY CHECK: If user has invitation token but somehow reached here, 
+  // it means invitation verification failed or is still loading
+  if (inviteToken && user) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('🚨 ONBOARDING: User has invite token but reached gym setup form - this should not happen', {
+        inviteToken: inviteToken.substring(0, 10) + '...',
+        isValidInvite,
+        hasInvitation: !!invitation,
+        inviteError
+      })
+    }
+    
+    // Show waiting state for invitation verification
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
+          <p className="text-gray-600">
+            Processing your invitation...
+          </p>
+          <p className="text-sm text-gray-500">
+            If this takes too long, please try refreshing the page.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   // Check if email is confirmed for authenticated users  
   const isEmailConfirmed = Boolean(user?.email_confirmed_at)
   const userEmail = user?.email || ''
@@ -573,11 +602,11 @@ const OnboardingContent = () => {
               </div>
             </div>
             <CardTitle className="text-center text-xl font-bold text-gray-900">
-              {isEmailConfirmed ? 'Complete Setup' : 'Email Verification'}
+              {isEmailConfirmed ? 'Complete Gym Setup' : 'Email Verification'}
             </CardTitle>
             <CardDescription className="text-center text-gray-600">
               {isEmailConfirmed 
-                ? 'Just one more step to get your gym management started'
+                ? 'Create your gym and start managing your members'
                 : 'We need to verify your email address first'
               }
             </CardDescription>

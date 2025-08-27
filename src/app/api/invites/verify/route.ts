@@ -78,17 +78,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User email is required' }, { status: 400 })
     }
 
-    logger.info('Accepting invitation via RPC', { userId: user.id, email: user.email })
+    // Normalize email to lowercase for consistent comparison
+    const normalizedEmail = user.email.toLowerCase().trim()
+
+    logger.info('Accepting invitation via RPC', { 
+      userId: user.id, 
+      email: user.email,
+      normalizedEmail 
+    })
 
     // Hash the token to match stored version
     const hashedToken = hashToken(token)
+
+    // Debug: Log the parameters being sent to RPC
+    logger.info('RPC parameters:', {
+      hashedToken: hashedToken.substring(0, 10) + '...',
+      userId: user.id,
+      userEmail: normalizedEmail,
+      originalEmail: user.email,
+      tokenLength: hashedToken.length
+    })
 
     // Call the secure RPC function for invitation acceptance
     const { data: acceptanceResult, error: rpcError } = await supabase
       .rpc('accept_invitation_by_hash', {
         hashed_token_param: hashedToken,
         user_id_param: user.id,
-        user_email_param: user.email
+        user_email_param: normalizedEmail
       })
 
     if (rpcError) {
@@ -108,7 +124,9 @@ export async function POST(request: NextRequest) {
       logger.warn('Invitation acceptance failed:', { 
         error: errorMessage, 
         userId: user.id,
-        email: user.email 
+        email: user.email,
+        details: acceptanceResult?.details,
+        fullResult: acceptanceResult 
       })
 
       return NextResponse.json({

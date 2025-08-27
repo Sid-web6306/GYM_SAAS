@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { checkUserPermission } from '@/actions/rbac.actions'
 import { logger } from '@/lib/logger'
 import { generateSecureToken, hashToken } from '@/lib/invite-utils'
+import { rateLimit } from '@/lib/sanitization'
 import type { GymRole } from '@/types/rbac.types'
 
 // Validation schemas
@@ -151,6 +152,16 @@ export async function POST(request: NextRequest) {
     
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Apply rate limiting (5 invitations per minute per user)
+    const rateLimitKey = `invite_create:${user.id}`
+    if (!rateLimit.check(rateLimitKey, 5, 60 * 1000)) {
+      logger.warn('Rate limit exceeded for invitation creation', { userId: user.id })
+      return NextResponse.json({ 
+        error: 'Too many invitation requests. Please wait before sending more invitations.',
+        code: 'RATE_LIMIT_EXCEEDED' 
+      }, { status: 429 })
     }
 
     // Get user's gym_id if not provided

@@ -9,7 +9,10 @@ import type {
   InvitationFilters,
   InvitationSummary
 } from '@/types/invite.types'
-import { useMemo } from 'react'
+import type { Database } from '@/types/supabase'
+import { useMemo, useCallback, useEffect } from 'react'
+import { logger } from '@/lib/logger'
+import { toastActions } from '@/stores/toast-store'
 
 // ========== QUERY KEYS ==========
 
@@ -89,7 +92,38 @@ export const useInvitations = (
     })
   }, [invitationsData?.invitations, filters])
 
-  // Create invitation mutation
+  // Enhanced error handling function
+  const handleInvitationError = useCallback((error: unknown, context: string) => {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+    
+    logger.error(`Invitation ${context} failed`, {
+      error: errorMessage,
+      context,
+      targetGymId,
+      timestamp: new Date().toISOString()
+    })
+
+    // Handle specific error types
+    if (errorMessage.includes('rate limit') || errorMessage.includes('too many')) {
+      toastActions.error('Rate Limited', 'Please wait before sending more invitations')
+      return
+    }
+    
+    if (errorMessage.includes('permission') || errorMessage.includes('unauthorized')) {
+      toastActions.error('Permission Denied', 'You don\'t have permission to perform this action')
+      return
+    }
+
+    if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+      toastActions.error('Connection Error', 'Please check your internet connection and try again')
+      return
+    }
+
+    // Generic error
+    toastActions.error('Operation Failed', errorMessage)
+  }, [targetGymId])
+
+  // Create invitation mutation with enhanced error handling
   const createMutation = useMutation({
     mutationFn: async (data: CreateInvitationRequest) => {
       const formData = new FormData()
@@ -108,9 +142,19 @@ export const useInvitations = (
         queryClient.invalidateQueries({ queryKey: invitationKeys.summary(targetGymId) })
       }
     },
+    onError: (error) => handleInvitationError(error, 'creation'),
+    retry: (failureCount, error) => {
+      // Retry network errors but not permission/validation errors
+      const errorMessage = error.message.toLowerCase()
+      if (errorMessage.includes('permission') || errorMessage.includes('validation') || errorMessage.includes('rate limit')) {
+        return false
+      }
+      return failureCount < 3
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000)
   })
 
-  // Revoke invitation mutation
+  // Revoke invitation mutation with enhanced error handling
   const revokeMutation = useMutation({
     mutationFn: async (invitationId: string) => {
       const formData = new FormData()
@@ -123,9 +167,17 @@ export const useInvitations = (
         queryClient.invalidateQueries({ queryKey: invitationKeys.summary(targetGymId) })
       }
     },
+    onError: (error) => handleInvitationError(error, 'revocation'),
+    retry: (failureCount, error) => {
+      const errorMessage = error.message.toLowerCase()
+      if (errorMessage.includes('permission') || errorMessage.includes('not found')) {
+        return false
+      }
+      return failureCount < 2
+    }
   })
 
-  // Resend invitation mutation
+  // Resend invitation mutation with enhanced error handling
   const resendMutation = useMutation({
     mutationFn: async (invitationId: string) => {
       const formData = new FormData()
@@ -137,7 +189,79 @@ export const useInvitations = (
         queryClient.invalidateQueries({ queryKey: invitationKeys.list(targetGymId) })
       }
     },
+    onError: (error) => handleInvitationError(error, 'resend'),
+    retry: (failureCount, error) => {
+      const errorMessage = error.message.toLowerCase()
+      if (errorMessage.includes('permission') || errorMessage.includes('rate limit') || errorMessage.includes('accepted')) {
+        return false
+      }
+      return failureCount < 2
+    }
   })
+
+  // Real-time updates via Supabase subscriptions
+  useEffect(() => {
+    if (!targetGymId) return
+
+    const supabase = createClient()
+    
+    // Subscribe to invitation changes for the current gym
+    const channel = supabase
+      .channel(`invitation-changes-${targetGymId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'gym_invitations',
+          filter: `gym_id=eq.${targetGymId}`
+        },
+        (payload) => {
+          // Type-safe payload handling using proper Supabase types
+          const newRecord = payload.new as Database['public']['Tables']['gym_invitations']['Row'] | null
+          const oldRecord = payload.old as Database['public']['Tables']['gym_invitations']['Row'] | null
+          
+          logger.info('Real-time invitation update received', {
+            event: payload.eventType,
+            invitationId: newRecord?.id || oldRecord?.id,
+            gymId: targetGymId
+          })
+
+          // Invalidate and refetch invitation queries
+          queryClient.invalidateQueries({ queryKey: invitationKeys.list(targetGymId) })
+          queryClient.invalidateQueries({ queryKey: invitationKeys.summary(targetGymId) })
+
+          // Show toast notification for certain events
+          if (payload.eventType === 'INSERT' && newRecord?.email) {
+            toastActions.info('New Invitation', `Invitation sent to ${newRecord.email}`)
+          } else if (payload.eventType === 'UPDATE' && newRecord?.status && newRecord?.email) {
+            const status = newRecord.status
+            const email = newRecord.email
+            
+            if (status === 'accepted') {
+              toastActions.success('Invitation Accepted', `${email} has joined the team!`)
+            } else if (status === 'expired') {
+              toastActions.warning('Invitation Expired', `Invitation to ${email} has expired`)
+            } else if (status === 'revoked') {
+              toastActions.info('Invitation Revoked', `Invitation to ${email} was revoked`)
+            }
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          logger.info('Subscribed to invitation updates', { gymId: targetGymId })
+        } else if (status === 'CHANNEL_ERROR') {
+          logger.error('Error subscribing to invitation updates', { gymId: targetGymId })
+        }
+      })
+
+    // Cleanup subscription on unmount
+    return () => {
+      logger.info('Unsubscribing from invitation updates', { gymId: targetGymId })
+      supabase.removeChannel(channel)
+    }
+  }, [targetGymId, queryClient])
 
   return {
     invitations,
