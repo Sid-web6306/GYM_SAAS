@@ -13,14 +13,16 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+
+import { 
+  ResponsiveTable, 
+  ResponsiveTableHeader, 
+  ResponsiveTableBody, 
+  ResponsiveTableRow, 
+  ResponsiveTableCell,
+  ResponsiveTableActionsCell,
+  ResponsiveTableSkeleton
+} from '@/components/ui/responsive-table'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -507,56 +509,33 @@ const MembersPage = () => {
             </div>
           </div>
           
-          {/* Table */}
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[200px]">Name</TableHead>
-                  <TableHead className="w-[250px]">Email</TableHead>
-                  <TableHead className="w-[180px]">Phone</TableHead>
-                  <TableHead className="w-[140px]">Join Date</TableHead>
-                  <TableHead className="w-[120px]">Status</TableHead>
-                  <TableHead className="text-right w-[80px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          {/* Responsive Table */}
+          <ResponsiveTable>
+            <ResponsiveTableHeader>
+              <ResponsiveTableRow>
+                <ResponsiveTableCell>Name</ResponsiveTableCell>
+                <ResponsiveTableCell>Email</ResponsiveTableCell>
+                <ResponsiveTableCell>Phone</ResponsiveTableCell>
+                <ResponsiveTableCell>Join Date</ResponsiveTableCell>
+                <ResponsiveTableCell>Status</ResponsiveTableCell>
+                <ResponsiveTableCell className="text-right">Actions</ResponsiveTableCell>
+              </ResponsiveTableRow>
+            </ResponsiveTableHeader>
+            <ResponsiveTableBody>
                 {membersLoading ? (
-                  // Loading skeleton
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="py-4">
-                        <div className="h-4 bg-gray-200 rounded animate-pulse w-32"></div>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <div className="h-4 bg-gray-200 rounded animate-pulse w-48"></div>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <div className="h-4 bg-gray-200 rounded animate-pulse w-32"></div>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <div className="h-6 bg-gray-200 rounded animate-pulse w-16"></div>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <div className="h-8 bg-gray-200 rounded animate-pulse w-8 ml-auto"></div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  <ResponsiveTableSkeleton rows={5} columns={6} />
                 ) : members.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-16">
-                      <div className="flex flex-col items-center gap-4">
-                        <Users className="h-16 w-16 text-muted-foreground opacity-50" />
-                        <div className="space-y-2">
-                          <h3 className="text-lg font-semibold">
+                  <ResponsiveTableRow>
+                    <ResponsiveTableCell colSpan={6} className="h-96">
+                      <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
+                        <Users className="h-20 w-20 text-muted-foreground opacity-40" />
+                        <div className="space-y-3">
+                          <h3 className="text-xl font-semibold text-gray-900">
                             {searchQuery || statusFilter 
                               ? 'No members found' 
                               : 'No members yet'}
                           </h3>
-                          <p className="text-muted-foreground max-w-sm">
+                          <p className="text-muted-foreground text-lg max-w-sm mx-auto">
                             {searchQuery || statusFilter
                               ? 'Try adjusting your search or filters'
                               : 'Get started by adding your first member'}
@@ -564,28 +543,35 @@ const MembersPage = () => {
                         </div>
                         {!searchQuery && !statusFilter && (
                           <MemberManagementGuard action="create" fallback={
-                            <div className="text-center py-8">
+                            <div className="text-center py-4">
                               <AccessDenied 
                                 message="You need staff privileges or above to add members. Contact your gym manager to request access." 
                               />
                             </div>
                           }>
-                            <Button onClick={() => setAddDialogOpen(true)}>
-                              <UserPlus className="h-4 w-4 mr-2" />
+                            <Button onClick={() => setAddDialogOpen(true)} size="lg" className="mt-4">
+                              <UserPlus className="h-5 w-5 mr-2" />
                               Add Your First Member
                             </Button>
                           </MemberManagementGuard>
                         )}
                       </div>
-                    </TableCell>
-                  </TableRow>
+                    </ResponsiveTableCell>
+                  </ResponsiveTableRow>
                 ) : (
                   members.map((member) => (
-                    <TableRow key={member.id} className="hover:bg-muted/50">
-                      <TableCell className="font-medium py-4">
+                    <ResponsiveTableRow key={member.id}>
+                      <ResponsiveTableCell 
+                        label="Name" 
+                        className="font-medium"
+                        mobileOrder={1}
+                      >
                         {member.first_name} {member.last_name}
-                      </TableCell>
-                      <TableCell className="py-4">
+                      </ResponsiveTableCell>
+                      <ResponsiveTableCell 
+                        label="Email"
+                        mobileOrder={2}
+                      >
                         {member.email ? (
                           <div className="flex items-center gap-2">
                             <Mail className="h-4 w-4 text-muted-foreground" />
@@ -594,8 +580,11 @@ const MembersPage = () => {
                         ) : (
                           <span className="text-muted-foreground text-sm">No email</span>
                         )}
-                      </TableCell>
-                      <TableCell className="py-4">
+                      </ResponsiveTableCell>
+                      <ResponsiveTableCell 
+                        label="Phone"
+                        mobileOrder={3}
+                      >
                         {member.phone_number ? (
                           <div className="flex items-center gap-2">
                             <Phone className="h-4 w-4 text-muted-foreground" />
@@ -604,17 +593,23 @@ const MembersPage = () => {
                         ) : (
                           <span className="text-muted-foreground text-sm">No phone</span>
                         )}
-                      </TableCell>
-                      <TableCell className="py-4">
+                      </ResponsiveTableCell>
+                      <ResponsiveTableCell 
+                        label="Join Date"
+                        mobileOrder={4}
+                      >
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm">{formatDate(member.join_date)}</span>
                         </div>
-                      </TableCell>
-                      <TableCell className="py-4">
+                      </ResponsiveTableCell>
+                      <ResponsiveTableCell 
+                        label="Status"
+                        mobileOrder={5}
+                      >
                         {getStatusBadge(member.status)}
-                      </TableCell>
-                      <TableCell className="text-right py-4">
+                      </ResponsiveTableCell>
+                      <ResponsiveTableActionsCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
@@ -652,13 +647,12 @@ const MembersPage = () => {
                             </MemberManagementGuard>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                      </ResponsiveTableActionsCell>
+                    </ResponsiveTableRow>
                   ))
                 )}
-              </TableBody>
-            </Table>
-          </div>
+            </ResponsiveTableBody>
+          </ResponsiveTable>
 
           {/* Pagination */}
           {totalCount > pageSize && (

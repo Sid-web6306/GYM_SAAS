@@ -7,6 +7,7 @@ import { checkUserPermission } from '@/actions/rbac.actions'
 import { generateSecureToken, hashToken, calculateExpirationTime, generateInviteUrl } from '@/lib/invite-utils'
 import { sendInvitationEmail as sendEmail } from '@/lib/email-service'
 import { logger } from '@/lib/logger'
+import { rateLimit } from '@/lib/sanitization'
 
 
 // ========== VALIDATION SCHEMAS ==========
@@ -48,15 +49,30 @@ export async function createInvitation(formData: FormData): Promise<CreateInvite
       return { success: false, error: 'Authentication required' }
     }
 
+    // Apply rate limiting (3 invitations per minute per user via server actions)
+    const rateLimitKey = `invite_action:${user.id}`
+    if (!rateLimit.check(rateLimitKey, 3, 60 * 1000)) {
+      logger.warn('Rate limit exceeded for invitation server action', { userId: user.id })
+      return { 
+        success: false, 
+        error: 'Too many invitation requests. Please wait before sending more invitations.' 
+      }
+    }
+
     // Validate form data
-    const validatedData = createInviteSchema.parse({
+    const rawData = {
       email: formData.get('email'),
       role: formData.get('role'),
       gym_id: formData.get('gym_id') || undefined,
       expires_in_hours: parseInt(formData.get('expires_in_hours') as string || '72'),
       message: formData.get('message') || undefined,
       notify_user: formData.get('notify_user') === 'true'
-    })
+    }
+
+    const validatedData = createInviteSchema.parse(rawData)
+    
+    // Normalize email to lowercase for consistent storage
+    validatedData.email = validatedData.email.toLowerCase().trim()
 
     // Get user's gym_id if not provided
     let targetGymId: string | undefined = validatedData.gym_id
@@ -122,8 +138,14 @@ export async function createInvitation(formData: FormData): Promise<CreateInvite
     // Generate secure token and expiration
     const token = generateSecureToken()
     const expiresAt = calculateExpirationTime(validatedData.expires_in_hours)
-    logger.info("RAW TOKEN (sent in email):", {token})
-    logger.info("HASH STORED:", {hashtokenvalue: hashToken(token)})
+    
+    // Log invitation creation (never log raw tokens for security)
+    logger.info("Creating invitation", { 
+      email: validatedData.email, 
+      role: validatedData.role,
+      gymId: targetGymId,
+      expiresAt 
+    })
 
     // Create invitation
     const { data: invitation, error: createError } = await supabase

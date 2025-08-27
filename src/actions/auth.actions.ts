@@ -132,6 +132,17 @@ export async function completeOnboarding(
       return { error: 'Failed to create gym. Please try again.' }
     }
 
+    // Initialize trial subscription after successful gym creation
+    const { error: trialError } = await supabase.rpc('initialize_trial_subscription', {
+      p_user_id: user.id
+    })
+
+    if (trialError) {
+      console.error('Trial initialization error:', trialError)
+      // Don't fail the onboarding if trial init fails, just log it
+      // The user can still use the system and start trial later
+    }
+
     shouldRedirectToDashboard = true
   } catch (error) {
     console.error('Onboarding error:', error)

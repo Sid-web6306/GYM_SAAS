@@ -26,6 +26,8 @@ import { z } from "zod";
 import { useAuth } from '@/hooks/use-auth';
 import { toastActions } from "@/stores/toast-store";
 import { withSuspense } from "@/components/providers/suspense-provider";
+import { useInviteVerification } from "@/hooks/use-invitations";
+import { Building2, Users, AlertCircle } from "lucide-react";
 
 // Zod schema for client-side validation (passwordless)
 const SignupSchema = z.object({
@@ -39,15 +41,19 @@ const SocialButton = ({
   provider, 
   onClick, 
   isLoading, 
-  disabled 
+  disabled,
+  hasInvitation = false
 }: { 
   provider: 'google' | 'facebook';
   onClick: () => void;
   isLoading: boolean;
   disabled: boolean;
+  hasInvitation?: boolean;
 }) => {
   const Icon = provider === 'google' ? FcGoogle : FaFacebook;
-  const text = `Continue with ${provider === 'google' ? 'Google' : 'Facebook'}`;
+  const text = hasInvitation 
+    ? `Accept invitation with ${provider === 'google' ? 'Google' : 'Facebook'}`
+    : `Continue with ${provider === 'google' ? 'Google' : 'Facebook'}`;
   const bgColor = provider === 'google' ? 'bg-white' : 'bg-blue-600';
   const textColor = provider === 'google' ? 'text-gray-700' : 'text-white';
   const borderColor = provider === 'google' ? 'border-gray-300' : 'border-blue-600';
@@ -87,6 +93,14 @@ const SignUpPageComponent = () => {
   // Get invitation token from search params
   const inviteToken = searchParams.get('invite') || '';
   console.log('inviteToken', inviteToken)
+  
+  // Verify invitation if token exists
+  const {
+    invitation,
+    isValid: isValidInvite,
+    isLoading: isVerifyingInvite,
+    error: inviteError
+  } = useInviteVerification(inviteToken);
   
   // Use TanStack Query hooks for auth state
   const { isAuthenticated, isLoading } = useAuth();
@@ -204,8 +218,8 @@ const SignUpPageComponent = () => {
     }
   };
 
-  // Show loading while checking authentication
-  if (isLoading || isAuthenticated) {
+  // Show loading while checking authentication or verifying invitation
+  if (isLoading || isAuthenticated || (inviteToken && isVerifyingInvite)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
@@ -213,9 +227,42 @@ const SignUpPageComponent = () => {
           <p className="text-sm text-muted-foreground">
             {isAuthenticated 
               ? 'Redirecting to dashboard...' 
+              : inviteToken && isVerifyingInvite
+              ? 'Verifying your invitation...'
               : 'Loading...'}
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // Show error if invite token is invalid
+  if (inviteToken && !isVerifyingInvite && (!isValidInvite || inviteError)) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Invalid Invitation</h2>
+                <p className="text-gray-600 mt-2">
+                  {inviteError || 'This invitation link is invalid or has expired.'}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button onClick={() => window.location.href = '/signup'} className="w-full">
+                  Continue with Regular Signup
+                </Button>
+                <Button variant="outline" onClick={() => window.location.href = '/'} className="w-full">
+                  Go to Homepage
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -226,12 +273,49 @@ const SignUpPageComponent = () => {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
-      <Card className="mx-auto max-w-sm w-full">
+      <Card className="mx-auto max-w-md w-full">
         <CardHeader>
-          <CardTitle className="text-xl">Create your account</CardTitle>
-          <CardDescription>Choose your preferred sign up method</CardDescription>
+          <CardTitle className="text-xl">
+            {inviteToken && isValidInvite && invitation ? 'Join Team' : 'Create your account'}
+          </CardTitle>
+          <CardDescription>
+            {inviteToken && isValidInvite && invitation 
+              ? `Create your account to join ${invitation.gym.name}`
+              : 'Choose your preferred sign up method'
+            }
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          
+          {/* Invitation Details */}
+          {inviteToken && isValidInvite && invitation && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-blue-600" />
+                  <span className="font-semibold text-blue-900">{invitation.gym.name}</span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm text-gray-600">Role:</span>
+                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium capitalize">
+                    {invitation.role}
+                  </span>
+                </div>
+                
+                <div className="text-sm text-gray-600">
+                  Invited by: <span className="font-medium">{invitation.invited_by.name}</span>
+                </div>
+                
+                {invitation.message && (
+                  <div className="mt-3 p-3 bg-white border border-blue-200 rounded text-gray-700 italic text-sm">
+                    &ldquo;{invitation.message}&rdquo;
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {/* Social Login Buttons */}
           <div className="grid grid-cols-1 gap-4">
             <SocialButton
@@ -239,6 +323,7 @@ const SignUpPageComponent = () => {
               onClick={() => handleSocialLogin('google')}
               isLoading={socialLoading.google}
               disabled={isSocialButtonDisabled}
+              hasInvitation={!!(inviteToken && isValidInvite && invitation)}
             />
             {/* <SocialButton
               provider="facebook"
@@ -286,6 +371,8 @@ const SignUpPageComponent = () => {
                     <Loader2 className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
                     Creating Account...
                   </>
+                ) : inviteToken && isValidInvite && invitation ? (
+                  "Create Account & Accept Invitation"
                 ) : (
                   "Sign up with Email"
                 )}
@@ -295,16 +382,27 @@ const SignUpPageComponent = () => {
 
           { inviteToken && <div className="mt-4 text-center text-sm">
             Already have an account?{" "}
-            <Link href="/login" className="underline">
-              Log in
+            <Link 
+              href={`/login${inviteToken ? `?invite=${inviteToken}` : ''}`} 
+              className="underline"
+            >
+              Log in to accept invitation
             </Link>
           </div>}
 
-          <div className="mt-2 text-center text-sm">
-            <Link href="/" className="underline">
-              Go to home page
-            </Link>
-          </div>
+          {!inviteToken && (
+            <div className="mt-2 text-center text-sm">
+              <Link href="/" className="underline">
+                Go to home page
+              </Link>
+            </div>
+          )}
+          
+          {inviteToken && isValidInvite && invitation && (
+            <div className="mt-4 text-center text-sm text-gray-600">
+              <p>By creating an account, you&apos;ll automatically accept the invitation to join {invitation.gym.name}.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

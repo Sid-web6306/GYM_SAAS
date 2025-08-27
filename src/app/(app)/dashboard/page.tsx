@@ -193,24 +193,28 @@ const DashboardPage = () => {
   }
 
   return (
-    <div className="space-y-8 p-6 md:p-8">
+    <div className="space-y-6 sm:space-y-8 p-4 sm:p-6 md:p-8">
       {/* Enhanced Header with Session Info */}
       <DashboardHeader
         title={`Welcome back, ${profile?.full_name || 'User'}!`}
         subtitle={`Here's what's happening with your gym today${process.env.NODE_ENV === 'development' ? ` • Session: ${sessionId || 'N/A'}` : ''}`}
       >
-        <Link href="/members">
-          <Button>
-            <UserPlus className="h-4 w-4 mr-2" />
-            Add Members
-          </Button>
-        </Link>
-        <Link href="/settings">
-          <Button variant="outline">
-            <Settings className="h-4 w-4 mr-2" />
-            Settings
-          </Button>
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Link href="/members">
+            <Button className="w-full sm:w-auto">
+              <UserPlus className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Add Members</span>
+              <span className="sm:hidden">Add</span>
+            </Button>
+          </Link>
+          <Link href="/settings">
+            <Button variant="outline" className="w-full sm:w-auto">
+              <Settings className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Settings</span>
+              <span className="sm:hidden">Settings</span>
+            </Button>
+          </Link>
+        </div>
       </DashboardHeader>
 
       {/* Welcome Message */}
@@ -246,8 +250,8 @@ const DashboardPage = () => {
         </Card>
       )}
 
-      {/* Enhanced Stats Cards with Session Health */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      {/* Enhanced Stats Cards with Session Health - Mobile Optimized */}
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {statsLoading || isRefreshing ? (
           <>
             <StatsCardSkeleton />
@@ -330,7 +334,7 @@ const DashboardPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
               <div>
                 <span className="font-medium">Session ID:</span>
                 <p className="text-muted-foreground truncate">{sessionId || 'N/A'}</p>
@@ -358,8 +362,8 @@ const DashboardPage = () => {
         </Card>
       )}
 
-      {/* Charts Section */}
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* Charts Section - Mobile Optimized */}
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
         {analyticsLoading ? (
           <>
             <ChartSkeleton />
@@ -469,7 +473,7 @@ const DashboardPage = () => {
             </p>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
               <div className="text-center p-4 rounded-lg bg-muted/50">
                 <div className="text-2xl font-bold text-primary">
                 {(stats?.memberRetentionRate ?? 0).toFixed(1)}%
