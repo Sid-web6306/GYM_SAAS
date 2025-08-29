@@ -34,6 +34,11 @@ export function createClient() {
     {
       cookies: {
         get(name: string) {
+          // Only access document in browser environment
+          if (typeof document === 'undefined') {
+            return undefined
+          }
+          
           // Use environment-specific cookie names
           const envName = `${envPrefix}-${name}`
           return document.cookie
@@ -44,6 +49,11 @@ export function createClient() {
             .join('=')
         },
         set(name: string, value: string, options: CookieOptions) {
+          // Only access document in browser environment
+          if (typeof document === 'undefined') {
+            return
+          }
+          
           // Use environment-specific cookie names
           const envName = `${envPrefix}-${name}`
           let cookieString = `${envName}=${value}`
@@ -71,6 +81,11 @@ export function createClient() {
           console.log(`Cookie set: ${envName} (environment: ${envPrefix})`)
         },
         remove(name: string, options: CookieOptions) {
+          // Only access document in browser environment
+          if (typeof document === 'undefined') {
+            return
+          }
+          
           // Use environment-specific cookie names
           const envName = `${envPrefix}-${name}`
           let cookieString = `${envName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT`
