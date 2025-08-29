@@ -303,18 +303,18 @@ export async function middleware(request: NextRequest) {
         return response
       }
 
-      // For root path, redirect based on onboarding status
-      if (pathname === '/') {
-        const redirectPath = hasGym ? '/dashboard' : '/onboarding'
-        const redirectUrl = new URL(redirectPath, request.url)
-        if (hasInviteToken) {
-          redirectUrl.searchParams.set('invite', inviteToken)
-        }
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔧 MIDDLEWARE: Redirecting root path to:', redirectPath, { hasInviteToken })
-        }
-        return NextResponse.redirect(redirectUrl)
-      }
+      // // For root path, redirect based on onboarding status
+      // if (pathname === '/') {
+      //   const redirectPath = hasGym ? '/dashboard' : '/onboarding'
+      //   const redirectUrl = new URL(redirectPath, request.url)
+      //   if (hasInviteToken) {
+      //     redirectUrl.searchParams.set('invite', inviteToken)
+      //   }
+      //   if (process.env.NODE_ENV === 'development') {
+      //     console.log('🔧 MIDDLEWARE: Redirecting root path to:', redirectPath, { hasInviteToken })
+      //   }
+      //   return NextResponse.redirect(redirectUrl)
+      // }
     }
 
     // Allow all other routes
