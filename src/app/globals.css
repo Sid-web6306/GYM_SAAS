@@ -82,6 +82,14 @@
 /* Theme transition support */
 html {
   transition: background-color 0.2s ease, color 0.2s ease;
+  scroll-behavior: smooth;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 /* Blue Theme */
@@ -326,5 +334,87 @@ html.rose {
 
   [data-sonner-toaster] [data-sonner-toast]:nth-child(3) {
     @apply !z-[98] !scale-[0.96] !opacity-80;
+  }
+  
+  /* Touch manipulation for better mobile performance */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Safe area insets for iOS devices */
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  
+  /* Dynamic viewport height for mobile browsers */
+  .h-\[100dvh\] {
+    height: 100vh;
+    height: 100dvh;
+  }
+  
+  /* Overscroll behavior for better mobile experience */
+  .overscroll-contain {
+    overscroll-behavior: contain;
+  }
+  
+  /* Enhanced mobile menu animations */
+  .slide-in-from-right {
+    animation: slideInFromRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  @keyframes slideInFromRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  
+  /* Active states for mobile touch */
+  .active\:text-purple-400:active {
+    color: rgb(196 181 253);
+  }
+  
+  .active\:bg-white\/10:active {
+    background-color: rgb(255 255 255 / 0.1);
+  }
+  
+  .active\:from-purple-700:active {
+    --tw-gradient-from: rgb(109 40 217);
+  }
+  
+  .active\:to-pink-700:active {
+    --tw-gradient-to: rgb(190 24 93);
+  }
+  
+  .active\:bg-white:active {
+    background-color: rgb(255 255 255);
+  }
+  
+  .active\:text-slate-900:active {
+    color: rgb(15 23 42);
+  }
+  
+  /* Animation delays that respect motion preferences */
+  @media (prefers-reduced-motion: no-preference) {
+    .motion-safe\:delay-500 {
+      animation-delay: 500ms;
+    }
+    
+    .motion-safe\:delay-1000 {
+      animation-delay: 1000ms;
+    }
+    
+    .motion-safe\:delay-2000 {
+      animation-delay: 2000ms;
+    }
+    
+    .motion-safe\:delay-3000 {
+      animation-delay: 3000ms;
+    }
   }
 }
