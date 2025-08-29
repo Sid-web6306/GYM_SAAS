@@ -33,7 +33,6 @@ interface AdaptiveNavigationProps {
 export function AdaptiveNavigation({ className }: AdaptiveNavigationProps) {
   const { isAuthenticated, hasGym, isLoading, user, profile } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [scrollPosition, setScrollPosition] = useState(0)
   const router = useRouter()
   const supabase = createClient()
 
@@ -58,62 +57,19 @@ export function AdaptiveNavigation({ className }: AdaptiveNavigationProps) {
     }
   }
 
-  // Handle body scroll locking with iOS Safari compatibility
+  // Handle escape key to close mobile menu
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && isMobileMenuOpen) {
         closeMobileMenu()
       }
     }
     
     if (isMobileMenuOpen) {
-      // Save current scroll position
-      const currentScrollY = window.scrollY
-      setScrollPosition(currentScrollY)
-      
-      // Lock body scroll with iOS Safari compatibility
-      document.body.style.position = 'fixed'
-      document.body.style.top = `-${currentScrollY}px`
-      document.body.style.width = '100%'
-      document.body.style.overflow = 'hidden'
-      
-      // Add event listener
-      document.addEventListener('keydown', handleEscape)
-      
-      // Prevent scrolling on iOS when menu is open
-      const preventDefault = (e: TouchEvent) => {
-        if (e.touches.length > 1) return // Allow pinch-to-zoom
-        e.preventDefault()
-      }
-      document.addEventListener('touchmove', preventDefault, { passive: false })
-      
-      return () => {
-        document.removeEventListener('keydown', handleEscape)
-        document.removeEventListener('touchmove', preventDefault)
-      }
-    } else {
-      // Restore body scroll
-      document.body.style.position = ''
-      document.body.style.top = ''
-      document.body.style.width = ''
-      document.body.style.overflow = ''
-      
-      // Restore scroll position
-      if (scrollPosition > 0) {
-        window.scrollTo(0, scrollPosition)
-      }
+      window.addEventListener('keydown', handleEscape)
+      return () => window.removeEventListener('keydown', handleEscape)
     }
-  }, [isMobileMenuOpen, scrollPosition, closeMobileMenu])
-
-  // Close mobile menu on route change
-  useEffect(() => {
-    return () => {
-      document.body.style.position = ''
-      document.body.style.top = ''
-      document.body.style.width = ''
-      document.body.style.overflow = ''
-    }
-  }, [])
+  }, [isMobileMenuOpen, closeMobileMenu])
 
   // Navigation links
   const navLinks = [
