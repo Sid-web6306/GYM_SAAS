@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
+import { useRBAC } from "@/hooks/use-rbac"
 import { Skeleton } from "@/components/ui/skeleton"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import {
@@ -20,7 +21,8 @@ import {
   ChevronDown,
   LogOut,
   LayoutDashboard,
-  Dumbbell
+  Dumbbell,
+  Smartphone
 } from "lucide-react"
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from '@/utils/supabase/client'
@@ -32,6 +34,7 @@ interface AdaptiveNavigationProps {
 
 export function AdaptiveNavigation({ className }: AdaptiveNavigationProps) {
   const { isAuthenticated, hasGym, isLoading, user, profile } = useAuth()
+  const rbac = useRBAC()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const router = useRouter()
   const supabase = createClient()
@@ -166,6 +169,20 @@ export function AdaptiveNavigation({ className }: AdaptiveNavigationProps) {
                         <span>{hasGym ? "Dashboard" : "Complete Setup"}</span>
                       </Link>
                     </DropdownMenuItem>
+                    
+                    {/* Member Portal Link */}
+                    {rbac?.role === 'member' && (
+                      <DropdownMenuItem asChild>
+                        <Link 
+                          href="/portal" 
+                          className="flex items-center cursor-pointer"
+                        >
+                          <Smartphone className="mr-2 h-4 w-4" />
+                          <span>Member Portal</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                    
                     <DropdownMenuSeparator />
                     <DropdownMenuItem 
                       onClick={handleLogout}

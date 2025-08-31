@@ -66,6 +66,7 @@ export type Database = {
           last_name: string | null
           phone_number: string | null
           status: string | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -77,6 +78,7 @@ export type Database = {
           last_name?: string | null
           phone_number?: string | null
           status?: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -88,6 +90,7 @@ export type Database = {
           last_name?: string | null
           phone_number?: string | null
           status?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1096,6 +1099,51 @@ export type Database = {
           p_check_in_at: string
           p_check_out_at?: string | null
           p_notes?: string | null
+        }
+        Returns: Database['public']['Tables']['attendance_sessions']['Row']
+      }
+      get_member_by_user_id: {
+        Args: {
+          p_user_id: string
+          p_gym_id?: string | null
+        }
+        Returns: Database['public']['Tables']['members']['Row']
+      }
+      get_member_current_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          is_checked_in: boolean
+          session_id: string | null
+          check_in_at: string | null
+          total_seconds: number | null
+        }[]
+      }
+      get_my_member_attendance: {
+        Args: {
+          p_from?: string | null
+          p_to?: string | null
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          session_id: string
+          check_in_at: string
+          check_out_at: string | null
+          total_seconds: number
+          method: string | null
+          notes: string | null
+        }[]
+      }
+      member_check_in: {
+        Args: {
+          p_method?: string
+          p_notes?: string | null
+        }
+        Returns: Database['public']['Tables']['attendance_sessions']['Row']
+      }
+      member_check_out: {
+        Args: {
+          p_checkout_at?: string | null
         }
         Returns: Database['public']['Tables']['attendance_sessions']['Row']
       }

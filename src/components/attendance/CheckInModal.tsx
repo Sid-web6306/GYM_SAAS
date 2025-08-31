@@ -69,7 +69,7 @@ export function CheckInModal({ isOpen, onClose, type }: CheckInModalProps) {
   const startAttendance = useStartAttendance(gymId)
   
   const filteredData = type === 'member' 
-    ? (membersData?.members || []).filter((m: Member) => 
+    ? (membersData?.members || []).filter((m) => 
         m.status === 'active' && (
           `${m.first_name || ''} ${m.last_name || ''}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
           (m.email || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -196,7 +196,7 @@ export function CheckInModal({ isOpen, onClose, type }: CheckInModalProps) {
                   {searchTerm && <p className="text-sm">Try a different search term</p>}
                 </div>
               ) : (
-                filteredData.map((person: Member | StaffMember) => (
+                filteredData.map((person) => (
                   <div
                     key={person.id}
                     onClick={() => handlePersonSelect(person)}

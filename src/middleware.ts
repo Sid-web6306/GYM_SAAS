@@ -140,10 +140,12 @@ export async function middleware(request: NextRequest) {
     const authRoutes = ['/login', '/signup', '/verify-email', '/confirm-email']
     const appRoutes = ['/dashboard', '/members', '/staff', '/attendance', '/settings', '/team', '/upgrade']
     const publicRoutes = ['/', '/contact', '/privacy-policy', '/terms-of-service', '/refund-policy']
+    const portalRoutes = ['/portal'] // Member portal routes
     const inviteRoutes = ['/invite', '/accept-invitation'] // Future-proof for dedicated invite pages
     
     const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
     const isAppRoute = appRoutes.some(route => pathname.startsWith(route))
+    const isPortalRoute = portalRoutes.some(route => pathname.startsWith(route))
     const isOnboardingRoute = pathname.startsWith('/onboarding')
     const isInviteRoute = inviteRoutes.some(route => pathname.startsWith(route))
     const isPublicRoute = publicRoutes.includes(pathname)
@@ -293,15 +295,87 @@ export async function middleware(request: NextRequest) {
         
         // Allow access to app routes
         return response
-      }
+    }
 
-      // Allow access to future dedicated invite routes
-      if (isInviteRoute) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔧 MIDDLEWARE: Allowing access to invite route for authenticated user')
-        }
-        return response
+    // Handle portal routes (member-specific)
+    if (isPortalRoute) {
+      // Portal routes require authentication and member role
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔧 MIDDLEWARE: Processing portal route access')
       }
+      
+      // Check if user has member role in this gym
+      try {
+        // Get user's gym_id from profiles table first
+        const { data: userProfile, error: profileError } = await supabase
+          .from('profiles')
+          .select('gym_id')
+          .eq('id', user.id)
+          .single()
+        
+        if (profileError || !userProfile?.gym_id) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔧 MIDDLEWARE: No gym_id found for user, redirecting to dashboard')
+          }
+          const dashboardUrl = new URL('/dashboard', request.url)
+          dashboardUrl.searchParams.set('message', 'no_gym')
+          return NextResponse.redirect(dashboardUrl)
+        }
+        
+        // Query user_roles table to check role
+        const { data: userRole, error: roleError } = await supabase
+          .from('user_roles')
+          .select(`
+            role_id,
+            roles(name)
+          `)
+          .eq('user_id', user.id)
+          .eq('gym_id', userProfile.gym_id)
+          .eq('is_active', true)
+          .single()
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔧 MIDDLEWARE: Portal role check:', { 
+            userRole, 
+            roleError: roleError?.message,
+            gymId: userProfile.gym_id 
+          })
+        }
+        
+        // Only allow access if user has 'member' role
+        const roleName = (userRole?.roles as { name: string }[])?.[0]?.name
+        if (roleName === 'member') {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔧 MIDDLEWARE: Allowing portal access - user is member')
+          }
+          return response
+        } else {
+          // Redirect non-members to dashboard with message
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔧 MIDDLEWARE: Redirecting non-member from portal to dashboard')
+          }
+          const dashboardUrl = new URL('/dashboard', request.url)
+          dashboardUrl.searchParams.set('message', 'portal_access_denied')
+          return NextResponse.redirect(dashboardUrl)
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('🔧 MIDDLEWARE: Portal role check error:', error)
+        }
+        // On error, redirect to dashboard for safety
+        const dashboardUrl = new URL('/dashboard', request.url)
+        dashboardUrl.searchParams.set('message', 'portal_error')
+        return NextResponse.redirect(dashboardUrl)
+      }
+    }
+
+    // Allow access to future dedicated invite routes
+    if (isInviteRoute) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔧 MIDDLEWARE: Allowing access to invite route for authenticated user')
+      }
+      return response
+    }
 
       // // For root path, redirect based on onboarding status
       // if (pathname === '/') {
