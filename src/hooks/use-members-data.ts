@@ -43,19 +43,9 @@ function isAuthenticationError(error: unknown): boolean {
   return false
 }
 
-// Types
-export interface Member {
-  id: string
-  first_name: string | null
-  last_name: string | null
-  email: string | null
-  phone_number: string | null
-  status: string | null
-  join_date: string | null
-  gym_id: string
-  created_at: string
-  updated_at?: string
-}
+// Types (re-export from member.types.ts for consistency)
+export type { Member, MemberStatus } from '@/types/member.types'
+import type { Member } from '@/types/member.types'
 
 export interface MemberActivity {
   id: string

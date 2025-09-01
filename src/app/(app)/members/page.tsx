@@ -73,13 +73,15 @@ import {
   UserCheck,
   UserX,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Smartphone
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { MemberManagementGuard, AnalyticsGuard, AccessDenied } from '@/components/rbac/rbac-guards'
+import { MemberPortalInvite } from '@/components/members/MemberPortalInvite'
 
 // Form schema
 const memberSchema = z.object({
@@ -600,7 +602,7 @@ const MembersPage = () => {
                       >
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">{formatDate(member.join_date)}</span>
+                          <span className="text-sm">{formatDate(member.join_date || null)}</span>
                         </div>
                       </ResponsiveTableCell>
                       <ResponsiveTableCell 
@@ -620,6 +622,19 @@ const MembersPage = () => {
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
+                            
+                            {/* Portal Status Indicator */}
+                            {member.user_id ? (
+                              <DropdownMenuItem disabled className="text-green-600">
+                                <Smartphone className="h-4 w-4 mr-2" />
+                                Portal Access Active
+                              </DropdownMenuItem>
+                            ) : (
+                              <MemberPortalInvite member={member} onSuccess={() => refetchMembers()} />
+                            )}
+                            
+                            <DropdownMenuSeparator />
+                            
                             <MemberManagementGuard action="update" fallback={
                               <DropdownMenuItem disabled className="text-gray-400">
                                 <Edit className="h-4 w-4 mr-2" />

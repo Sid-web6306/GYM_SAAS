@@ -2,15 +2,16 @@ export type MemberStatus = 'active' | 'inactive' | 'pending'
 
 export interface Member {
   id: string
-  first_name: string
-  last_name: string
-  email?: string | null
-  phone_number?: string | null
-  status: MemberStatus
-  join_date?: string | null
+  first_name: string | null
+  last_name: string | null
+  email: string | null
+  phone_number: string | null
+  status: string | null
+  join_date: string | null
   created_at: string
-  updated_at: string
+  updated_at?: string
   gym_id: string
+  user_id: string | null
 }
 
 export interface MemberStats {

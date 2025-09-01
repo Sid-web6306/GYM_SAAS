@@ -203,15 +203,15 @@ const DashboardPage = () => {
           <Link href="/members">
             <Button className="w-full sm:w-auto">
               <UserPlus className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Add Members</span>
-              <span className="sm:hidden">Add</span>
+              <span className="sm:inline">Add Members</span>
+              {/* <span className="sm:hidden">Add</span> */}
             </Button>
           </Link>
           <Link href="/settings">
             <Button variant="outline" className="w-full sm:w-auto">
               <Settings className="h-4 w-4 mr-2" />
               <span className="hidden sm:inline">Settings</span>
-              <span className="sm:hidden">Settings</span>
+              {/* <span className="sm:hidden">Settings</span> */}
             </Button>
           </Link>
         </div>

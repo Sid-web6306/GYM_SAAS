@@ -26,6 +26,10 @@ export interface InvitationMetadata {
   notify_user?: boolean
   invited_by_name?: string
   custom_permissions?: Record<string, boolean>
+  // Member portal specific metadata
+  member_id?: string
+  member_name?: string
+  portal_invitation?: boolean
   [key: string]: JsonValue | undefined
 }
 
@@ -37,6 +41,7 @@ export interface CreateInvitationRequest {
   expires_in_hours?: number
   message?: string
   notify_user?: boolean
+  metadata?: InvitationMetadata
 }
 
 export interface CreateInvitationResponse {

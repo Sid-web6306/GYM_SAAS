@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { logger } from '@/lib/logger'
 
 // Edge Runtime-compatible environment detection
 const getEnvironmentPrefix = (): string => {
@@ -22,7 +23,7 @@ export async function middleware(request: NextRequest) {
   
   // Debug: Log all middleware requests (Edge Runtime compatible)
   if (process.env.NODE_ENV === 'development') {
-    console.log('🔧 MIDDLEWARE: Processing request to:', pathname)
+    logger.info('🔧 MIDDLEWARE: Processing request to:', { pathname })
   }
   
   // Skip middleware for static files, API routes, and auth callback
@@ -33,7 +34,7 @@ export async function middleware(request: NextRequest) {
     pathname.includes('.') // Static files (images, favicon, etc.)
   ) {
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔧 MIDDLEWARE: Skipping static/API route:', pathname)
+      logger.info('🔧 MIDDLEWARE: Skipping static/API route:', { pathname })
     }
     return NextResponse.next()
   }
@@ -49,7 +50,7 @@ export async function middleware(request: NextRequest) {
     // Get environment prefix (same as server client)
     const envPrefix = getEnvironmentPrefix()
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔧 MIDDLEWARE: Using environment prefix:', envPrefix)
+      logger.info('🔧 MIDDLEWARE: Using environment prefix:', { envPrefix })
     }
 
     // Create Supabase client with SAME cookie naming as server
@@ -63,7 +64,7 @@ export async function middleware(request: NextRequest) {
             const envName = `${envPrefix}-${name}`
             const value = request.cookies.get(envName)?.value
             if (process.env.NODE_ENV === 'development') {
-              console.log('🔧 MIDDLEWARE: Getting cookie:', { originalName: name, envName, hasValue: !!value })
+              logger.info('🔧 MIDDLEWARE: Getting cookie:', { originalName: name, envName, hasValue: !!value })
             }
             return value
           },
@@ -71,7 +72,7 @@ export async function middleware(request: NextRequest) {
             // Use environment-specific cookie names
             const envName = `${envPrefix}-${name}`
             if (process.env.NODE_ENV === 'development') {
-              console.log('🔧 MIDDLEWARE: Setting cookie:', { originalName: name, envName })
+              logger.info('🔧 MIDDLEWARE: Setting cookie:', { originalName: name, envName })
             }
             request.cookies.set({
               name: envName,
@@ -93,7 +94,7 @@ export async function middleware(request: NextRequest) {
             // Use environment-specific cookie names
             const envName = `${envPrefix}-${name}`
             if (process.env.NODE_ENV === 'development') {
-              console.log('🔧 MIDDLEWARE: Removing cookie:', { originalName: name, envName })
+              logger.info('🔧 MIDDLEWARE: Removing cookie:', { originalName: name, envName })
             }
             request.cookies.set({
               name: envName,
@@ -118,7 +119,7 @@ export async function middleware(request: NextRequest) {
     const { data: { session }, error } = await supabase.auth.getSession()
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔧 MIDDLEWARE: Auth check result:', { 
+      logger.info('🔧 MIDDLEWARE: Auth check result:', { 
         hasSession: !!session, 
         hasUser: !!session?.user, 
         error: error?.message,
@@ -132,7 +133,7 @@ export async function middleware(request: NextRequest) {
 
     if (error) {
       if (process.env.NODE_ENV === 'development') {
-        console.warn('🔧 MIDDLEWARE: Auth error, treating as unauthenticated:', error.message)
+        logger.warn('🔧 MIDDLEWARE: Auth error, treating as unauthenticated:', { error: error.message })
       }
     }
 
@@ -140,10 +141,12 @@ export async function middleware(request: NextRequest) {
     const authRoutes = ['/login', '/signup', '/verify-email', '/confirm-email']
     const appRoutes = ['/dashboard', '/members', '/staff', '/attendance', '/settings', '/team', '/upgrade']
     const publicRoutes = ['/', '/contact', '/privacy-policy', '/terms-of-service', '/refund-policy']
+    const portalRoutes = ['/portal'] // Member portal routes
     const inviteRoutes = ['/invite', '/accept-invitation'] // Future-proof for dedicated invite pages
     
     const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
     const isAppRoute = appRoutes.some(route => pathname.startsWith(route))
+    const isPortalRoute = portalRoutes.some(route => pathname.startsWith(route))
     const isOnboardingRoute = pathname.startsWith('/onboarding')
     const isInviteRoute = inviteRoutes.some(route => pathname.startsWith(route))
     const isPublicRoute = publicRoutes.includes(pathname)
@@ -162,7 +165,7 @@ export async function middleware(request: NextRequest) {
       // Allow access to onboarding with invitation token (invitation acceptance flow)
       if (isOnboardingRoute && hasInviteToken) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('🔧 MIDDLEWARE: Allowing unauthenticated access to onboarding with invite token')
+          logger.info('🔧 MIDDLEWARE: Allowing unauthenticated access to onboarding with invite token')
         }
         return response
       }
@@ -170,33 +173,35 @@ export async function middleware(request: NextRequest) {
       // Allow access to future dedicated invite routes
       if (isInviteRoute) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('🔧 MIDDLEWARE: Allowing access to invite route')
+          logger.info('🔧 MIDDLEWARE: Allowing access to invite route')
         }
         return response
       }
       
       // Redirect to login for protected routes, preserve invite token
       const loginUrl = new URL('/login', request.url)
-      if (hasInviteToken) {
-        loginUrl.searchParams.set('invite', inviteToken)
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔧 MIDDLEWARE: Redirecting unauthenticated user to login with invite token')
+              if (hasInviteToken) {
+          loginUrl.searchParams.set('invite', inviteToken)
+          if (process.env.NODE_ENV === 'development') {
+            logger.info('🔧 MIDDLEWARE: Redirecting unauthenticated user to login with invite token')
+          }
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            logger.info('🔧 MIDDLEWARE: Redirecting unauthenticated user to login')
+          }
         }
-      } else {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔧 MIDDLEWARE: Redirecting unauthenticated user to login')
-        }
-      }
       return NextResponse.redirect(loginUrl)
     }
 
     // Handle authenticated users
     if (isAuthenticated && user) {
-      // Check if user has completed onboarding (has gym setup)
+      // Check if user has completed onboarding (has gym setup) and get role info
       let hasGym = false
+      let userRoleData: { roles: { name: string }[] } | null = null
+      let userProfileData: { gym_id: string } | null = null
       
       try {
-        // Query database for gym_id (reliable approach)
+        // Single query to get both profile and role information
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('gym_id')
@@ -204,7 +209,7 @@ export async function middleware(request: NextRequest) {
           .single()
         
         if (process.env.NODE_ENV === 'development') {
-          console.log('🔧 MIDDLEWARE: Profile fetch result:', {
+          logger.info('🔧 MIDDLEWARE: Profile fetch result:', {
             profile,
             profileError: profileError?.message,
             hasGymId: !!(profile?.gym_id),
@@ -213,10 +218,35 @@ export async function middleware(request: NextRequest) {
         }
         
         hasGym = !!(profile?.gym_id)
+        userProfileData = profile
+        
+        // If user has gym, also fetch their role information
+        if (hasGym && profile?.gym_id) {
+          const { data: userRole, error: roleError } = await supabase
+            .from('user_roles')
+            .select(`
+              role_id,
+              roles(name)
+            `)
+            .eq('user_id', user.id)
+            .eq('gym_id', profile.gym_id)
+            .eq('is_active', true)
+            .single()
+          
+          if (process.env.NODE_ENV === 'development') {
+            logger.info('🔧 MIDDLEWARE: Role fetch result:', {
+              userRole,
+              roleError: roleError?.message,
+              gymId: profile.gym_id
+            })
+          }
+          
+          userRoleData = userRole
+        }
       } catch (error) {
         // If profile fetch fails, treat as no gym (fail-safe)
         if (process.env.NODE_ENV === 'development') {
-          console.warn('🔧 MIDDLEWARE: Profile fetch failed, treating as no gym:', error)
+          logger.warn('🔧 MIDDLEWARE: Profile/Role fetch failed, treating as no gym:', { error })
         }
         hasGym = false
       }
@@ -230,11 +260,11 @@ export async function middleware(request: NextRequest) {
         if (hasInviteToken) {
           redirectUrlObj.searchParams.set('invite', inviteToken)
           if (process.env.NODE_ENV === 'development') {
-            console.log('🔧 MIDDLEWARE: Redirecting authenticated user from auth route with invite token to:', redirectUrl)
+            logger.info('🔧 MIDDLEWARE: Redirecting authenticated user from auth route with invite token to:', { redirectUrl })
           }
         } else {
           if (process.env.NODE_ENV === 'development') {
-            console.log('🔧 MIDDLEWARE: Redirecting authenticated user from auth route to:', redirectUrl)
+            logger.info('🔧 MIDDLEWARE: Redirecting authenticated user from auth route to:', { redirectUrl })
           }
         }
         return NextResponse.redirect(redirectUrlObj)
@@ -243,13 +273,13 @@ export async function middleware(request: NextRequest) {
       // Handle onboarding flow
       if (isOnboardingRoute) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('🔧 MIDDLEWARE: Onboarding route check:', { hasGym, hasInviteToken, shouldRedirect: hasGym && !hasInviteToken })
+          logger.info('🔧 MIDDLEWARE: Onboarding route check:', { hasGym, hasInviteToken, shouldRedirect: hasGym && !hasInviteToken })
         }
         
         // If user already has gym but has an invite token, allow onboarding for invitation acceptance
         if (hasGym && hasInviteToken) {
           if (process.env.NODE_ENV === 'development') {
-            console.log('🔧 MIDDLEWARE: Allowing onboarding access for user with gym (has invite token)')
+            logger.info('🔧 MIDDLEWARE: Allowing onboarding access for user with gym (has invite token)')
           }
           return response
         }
@@ -257,14 +287,14 @@ export async function middleware(request: NextRequest) {
         // If user already has gym and no invite token, redirect to dashboard
         if (hasGym && !hasInviteToken) {
           if (process.env.NODE_ENV === 'development') {
-            console.log('🔧 MIDDLEWARE: Redirecting /onboarding → /dashboard (user has gym, no invite)')
+            logger.info('🔧 MIDDLEWARE: Redirecting /onboarding → /dashboard (user has gym, no invite)')
           }
           return NextResponse.redirect(new URL('/dashboard', request.url))
         }
         
         // Allow access to onboarding for users without gym
         if (process.env.NODE_ENV === 'development') {
-          console.log('🔧 MIDDLEWARE: Allowing access to onboarding')
+          logger.info('🔧 MIDDLEWARE: Allowing access to onboarding')
         }
         return response
       }
@@ -278,7 +308,7 @@ export async function middleware(request: NextRequest) {
             onboardingUrl.searchParams.set('invite', inviteToken)
           }
           if (process.env.NODE_ENV === 'development') {
-            console.log('🔧 MIDDLEWARE: Redirecting to onboarding (no gym)', { hasInviteToken })
+            logger.info('🔧 MIDDLEWARE: Redirecting to onboarding (no gym)', { hasInviteToken })
           }
           return NextResponse.redirect(onboardingUrl)
         }
@@ -286,35 +316,108 @@ export async function middleware(request: NextRequest) {
         // If user has invite token, allow dashboard access for multi-gym invitation handling
         if (hasInviteToken) {
           if (process.env.NODE_ENV === 'development') {
-            console.log('🔧 MIDDLEWARE: Allowing app route access with invite token')
+            logger.info('🔧 MIDDLEWARE: Allowing app route access with invite token')
           }
           return response
         }
         
-        // Allow access to app routes
-        return response
-      }
-
-      // Allow access to future dedicated invite routes
-      if (isInviteRoute) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔧 MIDDLEWARE: Allowing access to invite route for authenticated user')
+        // Check if user is a member and redirect to portal (using cached data)
+        if (userRoleData) {
+          const roleName = (userRoleData.roles as unknown as { name: string })?.name
+          if (roleName === 'member') {
+            if (process.env.NODE_ENV === 'development') {
+              logger.info('🔧 MIDDLEWARE: Redirecting member from app route to portal')
+            }
+            const portalUrl = new URL('/portal', request.url)
+            return NextResponse.redirect(portalUrl)
+          }
         }
+        
+        // Allow access to app routes for non-members
         return response
       }
 
-      // // For root path, redirect based on onboarding status
-      // if (pathname === '/') {
-      //   const redirectPath = hasGym ? '/dashboard' : '/onboarding'
-      //   const redirectUrl = new URL(redirectPath, request.url)
-      //   if (hasInviteToken) {
-      //     redirectUrl.searchParams.set('invite', inviteToken)
-      //   }
-      //   if (process.env.NODE_ENV === 'development') {
-      //     console.log('🔧 MIDDLEWARE: Redirecting root path to:', redirectPath, { hasInviteToken })
-      //   }
-      //   return NextResponse.redirect(redirectUrl)
-      // }
+    // Handle portal routes (member-specific)
+    if (isPortalRoute) {
+      if (process.env.NODE_ENV === 'development') {
+        logger.info('🔧 MIDDLEWARE: Processing portal route access')
+      }
+      
+      // Check if user has member role in this gym (using cached data)
+      if (!userProfileData?.gym_id) {
+        if (process.env.NODE_ENV === 'development') {
+          logger.info('🔧 MIDDLEWARE: No gym_id found for user, redirecting to dashboard')
+        }
+        const dashboardUrl = new URL('/dashboard', request.url)
+        
+        // Set toast message in cookie
+        response.cookies.set('toast_message', 'no_gym', {
+          httpOnly: false,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 5 // 5 seconds
+        })
+        
+        return NextResponse.redirect(dashboardUrl)
+      }
+      
+      if (process.env.NODE_ENV === 'development') {
+        logger.info('🔧 MIDDLEWARE: Portal role check:', { 
+          userRoleData, 
+          gymId: userProfileData.gym_id,
+          rawRoles: userRoleData?.roles,
+          extractedRoleName: (userRoleData?.roles as unknown as { name: string })?.name
+        })
+      }
+      
+      // Only allow access if user has 'member' role
+      if (userRoleData) {
+        const roleName = (userRoleData.roles as unknown as { name: string })?.name
+        if (roleName === 'member') {
+          if (process.env.NODE_ENV === 'development') {
+            logger.info('🔧 MIDDLEWARE: Allowing portal access - user is member')
+          }
+          return response
+        }
+      }
+      
+      // Redirect non-members to dashboard with toast message
+      if (process.env.NODE_ENV === 'development') {
+        logger.info('🔧 MIDDLEWARE: Redirecting non-member from portal to dashboard')
+      }
+      const dashboardUrl = new URL('/dashboard', request.url)
+      
+      // Set toast message in cookie instead of URL params
+      response.cookies.set('toast_message', 'portal_access_denied', {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 5 // 5 seconds
+      })
+      
+      return NextResponse.redirect(dashboardUrl)
+    }
+
+    // Allow access to future dedicated invite routes
+    if (isInviteRoute) {
+      if (process.env.NODE_ENV === 'development') {
+        logger.info('🔧 MIDDLEWARE: Allowing access to invite route for authenticated user')
+      }
+      return response
+    }
+
+      // For root path, redirect based on onboarding status
+      if (pathname === '/') {
+        const redirectPath = hasGym ? '/dashboard' : '/onboarding'
+        const redirectUrl = new URL(redirectPath, request.url)
+        if (hasInviteToken) {
+          redirectUrl.searchParams.set('invite', inviteToken)
+        }
+        if (process.env.NODE_ENV === 'development') {
+          logger.info('🔧 MIDDLEWARE: Redirecting root path to:', { redirectPath, hasInviteToken })
+        }
+        return NextResponse.redirect(redirectUrl)
+      }
     }
 
     // Allow all other routes
@@ -322,7 +425,7 @@ export async function middleware(request: NextRequest) {
 
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
-      console.error('🔧 MIDDLEWARE: Error:', error)
+      logger.error('🔧 MIDDLEWARE: Error:', { error })
     }
     // On error, allow the request to continue (fail open)
     return NextResponse.next()

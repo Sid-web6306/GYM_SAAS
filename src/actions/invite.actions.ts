@@ -18,7 +18,16 @@ const createInviteSchema = z.object({
   gym_id: z.string().uuid('Invalid gym ID').optional(),
   expires_in_hours: z.number().min(1).max(168).default(72), // 1 hour to 7 days
   message: z.string().max(500).optional(),
-  notify_user: z.boolean().default(true)
+  notify_user: z.boolean().default(true),
+  metadata: z.object({
+    member_id: z.string().uuid().optional(),
+    member_name: z.string().optional(),
+    portal_invitation: z.boolean().optional(),
+    message: z.string().optional(),
+    notify_user: z.boolean().optional(),
+    invited_by_name: z.string().optional(),
+    custom_permissions: z.record(z.boolean()).optional()
+  }).optional()
 })
 
 // Note: updateInviteSchema can be added later for batch update operations
@@ -66,7 +75,8 @@ export async function createInvitation(formData: FormData): Promise<CreateInvite
       gym_id: formData.get('gym_id') || undefined,
       expires_in_hours: parseInt(formData.get('expires_in_hours') as string || '72'),
       message: formData.get('message') || undefined,
-      notify_user: formData.get('notify_user') === 'true'
+      notify_user: formData.get('notify_user') === 'true',
+      metadata: formData.get('metadata') ? JSON.parse(formData.get('metadata') as string) : undefined
     }
 
     const validatedData = createInviteSchema.parse(rawData)
@@ -159,6 +169,7 @@ export async function createInvitation(formData: FormData): Promise<CreateInvite
         expires_at: expiresAt,
         status: 'pending',
         metadata: {
+          ...validatedData.metadata,
           message: validatedData.message,
           notify_user: validatedData.notify_user,
           invited_by_name: user.user_metadata?.full_name || user.email
