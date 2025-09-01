@@ -12,8 +12,6 @@ import { Separator } from '@/components/ui/separator'
 import { 
   User, 
   Building2, 
-  Lock, 
-  Mail, 
   Save,
   AlertCircle,
   CheckCircle,
@@ -71,10 +69,6 @@ const SettingsPage = () => {
   const [, startTransition] = useTransition()
   const deferredTab = useDeferredValue(selectedTab)
   
-  // Detect if user is using social authentication
-  const authProvider = user?.app_metadata?.provider
-  const isSocialAuth = authProvider && authProvider !== 'email'
-  const providerName = authProvider === 'google' ? 'Google' : authProvider === 'facebook' ? 'Facebook' : authProvider
 
   // Profile form
   const profileForm = useForm<ProfileFormData>({
@@ -150,7 +144,6 @@ const SettingsPage = () => {
 
   const tabs = [
     { id: 'profile' as const, label: 'Profile', icon: User },
-    { id: 'security' as const, label: 'Security', icon: Lock },
     { id: 'gym' as const, label: 'Gym Settings', icon: Building2, guard: 'gym' },
     { id: 'subscription' as const, label: 'Subscription', icon: CreditCard, guard: 'billing' },
     { id: 'appearance' as const, label: 'Appearance', icon: Palette },
@@ -447,73 +440,7 @@ const SettingsPage = () => {
             <LazyAppearanceTab />
           )}
 
-          {deferredTab === 'security' && (
-           <Card>
-             <CardHeader>
-               <CardTitle className="flex items-center gap-2">
-                 <Lock className="h-5 w-5" />
-                 Security Settings
-               </CardTitle>
-               <CardDescription>
-                 Manage your account security and authentication
-               </CardDescription>
-             </CardHeader>
-             <CardContent className="space-y-6">
-               {/* Authentication Method Info */}
-               <div className="space-y-4">
-                 <h3 className="font-medium">Authentication Method</h3>
-                 <div className="p-4 bg-muted/50 rounded-lg">
-                   <div className="flex items-center gap-2 text-sm">
-                     {isSocialAuth ? (
-                       <>
-                         <CheckCircle className="h-4 w-4 text-green-600" />
-                         <span>You&apos;re signed in with <strong>{providerName}</strong></span>
-                       </>
-                     ) : (
-                       <>
-                         <CheckCircle className="h-4 w-4 text-green-600" />
-                         <span>You&apos;re signed in with <strong>Email & Password</strong></span>
-                       </>
-                     )}
-                   </div>
-                   {isSocialAuth && (
-                     <p className="text-sm text-muted-foreground mt-2">
-                       Your account is secured by {providerName} authentication. No additional password setup is needed.
-                     </p>
-                   )}
-                 </div>
-               </div>
-               <Separator />
 
-               <div className="space-y-4">
-                 <h3 className="font-medium">Account Security</h3>
-                 <div className="grid gap-4 md:grid-cols-2">
-                   <div className="space-y-2">
-                     <div className="flex items-center gap-2">
-                       <Mail className="h-4 w-4 text-muted-foreground" />
-                       <span className="text-sm font-medium">Email Verification</span>
-                     </div>
-                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                       <CheckCircle className="h-4 w-4 text-green-600" />
-                       Email verified
-                     </div>
-                   </div>
-                   
-                   <div className="space-y-2">
-                     <div className="flex items-center gap-2">
-                       <Lock className="h-4 w-4 text-muted-foreground" />
-                       <span className="text-sm font-medium">Authentication Status</span>
-                     </div>
-                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                       <CheckCircle className="h-4 w-4 text-green-600" />
-                       {isSocialAuth ? `${providerName} authentication active` : 'Password protected'}
-                     </div>
-                   </div>
-                 </div>
-               </div>
-             </CardContent>
-           </Card>
-         )}
        </div>
      </div>
    </div>

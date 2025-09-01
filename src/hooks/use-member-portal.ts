@@ -67,8 +67,11 @@ export function useMemberProfile() {
       
       return data.member
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 1
+    staleTime: 10 * 60 * 1000, // 10 minutes (increased from 5 minutes)
+    gcTime: 15 * 60 * 1000, // 15 minutes garbage collection
+    retry: 1,
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnMount: false // Don't refetch on component mount if data is fresh
   })
 }
 
@@ -86,7 +89,7 @@ export function useMemberStatus() {
       
       return data.status
     },
-    refetchInterval: 30 * 1000, // Refetch every 30 seconds for real-time status
+    refetchInterval: false,
     staleTime: 15 * 1000, // 15 seconds
     retry: 1
   })
@@ -125,8 +128,11 @@ export function useMemberAttendance(filters: {
         pagination: data.pagination
       }
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    retry: 1
+    staleTime: 5 * 60 * 1000, // 5 minutes (increased from 2 minutes)
+    gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
+    retry: 1,
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnMount: false // Don't refetch on component mount if data is fresh
   })
 }
 

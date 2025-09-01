@@ -4,7 +4,7 @@ import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { getEnvironmentPrefix } from '@/utils/supabase/client'
 
-export type SettingsTab = 'profile' | 'gym' | 'subscription' | 'appearance' | 'security'
+export type SettingsTab = 'profile' | 'gym' | 'subscription' | 'appearance'
 
 export interface SettingsState {
   // Tab state
