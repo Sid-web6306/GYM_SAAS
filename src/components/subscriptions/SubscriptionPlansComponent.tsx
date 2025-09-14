@@ -472,7 +472,7 @@ export function SubscriptionPlansComponent({
                   ) : (
                     <div className="flex items-center gap-2">
                       <DynamicZap className="h-4 w-4" />
-                      Get Started - Pay with Razorpay
+                      Get Started
                     </div>
                   )}
                 </DynamicButton>

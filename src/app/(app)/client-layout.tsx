@@ -15,7 +15,6 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 import { useSidebarState } from '@/stores/ui-store'
 import { RequireAuth } from '@/components/auth/AuthGuard'
-import { RealtimeDebug } from '@/components/debug/RealtimeDebug'
 import { RealtimeProvider } from '@/components/providers/realtime-provider-simple'
 import { CollapsibleNavItem } from '@/components/layout/CollapsibleNavItem'
 import { SidebarToggle } from '@/components/layout/SidebarToggle'
@@ -199,9 +198,6 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
           </Suspense>
         </main>
       </div>
-
-      {/* Debug Component */}
-      <RealtimeDebug debugVisibleProp={false} />
     </div>
   )
 }

@@ -332,6 +332,39 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(portalUrl)
           }
         }
+
+        // Check subscription access for protected app routes
+        // Note: This is a basic check - detailed subscription logic is handled in components
+        try {
+          const { data: hasAccess, error: accessError } = await supabase.rpc('check_subscription_access', {
+            p_user_id: user.id
+          })
+
+          if (accessError) {
+            logger.warn('🔧 MIDDLEWARE: Error checking subscription access:', { error: accessError.message })
+          }
+
+          // For routes that require subscription access, redirect to upgrade if no access
+          if (!hasAccess && !pathname.startsWith('/upgrade') && !pathname.startsWith('/settings')) {
+            if (process.env.NODE_ENV === 'development') {
+              logger.info('🔧 MIDDLEWARE: No subscription access, redirecting to upgrade')
+            }
+            
+            // Set a cookie to show the subscription status message
+            response.cookies.set('subscription_status', 'no_access', {
+              httpOnly: false,
+              secure: process.env.NODE_ENV === 'production',
+              sameSite: 'lax',
+              maxAge: 10 // 10 seconds
+            })
+            
+            const upgradeUrl = new URL('/upgrade', request.url)
+            return NextResponse.redirect(upgradeUrl)
+          }
+        } catch (error) {
+          // If subscription check fails, allow access (fail open)
+          logger.warn('🔧 MIDDLEWARE: Subscription check failed, allowing access:', { error })
+        }
         
         // Allow access to app routes for non-members
         return response
