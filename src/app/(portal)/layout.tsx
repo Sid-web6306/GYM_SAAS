@@ -19,7 +19,6 @@ import React from 'react'
 import { PWAWrapper } from '@/components/pwa/PWAWrapper'
 import { RealtimeProvider } from '@/components/providers/realtime-provider-simple'
 import { PortalDataProvider } from '@/components/providers/portal-data-provider'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 export default function PortalLayout({
   children,
@@ -32,20 +31,6 @@ export default function PortalLayout({
   const router = useRouter()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   
-  // Create a QueryClient with optimized settings to prevent duplicate queries
-  const [queryClient] = useState(() => new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 30 * 60 * 1000, // 30 minutes
-        gcTime: 60 * 60 * 1000, // 60 minutes
-        refetchOnWindowFocus: false,
-        refetchOnMount: false,
-        refetchOnReconnect: false,
-        retry: 1,
-        networkMode: 'online'
-      }
-    }
-  }))
 
   // Handle redirect for unauthenticated users
   useEffect(() => {
@@ -76,9 +61,6 @@ export default function PortalLayout({
   // If we reach here, user is authenticated and middleware has allowed access
   // This means they have the 'member' role
 
-  // If we reach here, user is authenticated and middleware has allowed access
-  // This means they have the 'member' role
-
   const navigation = [
     { name: 'Dashboard', href: '/portal', icon: Home },
     { name: 'History', href: '/portal/history', icon: History },
@@ -90,11 +72,10 @@ export default function PortalLayout({
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <RealtimeProvider>
-        <PortalDataProvider>
-          <PWAWrapper />
-          <div className="min-h-screen bg-gray-50">
+    <RealtimeProvider>
+      <PortalDataProvider>
+        <PWAWrapper />
+        <div className="min-h-screen bg-gray-50">
         {/* Mobile header */}
         <div className="lg:hidden bg-white shadow-sm border-b">
           <div className="flex items-center justify-between px-4 py-3">
@@ -217,6 +198,5 @@ export default function PortalLayout({
       </div>
         </PortalDataProvider>
       </RealtimeProvider>
-    </QueryClientProvider>
   )
 }
