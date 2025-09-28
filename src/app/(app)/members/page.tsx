@@ -1,15 +1,14 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { 
   useMembers, 
-  useCreateMember, 
-  useUpdateMember, 
   useDeleteMember,
   useMembersStats,
   type MemberFilters 
 } from '@/hooks/use-members-data'
+import { logger } from '@/lib/logger'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,14 +22,6 @@ import {
   ResponsiveTableActionsCell,
   ResponsiveTableSkeleton
 } from '@/components/ui/responsive-table'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import {
   Select,
   SelectContent,
@@ -46,25 +37,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
 
 import { 
   Users, 
   UserPlus, 
   Search, 
-  MoreHorizontal, 
   Mail, 
   Phone,
   Calendar,
-  Edit,
   Trash2,
   Filter,
   Download,
@@ -73,26 +53,14 @@ import {
   UserCheck,
   UserX,
   AlertCircle,
-  RefreshCw,
-  Smartphone
+  RefreshCw
 } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { MemberManagementGuard, AnalyticsGuard, AccessDenied } from '@/components/rbac/rbac-guards'
-import { MemberPortalInvite } from '@/components/members/MemberPortalInvite'
+import { EnhancedMemberDialog } from '@/components/members/EnhancedMemberDialog'
+import { BulkPortalInvite } from '@/components/members/BulkPortalInvite'
+import { MemberActionsMenu, MemberPortalStatusBadge } from '@/components/members/MemberActionsMenu'
 
-// Form schema
-const memberSchema = z.object({
-  first_name: z.string().min(1, 'First name is required'),
-  last_name: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
-  phone_number: z.string().optional(),
-  status: z.enum(['active', 'inactive', 'pending']),
-})
-
-type MemberFormData = z.infer<typeof memberSchema>
 
 const MembersPage = () => {
   const { profile } = useAuth()
@@ -109,6 +77,7 @@ const MembersPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [bulkInviteDialogOpen, setBulkInviteDialogOpen] = useState(false)
 
   const pageSize = 10
 
@@ -135,32 +104,9 @@ const MembersPage = () => {
     isLoading: statsLoading 
   } = useMembersStats(gymId || null)
 
-  const createMemberMutation = useCreateMember()
-  const updateMemberMutation = useUpdateMember()
   const deleteMemberMutation = useDeleteMember()
 
-  // Forms
-  const addForm = useForm<MemberFormData>({
-    resolver: zodResolver(memberSchema),
-    defaultValues: {
-      first_name: '',
-      last_name: '',
-      email: '',
-      phone_number: '',
-      status: 'active',
-    },
-  })
-
-  const editForm = useForm<MemberFormData>({
-    resolver: zodResolver(memberSchema),
-    defaultValues: {
-      first_name: '',
-      last_name: '',
-      email: '',
-      phone_number: '',
-      status: 'active',
-    },
-  })
+  // Forms (only for add member - edit is handled by EnhancedMemberDialog)
 
   // Get current member data for editing
   const selectedMember = useMemo(() => {
@@ -168,81 +114,9 @@ const MembersPage = () => {
     return membersResponse.members.find(m => m.id === selectedMemberId) || null
   }, [selectedMemberId, membersResponse?.members])
 
-  // Update edit form when selected member changes
-  useEffect(() => {
-    if (selectedMember) {
-      console.log('Pre-filling edit form with member data:', selectedMember)
-      editForm.reset({
-        first_name: selectedMember.first_name || '',
-        last_name: selectedMember.last_name || '',
-        email: selectedMember.email || '',
-        phone_number: selectedMember.phone_number || '',
-        status: (selectedMember.status as 'active' | 'inactive' | 'pending') || 'active',
-      })
-    }
-  }, [selectedMember, editForm])
-
-  // Reset edit form when dialog closes
-  useEffect(() => {
-    if (!editDialogOpen) {
-      editForm.reset()
-    }
-  }, [editDialogOpen, editForm])
 
   // Handlers
-  const handleAddMember = async (data: MemberFormData) => {
-    if (!gymId) return
-    
-    setIsSubmitting(true)
-    try {
-      await createMemberMutation.mutateAsync({
-        gymId,
-        memberData: {
-          ...data,
-          email: data.email || null,
-          phone_number: data.phone_number || null,
-        }
-      })
-      addForm.reset()
-      setAddDialogOpen(false)
-    } catch (error) {
-      console.error('Error creating member:', error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
 
-  const handleEditMember = async (data: MemberFormData) => {
-    if (!selectedMemberId) return
-    
-    setIsSubmitting(true)
-    try {
-      await updateMemberMutation.mutateAsync({
-        memberId: selectedMemberId,
-        updates: {
-          ...data,
-          email: data.email || null,
-          phone_number: data.phone_number || null,
-        }
-      })
-      setEditDialogOpen(false)
-      setSelectedMemberId(null)
-      // Reset form after successful update
-      editForm.reset()
-    } catch (error) {
-      console.error('Error updating member:', error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  // Close edit dialog and cleanup
-  const handleCloseEditDialog = () => {
-    setEditDialogOpen(false)
-    setSelectedMemberId(null)
-    // Reset form when dialog is closed
-    editForm.reset()
-  }
 
   const handleDeleteMember = async () => {
     if (!selectedMemberId) return
@@ -253,7 +127,7 @@ const MembersPage = () => {
       setDeleteDialogOpen(false)
       setSelectedMemberId(null)
     } catch (error) {
-      console.error('Error deleting member:', error)
+      logger.error('Error deleting member:', {error})
     } finally {
       setIsSubmitting(false)
     }
@@ -374,9 +248,18 @@ const MembersPage = () => {
             Add Member
           </Button>
         </MemberManagementGuard>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => setBulkInviteDialogOpen(true)}
+          className="w-full sm:w-auto"
+        >
+          <Mail className="h-4 w-4 mr-2" />
+          Bulk Invite
+        </Button>
       </PageHeader>
 
-      {/* Stats Cards */}
+      {/* Simple Member Stats */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -520,15 +403,16 @@ const MembersPage = () => {
                 <ResponsiveTableCell>Phone</ResponsiveTableCell>
                 <ResponsiveTableCell>Join Date</ResponsiveTableCell>
                 <ResponsiveTableCell>Status</ResponsiveTableCell>
+                <ResponsiveTableCell>Portal</ResponsiveTableCell>
                 <ResponsiveTableCell className="text-right">Actions</ResponsiveTableCell>
               </ResponsiveTableRow>
             </ResponsiveTableHeader>
             <ResponsiveTableBody>
                 {membersLoading ? (
-                  <ResponsiveTableSkeleton rows={5} columns={6} />
+                  <ResponsiveTableSkeleton rows={5} columns={7} />
                 ) : members.length === 0 ? (
                   <ResponsiveTableRow>
-                    <ResponsiveTableCell colSpan={6} className="h-96">
+                    <ResponsiveTableCell colSpan={7} className="h-96">
                       <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
                         <Users className="h-20 w-20 text-muted-foreground opacity-40" />
                         <div className="space-y-3">
@@ -611,57 +495,19 @@ const MembersPage = () => {
                       >
                         {getStatusBadge(member.status)}
                       </ResponsiveTableCell>
+                      <ResponsiveTableCell 
+                        label="Portal"
+                        mobileOrder={6}
+                      >
+                        <MemberPortalStatusBadge member={member} />
+                      </ResponsiveTableCell>
                       <ResponsiveTableActionsCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            
-                            {/* Portal Status Indicator */}
-                            {member.user_id ? (
-                              <DropdownMenuItem disabled className="text-green-600">
-                                <Smartphone className="h-4 w-4 mr-2" />
-                                Portal Access Active
-                              </DropdownMenuItem>
-                            ) : (
-                              <MemberPortalInvite member={member} onSuccess={() => refetchMembers()} />
-                            )}
-                            
-                            <DropdownMenuSeparator />
-                            
-                            <MemberManagementGuard action="update" fallback={
-                              <DropdownMenuItem disabled className="text-gray-400">
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit Member (Staff Only)
-                              </DropdownMenuItem>
-                            }>
-                              <DropdownMenuItem onClick={() => openEditDialog(member.id)}>
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit Member
-                              </DropdownMenuItem>
-                            </MemberManagementGuard>
-                            <MemberManagementGuard action="delete" fallback={
-                              <DropdownMenuItem disabled className="text-gray-400">
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete Member (Staff Only)
-                              </DropdownMenuItem>
-                            }>
-                              <DropdownMenuItem 
-                                onClick={() => openDeleteDialog(member.id)}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete Member
-                              </DropdownMenuItem>
-                            </MemberManagementGuard>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <MemberActionsMenu 
+                          member={member}
+                          onEdit={(member) => openEditDialog(member.id)}
+                          onDelete={(member) => openDeleteDialog(member.id)}
+                          onSuccess={() => refetchMembers()}
+                        />
                       </ResponsiveTableActionsCell>
                     </ResponsiveTableRow>
                   ))
@@ -698,248 +544,39 @@ const MembersPage = () => {
         </CardContent>
       </Card>
 
-      {/* Add Member Dialog */}
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader className="space-y-3">
-            <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5" />
-              Add New Member
-            </DialogTitle>
-            <DialogDescription>
-              Add a new member to your gym. All fields except email and phone are required.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...addForm}>
-            <form onSubmit={addForm.handleSubmit(handleAddMember)} className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={addForm.control}
-                  name="first_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="John" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={addForm.control}
-                  name="last_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Doe" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <FormField
-                control={addForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="john.doe@example.com" type="email" {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      Optional. Used for notifications and communication.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={addForm.control}
-                name="phone_number"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="+1 (555) 123-4567" {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      Optional. Used for emergency contact and notifications.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={addForm.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select member status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Initial membership status
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter className="gap-3 pt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setAddDialogOpen(false)}
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={isSubmitting || createMemberMutation.isPending}
-                >
-                  {isSubmitting || createMemberMutation.isPending ? 'Adding...' : 'Add Member'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      {/* Enhanced Add Member Dialog */}
+      {gymId && (
+        <EnhancedMemberDialog
+          open={addDialogOpen}
+          onOpenChange={setAddDialogOpen}
+          mode="add"
+          gymId={gymId}
+          onSuccess={() => refetchMembers()}
+        />
+      )}
+      
+      {/* Enhanced Edit Member Dialog */}
+      {gymId && selectedMember && (
+        <EnhancedMemberDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          mode="edit"
+          gymId={gymId}
+          member={selectedMember}
+          onSuccess={() => refetchMembers()}
+        />
+      )}
 
-      {/* Edit Member Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={(open) => {
-        if (!open) {
-          handleCloseEditDialog()
-        }
-      }}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader className="space-y-3">
-            <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-5 w-5" />
-              Edit Member
-            </DialogTitle>
-            <DialogDescription>
-              Update member information. Changes will be saved immediately.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(handleEditMember)} className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={editForm.control}
-                  name="first_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="John" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={editForm.control}
-                  name="last_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Doe" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <FormField
-                control={editForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="john.doe@example.com" type="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={editForm.control}
-                name="phone_number"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="+1 (555) 123-4567" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={editForm.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select member status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter className="gap-3 pt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCloseEditDialog}
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={isSubmitting || updateMemberMutation.isPending}
-                >
-                  {isSubmitting || updateMemberMutation.isPending ? 'Updating...' : 'Update Member'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      {/* Bulk Portal Invite Dialog */}
+      {gymId && (
+        <BulkPortalInvite
+          open={bulkInviteDialogOpen}
+          onOpenChange={setBulkInviteDialogOpen}
+          gymId={gymId}
+          onSuccess={() => refetchMembers()}
+        />
+      )}
+
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

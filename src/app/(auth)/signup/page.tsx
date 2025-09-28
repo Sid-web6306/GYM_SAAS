@@ -28,6 +28,7 @@ import { toastActions } from "@/stores/toast-store";
 import { withSuspense } from "@/components/providers/suspense-provider";
 import { useInviteVerification } from "@/hooks/use-invitations";
 import { Building2, Users, AlertCircle } from "lucide-react";
+import { logger } from '@/lib/logger';
 
 // Zod schema for client-side validation (passwordless)
 const SignupSchema = z.object({
@@ -92,7 +93,6 @@ const SignUpPageComponent = () => {
   
   // Get invitation token from search params
   const inviteToken = searchParams.get('invite') || '';
-  console.log('inviteToken', inviteToken)
   
   // Verify invitation if token exists
   const {
@@ -154,7 +154,7 @@ const SignUpPageComponent = () => {
       // unless there's an error
       
     } catch (error) {
-      console.error(`${provider} OAuth error:`, error);
+      logger.error(`${provider} OAuth error:`, {error});
       
       // Provide more specific error messages
       let errorMessage = `Failed to connect with ${provider === 'google' ? 'Google' : 'Facebook'}. Please try again.`;
@@ -185,7 +185,6 @@ const SignUpPageComponent = () => {
       
       // Include invitation token if present
       if (inviteToken) {
-        console.log('inviteToken', inviteToken)
         formData.append('inviteToken', inviteToken);
       }
       
@@ -204,11 +203,10 @@ const SignUpPageComponent = () => {
       // If no error, the server action will handle the redirect
       
     } catch (error) {
-      console.error('Signup form error:', error);
+      logger.error('Signup form error:', {error});
       
       // Check if this is a Next.js redirect (not a real error)
       if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
-        console.log('🔧 SIGNUP: Redirect successful, not an error')
         return // Don't show error toast for redirects
       }
       
@@ -380,19 +378,19 @@ const SignUpPageComponent = () => {
             </div>
           </form>
 
-          { inviteToken && <div className="mt-4 text-center text-sm">
+          <div className="mt-4 text-center text-sm">
             Already have an account?{" "}
             <Link 
               href={`/login${inviteToken ? `?invite=${inviteToken}` : ''}`} 
-              className="underline"
+              className="underline hover:text-primary"
             >
-              Log in to accept invitation
+              {inviteToken ? 'Log in to accept invitation' : 'Log in here'}
             </Link>
-          </div>}
+          </div>
 
           {!inviteToken && (
             <div className="mt-2 text-center text-sm">
-              <Link href="/" className="underline">
+              <Link href="/" className="underline hover:text-primary">
                 Go to home page
               </Link>
             </div>

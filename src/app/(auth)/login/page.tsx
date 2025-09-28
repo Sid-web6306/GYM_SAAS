@@ -28,6 +28,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { toastActions } from "@/stores/toast-store"
 import { displayAuthMessage } from "@/lib/auth-messages"
 import { withSuspense } from "@/components/providers/suspense-provider"
+import { logger } from '@/lib/logger'
 
 // Zod schema for client-side validation
 const LoginSchema = z.object({
@@ -170,7 +171,7 @@ const LoginPageComponent = () => {
       // unless there's an error
       
     } catch (error) {
-      console.error(`${provider} OAuth error:`, error)
+      logger.error(`${provider} OAuth error:`, {error})
       
       // Provide more specific error messages
       let errorMessage = `Failed to connect with ${provider === 'google' ? 'Google' : 'Facebook'}. Please try again.`
@@ -211,11 +212,10 @@ const LoginPageComponent = () => {
       // If no error, the server action will handle the redirect
       
     } catch (error) {
-      console.error('Login form error:', error)
+      logger.error('Login form error:', {error})
       
       // Check if this is a Next.js redirect (not a real error)
       if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
-        console.log('🔧 LOGIN: Redirect successful, not an error')
         return // Don't show error toast for redirects
       }
       

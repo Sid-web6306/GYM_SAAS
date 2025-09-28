@@ -11,11 +11,11 @@ import {
   UserCog,
   BookUser,
   CalendarDays,
+  BarChart3,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useSidebarState } from '@/stores/ui-store'
 import { RequireAuth } from '@/components/auth/AuthGuard'
-import { RealtimeDebug } from '@/components/debug/RealtimeDebug'
 import { RealtimeProvider } from '@/components/providers/realtime-provider-simple'
 import { CollapsibleNavItem } from '@/components/layout/CollapsibleNavItem'
 import { SidebarToggle } from '@/components/layout/SidebarToggle'
@@ -42,6 +42,7 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Attendance', href: '/attendance', icon: CalendarDays },
     { name: 'Members', href: '/members', icon: Users },
     { name: 'Roles & Invitations', href: '/team', icon: UserCog },
@@ -199,9 +200,6 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
           </Suspense>
         </main>
       </div>
-
-      {/* Debug Component */}
-      <RealtimeDebug debugVisibleProp={false} />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { OTPInput } from '@/components/ui/otp-input'
 import { toastActions } from '@/stores/toast-store'
 import { useQueryClient } from '@tanstack/react-query'
+import { logger } from '@/lib/logger'
 
 interface OTPVerificationProps {
   email: string
@@ -86,7 +87,7 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
         }
       }
     } catch (error) {
-      console.error('OTP verification error:', error)
+      logger.error('OTP verification error:', {error})
       setError('Something went wrong. Please try again.')
       setOtp('')
     } finally {
@@ -130,7 +131,7 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
         setError(result.error || 'Failed to resend code. Please try again.')
       }
     } catch (error) {
-      console.error('Resend OTP error:', error)
+      logger.error('Resend OTP error:', {error})
       setError('Failed to resend code. Please try again.')
     } finally {
       setIsResending(false)

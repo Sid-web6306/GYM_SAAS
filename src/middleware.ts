@@ -1,450 +1,431 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 
-// Edge Runtime-compatible environment detection
+// Types for better type safety
+interface UserProfile {
+  gym_id: string | null
+  user_roles?: Array<{
+    role_id: string
+    is_active: boolean
+    roles: { name: string } | null
+  }> | null
+}
+
+interface CacheEntry {
+  response: NextResponse
+  timestamp: number
+  userState?: {
+    isAuthenticated: boolean
+    hasGym: boolean
+    role: string | null
+    isInactive: boolean
+  }
+}
+
+// Configuration constants
+const CONFIG = {
+  CACHE_TTL: 30000, // 30 seconds
+  COOKIE_MAX_AGE: 10, // 10 seconds for temporary cookies
+  TOAST_MAX_AGE: 5, // 5 seconds for toast messages
+} as const
+
+// Route definitions - centralized for easier maintenance
+const ROUTES = {
+  AUTH: ['/login', '/signup', '/verify-email', '/confirm-email'],
+  APP: ['/dashboard', '/members', '/staff', '/attendance', '/settings', '/team', '/upgrade'],
+  PUBLIC: ['/', '/contact', '/privacy-policy', '/terms-of-service', '/refund-policy'],
+  PORTAL: ['/portal'],
+  INVITE: ['/invite', '/accept-invitation'],
+  SPECIAL: ['/inactive-user'],
+  STATIC_PATTERNS: [
+    /^\/_next/,
+    /^\/api/,
+    /^\/auth\/callback/,
+    /\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot|sw\.js|manifest\.json|browserconfig\.xml|robots\.txt)$/
+  ]
+} as const
+
+// Request cache with Map for better performance
+const requestCache = new Map<string, CacheEntry>()
+
+// Optimized environment detection
 const getEnvironmentPrefix = (): string => {
-  // Use NEXT_PUBLIC variables which are available at build time
   const explicitEnv = process.env.NEXT_PUBLIC_APP_ENV
   const isDev = process.env.NODE_ENV === 'development'
   
-  // Simple environment detection for Edge Runtime
   if (isDev) return 'dev'
   if (explicitEnv === 'staging') return 'staging'
-  if (explicitEnv === 'production') return 'prod'
+  return 'prod' // Default for production
+}
+
+// Optimized static file detection with caching
+const staticFileCache = new Map<string, boolean>()
+const isStaticFile = (pathname: string): boolean => {
+  if (staticFileCache.has(pathname)) {
+    return staticFileCache.get(pathname)!
+  }
   
-  // Default based on NODE_ENV only
-  return 'prod'
+  const isStatic = ROUTES.STATIC_PATTERNS.some(pattern => 
+    pattern instanceof RegExp ? pattern.test(pathname) : pathname.startsWith(pattern as string)
+  )
+  
+  staticFileCache.set(pathname, isStatic)
+  return isStatic
+}
+
+// Route type checking utilities
+const createRouteChecker = (routes: readonly string[]) => 
+  (pathname: string) => routes.some(route => pathname.startsWith(route))
+
+const isAuthRoute = createRouteChecker(ROUTES.AUTH)
+const isAppRoute = createRouteChecker(ROUTES.APP)
+const isPortalRoute = createRouteChecker(ROUTES.PORTAL)
+const isInviteRoute = createRouteChecker(ROUTES.INVITE)
+const isSpecialRoute = createRouteChecker(ROUTES.SPECIAL)
+
+// Optimized user profile fetching with better error handling
+const fetchUserProfile = async (supabase: SupabaseClient, userId: string): Promise<{
+  hasGym: boolean
+  userRole: string | null
+  isInactive: boolean
+  profileData: UserProfile | null
+}> => {
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select(`
+        gym_id,
+        user_roles!left(
+          role_id,
+          is_active,
+          roles(name)
+        )
+      `)
+      .eq('id', userId)
+      .single()
+
+    if (error) {
+      logger.error('Profile fetch error:', { message: error.message, code: error.code })
+      return { hasGym: false, userRole: null, isInactive: false, profileData: null }
+    }
+
+    const hasGymId = Boolean(profile?.gym_id)
+    let userRole: string | null = null
+    let hasActiveRole = false
+
+    // Find active role
+    if (hasGymId && profile?.user_roles && Array.isArray(profile.user_roles)) {
+      const activeRoleEntry = profile.user_roles.find(
+        (role: { is_active: boolean; roles: unknown }) => {
+          const roleData = Array.isArray(role.roles) ? role.roles[0] : role.roles
+          return role.is_active === true && roleData?.name
+        }
+      )
+      
+      if (activeRoleEntry) {
+        const roleData = Array.isArray(activeRoleEntry.roles) ? activeRoleEntry.roles[0] : activeRoleEntry.roles
+        if (roleData?.name) {
+          userRole = roleData.name
+          hasActiveRole = true
+        }
+      }
+    }
+
+    // User has a gym if they have a gym_id AND an active role
+    const hasGym = hasGymId && hasActiveRole
+    const isInactive = hasGymId && !hasActiveRole
+
+    return { hasGym, userRole, isInactive, profileData: profile as unknown as UserProfile }
+  } catch (error) {
+    logger.error('Profile fetch exception:', {error})
+    return { hasGym: false, userRole: null, isInactive: false, profileData: null }
+  }
+}
+
+// Subscription access check with caching
+const checkSubscriptionAccess = async (supabase: SupabaseClient, gymId: string): Promise<boolean> => {
+  try {
+    const { data: hasAccess, error } = await supabase.rpc('check_gym_subscription_access', {
+      p_gym_id: gymId
+    })
+
+    if (error) {
+      logger.warn('Subscription check error - failing open:', {error})
+      return true // Fail open on error
+    }
+
+    return Boolean(hasAccess)
+  } catch (error) {
+    logger.warn('Subscription check exception - failing open:', {error})
+    return true // Fail open on error
+  }
+}
+
+// Create redirect response with invite token preservation
+const createRedirect = (url: string, request: NextRequest, inviteToken?: string): NextResponse => {
+  const redirectUrl = new URL(url, request.url)
+  
+  if (inviteToken) {
+    redirectUrl.searchParams.set('invite', inviteToken)
+  }
+  
+  return NextResponse.redirect(redirectUrl)
+}
+
+// Set toast message cookie
+const setToastCookie = (response: NextResponse, message: string): void => {
+  response.cookies.set('toast_message', message, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: CONFIG.TOAST_MAX_AGE
+  })
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const isDev = process.env.NODE_ENV === 'development'
   
-  // Debug: Log all middleware requests (Edge Runtime compatible)
-  if (process.env.NODE_ENV === 'development') {
-    logger.info('🔧 MIDDLEWARE: Processing request to:', { pathname })
-  }
-  
-  // Skip middleware for static files, API routes, and auth callback
-  if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.startsWith('/auth/callback') ||
-    pathname.includes('.') // Static files (images, favicon, etc.)
-  ) {
-    if (process.env.NODE_ENV === 'development') {
-      logger.info('🔧 MIDDLEWARE: Skipping static/API route:', { pathname })
-    }
+  // Early return for static files
+  if (isStaticFile(pathname)) {
     return NextResponse.next()
+  }
+
+  // Extract invitation token
+  const inviteToken = request.nextUrl.searchParams.get('invite')
+  const hasInviteToken = Boolean(inviteToken)
+
+  // Create cache key
+  const authHeader = request.headers.get('authorization')
+  const cacheKey = `${pathname}-${authHeader || 'no-auth'}-${inviteToken || 'no-invite'}`
+
+  // Check cache first
+  const cachedEntry = requestCache.get(cacheKey)
+  if (cachedEntry && Date.now() - cachedEntry.timestamp < CONFIG.CACHE_TTL) {
+    return cachedEntry.response
+  }
+
+  // Clean expired cache entries periodically
+  if (requestCache.size > 100) {
+    const now = Date.now()
+    for (const [key, entry] of requestCache.entries()) {
+      if (now - entry.timestamp >= CONFIG.CACHE_TTL) {
+        requestCache.delete(key)
+      }
+    }
+  }
+
+  // Reduced logging for development
+  if (isDev && !pathname.startsWith('/_next')) {
+    logger.info('🔧 MIDDLEWARE:', { pathname })
   }
 
   try {
     // Create response for cookie handling
     let response = NextResponse.next({
-      request: {
-        headers: request.headers,
-      },
+      request: { headers: request.headers }
     })
 
-    // Get environment prefix (same as server client)
+    // Create Supabase client with environment-specific cookies
     const envPrefix = getEnvironmentPrefix()
-    if (process.env.NODE_ENV === 'development') {
-      logger.info('🔧 MIDDLEWARE: Using environment prefix:', { envPrefix })
-    }
-
-    // Create Supabase client with SAME cookie naming as server
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           get(name: string) {
-            // Use environment-specific cookie names (SAME as server.ts)
             const envName = `${envPrefix}-${name}`
-            const value = request.cookies.get(envName)?.value
-            if (process.env.NODE_ENV === 'development') {
-              logger.info('🔧 MIDDLEWARE: Getting cookie:', { originalName: name, envName, hasValue: !!value })
-            }
-            return value
+            return request.cookies.get(envName)?.value
           },
           set(name: string, value: string, options: Record<string, unknown>) {
-            // Use environment-specific cookie names
             const envName = `${envPrefix}-${name}`
-            if (process.env.NODE_ENV === 'development') {
-              logger.info('🔧 MIDDLEWARE: Setting cookie:', { originalName: name, envName })
-            }
-            request.cookies.set({
-              name: envName,
-              value,
-              ...options,
-            })
-            response = NextResponse.next({
-              request: {
-                headers: request.headers,
-              },
-            })
-            response.cookies.set({
-              name: envName,
-              value,
-              ...options,
-            })
+            request.cookies.set({ name: envName, value, ...options })
+            response = NextResponse.next({ request: { headers: request.headers } })
+            response.cookies.set({ name: envName, value, ...options })
           },
           remove(name: string, options: Record<string, unknown>) {
-            // Use environment-specific cookie names
             const envName = `${envPrefix}-${name}`
-            if (process.env.NODE_ENV === 'development') {
-              logger.info('🔧 MIDDLEWARE: Removing cookie:', { originalName: name, envName })
-            }
-            request.cookies.set({
-              name: envName,
-              value: '',
-              ...options,
-            })
-            response = NextResponse.next({
-              request: {
-                headers: request.headers,
-              },
-            })
-            response.cookies.set({
-              name: envName,
-              value: '',
-              ...options,
-            })
+            request.cookies.set({ name: envName, value: '', ...options })
+            response = NextResponse.next({ request: { headers: request.headers } })
+            response.cookies.set({ name: envName, value: '', ...options })
           },
         },
       }
     )
 
-    const { data: { session }, error } = await supabase.auth.getSession()
+    // Get user authentication status
+    const { data: { user }, error } = await supabase.auth.getUser()
+    const isAuthenticated = !error && Boolean(user)
 
-    if (process.env.NODE_ENV === 'development') {
-      logger.info('🔧 MIDDLEWARE: Auth check result:', { 
-        hasSession: !!session, 
-        hasUser: !!session?.user, 
-        error: error?.message,
-        pathname 
-      })
-    }
-
-    // If there's an auth error, treat as unauthenticated (fail-safe)
-    const isAuthenticated = !error && !!session?.user
-    const user = session?.user
-
-    if (error) {
-      if (process.env.NODE_ENV === 'development') {
-        logger.warn('🔧 MIDDLEWARE: Auth error, treating as unauthenticated:', { error: error.message })
-      }
-    }
-
-    // Define route types with invitation support
-    const authRoutes = ['/login', '/signup', '/verify-email', '/confirm-email']
-    const appRoutes = ['/dashboard', '/members', '/staff', '/attendance', '/settings', '/team', '/upgrade']
-    const publicRoutes = ['/', '/contact', '/privacy-policy', '/terms-of-service', '/refund-policy']
-    const portalRoutes = ['/portal'] // Member portal routes
-    const inviteRoutes = ['/invite', '/accept-invitation'] // Future-proof for dedicated invite pages
-    
-    const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
-    const isAppRoute = appRoutes.some(route => pathname.startsWith(route))
-    const isPortalRoute = portalRoutes.some(route => pathname.startsWith(route))
+    // Route type checks
+    const isPublicRoute = (ROUTES.PUBLIC as readonly string[]).includes(pathname)
     const isOnboardingRoute = pathname.startsWith('/onboarding')
-    const isInviteRoute = inviteRoutes.some(route => pathname.startsWith(route))
-    const isPublicRoute = publicRoutes.includes(pathname)
-    
-    // Extract invitation token from URL
-    const inviteToken = request.nextUrl.searchParams.get('invite')
-    const hasInviteToken = !!inviteToken
 
     // Handle unauthenticated users
     if (!isAuthenticated) {
       // Allow access to auth routes and public pages
-      if (isAuthRoute || isPublicRoute) {
+      if (isAuthRoute(pathname) || isPublicRoute) {
         return response
       }
       
-      // Allow access to onboarding with invitation token (invitation acceptance flow)
+      // Allow onboarding with invitation token
       if (isOnboardingRoute && hasInviteToken) {
-        if (process.env.NODE_ENV === 'development') {
-          logger.info('🔧 MIDDLEWARE: Allowing unauthenticated access to onboarding with invite token')
-        }
+        if (isDev) logger.info('🔧 Allowing unauthenticated onboarding with invite')
         return response
       }
       
-      // Allow access to future dedicated invite routes
-      if (isInviteRoute) {
-        if (process.env.NODE_ENV === 'development') {
-          logger.info('🔧 MIDDLEWARE: Allowing access to invite route')
-        }
+      // Allow invite routes
+      if (isInviteRoute(pathname)) {
+        if (isDev) logger.info('🔧 Allowing access to invite route')
         return response
       }
       
-      // Redirect to login for protected routes, preserve invite token
-      const loginUrl = new URL('/login', request.url)
-              if (hasInviteToken) {
-          loginUrl.searchParams.set('invite', inviteToken)
-          if (process.env.NODE_ENV === 'development') {
-            logger.info('🔧 MIDDLEWARE: Redirecting unauthenticated user to login with invite token')
-          }
-        } else {
-          if (process.env.NODE_ENV === 'development') {
-            logger.info('🔧 MIDDLEWARE: Redirecting unauthenticated user to login')
-          }
-        }
-      return NextResponse.redirect(loginUrl)
+      // Redirect to login with invite token preservation
+      if (isDev) {
+        logger.info(`🔧 Redirecting unauthenticated user to login${hasInviteToken ? ' with invite' : ''}`)
+      }
+      return createRedirect('/login', request, inviteToken || undefined)
     }
 
     // Handle authenticated users
-    if (isAuthenticated && user) {
-      // Check if user has completed onboarding (has gym setup) and get role info
-      let hasGym = false
-      let userRoleData: { roles: { name: string }[] } | null = null
-      let userProfileData: { gym_id: string } | null = null
-      
-      try {
-        // Single query to get both profile and role information
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('gym_id')
-          .eq('id', user.id)
-          .single()
-        
-        if (process.env.NODE_ENV === 'development') {
-          logger.info('🔧 MIDDLEWARE: Profile fetch result:', {
-            profile,
-            profileError: profileError?.message,
-            hasGymId: !!(profile?.gym_id),
-            userId: user.id
-          })
-        }
-        
-        hasGym = !!(profile?.gym_id)
-        userProfileData = profile
-        
-        // If user has gym, also fetch their role information
-        if (hasGym && profile?.gym_id) {
-          const { data: userRole, error: roleError } = await supabase
-            .from('user_roles')
-            .select(`
-              role_id,
-              roles(name)
-            `)
-            .eq('user_id', user.id)
-            .eq('gym_id', profile.gym_id)
-            .eq('is_active', true)
-            .single()
-          
-          if (process.env.NODE_ENV === 'development') {
-            logger.info('🔧 MIDDLEWARE: Role fetch result:', {
-              userRole,
-              roleError: roleError?.message,
-              gymId: profile.gym_id
-            })
-          }
-          
-          userRoleData = userRole
-        }
-      } catch (error) {
-        // If profile fetch fails, treat as no gym (fail-safe)
-        if (process.env.NODE_ENV === 'development') {
-          logger.warn('🔧 MIDDLEWARE: Profile/Role fetch failed, treating as no gym:', { error })
-        }
-        hasGym = false
-      }
-
-      // Redirect authenticated users away from auth routes
-      if (isAuthRoute) {
-        // Preserve invite token in redirects
-        const redirectUrl = hasGym ? '/dashboard' : '/onboarding'
-        const redirectUrlObj = new URL(redirectUrl, request.url)
-        
-        if (hasInviteToken) {
-          redirectUrlObj.searchParams.set('invite', inviteToken)
-          if (process.env.NODE_ENV === 'development') {
-            logger.info('🔧 MIDDLEWARE: Redirecting authenticated user from auth route with invite token to:', { redirectUrl })
-          }
-        } else {
-          if (process.env.NODE_ENV === 'development') {
-            logger.info('🔧 MIDDLEWARE: Redirecting authenticated user from auth route to:', { redirectUrl })
-          }
-        }
-        return NextResponse.redirect(redirectUrlObj)
-      }
-
-      // Handle onboarding flow
-      if (isOnboardingRoute) {
-        if (process.env.NODE_ENV === 'development') {
-          logger.info('🔧 MIDDLEWARE: Onboarding route check:', { hasGym, hasInviteToken, shouldRedirect: hasGym && !hasInviteToken })
-        }
-        
-        // If user already has gym but has an invite token, allow onboarding for invitation acceptance
-        if (hasGym && hasInviteToken) {
-          if (process.env.NODE_ENV === 'development') {
-            logger.info('🔧 MIDDLEWARE: Allowing onboarding access for user with gym (has invite token)')
-          }
-          return response
-        }
-        
-        // If user already has gym and no invite token, redirect to dashboard
-        if (hasGym && !hasInviteToken) {
-          if (process.env.NODE_ENV === 'development') {
-            logger.info('🔧 MIDDLEWARE: Redirecting /onboarding → /dashboard (user has gym, no invite)')
-          }
-          return NextResponse.redirect(new URL('/dashboard', request.url))
-        }
-        
-        // Allow access to onboarding for users without gym
-        if (process.env.NODE_ENV === 'development') {
-          logger.info('🔧 MIDDLEWARE: Allowing access to onboarding')
-        }
-        return response
-      }
-
-      // Handle app routes
-      if (isAppRoute) {
-        // If user doesn't have gym, redirect to onboarding (preserve invite token)
-        if (!hasGym) {
-          const onboardingUrl = new URL('/onboarding', request.url)
-          if (hasInviteToken) {
-            onboardingUrl.searchParams.set('invite', inviteToken)
-          }
-          if (process.env.NODE_ENV === 'development') {
-            logger.info('🔧 MIDDLEWARE: Redirecting to onboarding (no gym)', { hasInviteToken })
-          }
-          return NextResponse.redirect(onboardingUrl)
-        }
-        
-        // If user has invite token, allow dashboard access for multi-gym invitation handling
-        if (hasInviteToken) {
-          if (process.env.NODE_ENV === 'development') {
-            logger.info('🔧 MIDDLEWARE: Allowing app route access with invite token')
-          }
-          return response
-        }
-        
-        // Check if user is a member and redirect to portal (using cached data)
-        if (userRoleData) {
-          const roleName = (userRoleData.roles as unknown as { name: string })?.name
-          if (roleName === 'member') {
-            if (process.env.NODE_ENV === 'development') {
-              logger.info('🔧 MIDDLEWARE: Redirecting member from app route to portal')
-            }
-            const portalUrl = new URL('/portal', request.url)
-            return NextResponse.redirect(portalUrl)
-          }
-        }
-        
-        // Allow access to app routes for non-members
-        return response
-      }
-
-    // Handle portal routes (member-specific)
-    if (isPortalRoute) {
-      if (process.env.NODE_ENV === 'development') {
-        logger.info('🔧 MIDDLEWARE: Processing portal route access')
-      }
-      
-      // Check if user has member role in this gym (using cached data)
-      if (!userProfileData?.gym_id) {
-        if (process.env.NODE_ENV === 'development') {
-          logger.info('🔧 MIDDLEWARE: No gym_id found for user, redirecting to dashboard')
-        }
-        const dashboardUrl = new URL('/dashboard', request.url)
-        
-        // Set toast message in cookie
-        response.cookies.set('toast_message', 'no_gym', {
-          httpOnly: false,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: 5 // 5 seconds
-        })
-        
-        return NextResponse.redirect(dashboardUrl)
-      }
-      
-      if (process.env.NODE_ENV === 'development') {
-        logger.info('🔧 MIDDLEWARE: Portal role check:', { 
-          userRoleData, 
-          gymId: userProfileData.gym_id,
-          rawRoles: userRoleData?.roles,
-          extractedRoleName: (userRoleData?.roles as unknown as { name: string })?.name
-        })
-      }
-      
-      // Only allow access if user has 'member' role
-      if (userRoleData) {
-        const roleName = (userRoleData.roles as unknown as { name: string })?.name
-        if (roleName === 'member') {
-          if (process.env.NODE_ENV === 'development') {
-            logger.info('🔧 MIDDLEWARE: Allowing portal access - user is member')
-          }
-          return response
-        }
-      }
-      
-      // Redirect non-members to dashboard with toast message
-      if (process.env.NODE_ENV === 'development') {
-        logger.info('🔧 MIDDLEWARE: Redirecting non-member from portal to dashboard')
-      }
-      const dashboardUrl = new URL('/dashboard', request.url)
-      
-      // Set toast message in cookie instead of URL params
-      response.cookies.set('toast_message', 'portal_access_denied', {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 5 // 5 seconds
-      })
-      
-      return NextResponse.redirect(dashboardUrl)
+    if (!user) {
+      // This shouldn't happen, but handle gracefully
+      return createRedirect('/login', request, inviteToken || undefined)
     }
 
-    // Allow access to future dedicated invite routes
-    if (isInviteRoute) {
-      if (process.env.NODE_ENV === 'development') {
-        logger.info('🔧 MIDDLEWARE: Allowing access to invite route for authenticated user')
+    // Fetch user profile and role information
+    const { hasGym, userRole, isInactive, profileData } = await fetchUserProfile(supabase, user.id)
+
+    // Cache user state for potential reuse
+    const userState = { isAuthenticated, hasGym, role: userRole, isInactive }
+
+    // Redirect authenticated users away from auth routes
+    if (isAuthRoute(pathname)) {
+      let redirectPath = hasGym ? '/dashboard' : '/onboarding'
+      
+      // Redirect members to portal instead of dashboard
+      if (hasGym && userRole === 'member') {
+        redirectPath = '/portal'
       }
+      
+      return createRedirect(redirectPath, request, inviteToken || undefined)
+    }
+
+    // Handle inactive users (has gym but no active role)
+    if (isInactive && !isSpecialRoute(pathname) && !isPublicRoute && !isOnboardingRoute) {
+      return createRedirect('/inactive-user', request, inviteToken || undefined)
+    }
+
+    // Handle onboarding flow
+    if (isOnboardingRoute) {
+      // Always allow with invite token (for invitation acceptance)
+      if (hasInviteToken) {
+        return response
+      }
+      
+      // Redirect to dashboard if already has gym
+      if (hasGym) {
+        return createRedirect('/dashboard', request)
+      }
+      
       return response
     }
 
-      // For root path, redirect based on onboarding status
-      if (pathname === '/') {
-        const redirectPath = hasGym ? '/dashboard' : '/onboarding'
-        const redirectUrl = new URL(redirectPath, request.url)
-        if (hasInviteToken) {
-          redirectUrl.searchParams.set('invite', inviteToken)
-        }
-        if (process.env.NODE_ENV === 'development') {
-          logger.info('🔧 MIDDLEWARE: Redirecting root path to:', { redirectPath, hasInviteToken })
-        }
-        return NextResponse.redirect(redirectUrl)
+    // Handle app routes
+    if (isAppRoute(pathname)) {
+      // Redirect to onboarding if no gym
+      if (!hasGym) {
+        return createRedirect('/onboarding', request, inviteToken || undefined)
       }
+      
+      // Allow dashboard access with invite token (for multi-gym invitations)
+      if (hasInviteToken) {
+        return response
+      }
+      
+      // Redirect members to portal
+      if (userRole === 'member') {
+        return createRedirect('/portal', request)
+      }
+
+      // Check subscription access for protected routes
+      if (profileData?.gym_id && !pathname.startsWith('/upgrade') && !pathname.startsWith('/settings')) {
+        const hasAccess = await checkSubscriptionAccess(supabase, profileData.gym_id)
+        
+        if (!hasAccess) {
+          const redirectResponse = createRedirect('/upgrade', request)
+          redirectResponse.cookies.set('subscription_status', 'no_access', {
+            httpOnly: false,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: CONFIG.COOKIE_MAX_AGE
+          })
+          return redirectResponse
+        }
+      }
+      
+      return response
     }
 
-    // Allow all other routes
+    // Handle portal routes (member-specific)
+    if (isPortalRoute(pathname)) {
+      if (!profileData?.gym_id) {
+        const dashboardResponse = createRedirect('/dashboard', request)
+        setToastCookie(dashboardResponse, 'no_gym')
+        return dashboardResponse
+      }
+      
+      // Only members can access portal
+      if (userRole === 'member') {
+        return response
+      }
+      
+      // Redirect non-members with toast message
+      const dashboardResponse = createRedirect('/dashboard', request)
+      setToastCookie(dashboardResponse, 'portal_access_denied')
+      return dashboardResponse
+    }
+
+    // Allow invite routes
+    if (isInviteRoute(pathname)) {
+      return response
+    }
+
+    // Handle root path redirect
+    if (pathname === '/') {
+      const redirectPath = hasGym ? '/dashboard' : '/onboarding'
+      return createRedirect(redirectPath, request, inviteToken || undefined)
+    }
+
+    // Cache successful response
+    requestCache.set(cacheKey, {
+      response,
+      timestamp: Date.now(),
+      userState
+    })
+    
     return response
 
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      logger.error('🔧 MIDDLEWARE: Error:', { error })
-    }
-    // On error, allow the request to continue (fail open)
+    logger.error('Middleware error - failing open:',  { error })
+    // Fail open on any unexpected error
     return NextResponse.next()
   }
 }
 
-// Using Node runtime to avoid HMR conflicts with lucide-react and other packages
-// export const runtime = 'experimental-edge'
-
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
+     * Match all request paths except:
      * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)  
      * - favicon.ico (favicon file)
-     * - Static files (.png, .jpg, .css, .js, etc.)
+     * - Static files with extensions
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\..*|sw\\.js|manifest\\.json|browserconfig\\.xml|robots\\.txt).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot|sw\\.js|manifest\\.json|browserconfig\\.xml|robots\\.txt)$).*)',
   ],
 }

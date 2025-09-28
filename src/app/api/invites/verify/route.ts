@@ -37,16 +37,19 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
 
-    if (!verificationResult?.valid) {
+    // Cast the result to the expected type
+    const result = verificationResult as { valid: boolean; error?: string; [key: string]: unknown } | null
+
+    if (!result?.valid) {
       logger.warn('Invalid invitation token attempted:', { token: token.substring(0, 8) + '...' })
       return NextResponse.json({ 
-        error: verificationResult?.error || 'Invalid invitation token',
+        error: result?.error || 'Invalid invitation token',
         valid: false 
       }, { status: 404 })
     }
 
     // Return the verification result directly from RPC
-    return NextResponse.json(verificationResult)
+    return NextResponse.json(result)
 
   } catch (error) {
     logger.error('Invitation verification error:', {error})
@@ -115,8 +118,11 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    if (!acceptanceResult?.success) {
-      const errorMessage = acceptanceResult?.error || 'Failed to accept invitation'
+    // Cast the result to the expected type
+    const result = acceptanceResult as { success: boolean; error?: string; [key: string]: unknown } | null
+
+    if (!result?.success) {
+      const errorMessage = result?.error || 'Failed to accept invitation'
       const statusCode = errorMessage.includes('different email') ? 400 :
                          errorMessage.includes('already have a role') ? 409 :
                          errorMessage.includes('Invalid') || errorMessage.includes('expired') ? 404 : 400
@@ -125,25 +131,25 @@ export async function POST(request: NextRequest) {
         error: errorMessage, 
         userId: user.id,
         email: user.email,
-        details: acceptanceResult?.details,
-        fullResult: acceptanceResult 
+        details: result?.details,
+        fullResult: result 
       })
 
       return NextResponse.json({
         success: false,
         error: errorMessage,
-        ...(acceptanceResult?.details && { details: acceptanceResult.details })
+        ...(result?.details && typeof result.details === 'object' ? { details: result.details } : {})
       }, { status: statusCode })
     }
 
     logger.info('Invitation accepted successfully', { 
       userId: user.id,
-      gymId: acceptanceResult.assignment?.gym_id,
-      role: acceptanceResult.assignment?.role
+      gymId: (result as { assignment?: { gym_id?: string; role?: string } })?.assignment?.gym_id,
+      role: (result as { assignment?: { gym_id?: string; role?: string } })?.assignment?.role
     })
 
     // Return the success result directly from RPC
-    return NextResponse.json(acceptanceResult)
+    return NextResponse.json(result)
 
   } catch (error) {
     logger.error('Invitation acceptance error:', { error })

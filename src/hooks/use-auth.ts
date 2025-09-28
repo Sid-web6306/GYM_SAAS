@@ -6,6 +6,7 @@ import type { User } from '@supabase/supabase-js'
 import type { ProfileWithRBAC } from '@/types/rbac.types'
 import type { Database } from '@/types/supabase'
 import { toastActions } from '@/stores/toast-store'
+import { logger } from '@/lib/logger'
 
 export interface AuthData {
   user: User | null
@@ -21,10 +22,27 @@ async function fetchAuthSession(): Promise<AuthData> {
   const supabase = createClient()
   
   try {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
     
-    if (sessionError) throw sessionError
-    if (!session?.user) {
+    // Handle specific auth session errors more gracefully
+    if (userError) {
+      // If it's a session missing error, treat as unauthenticated rather than throwing
+      if (userError.message?.includes('Auth session missing') || 
+          userError.message?.includes('session_not_found')) {
+        logger.info('Auth session missing, treating as unauthenticated')
+        return {
+          user: null,
+          profile: null,
+          isLoading: false,
+          isAuthenticated: false,
+          hasGym: false,
+          error: null
+        }
+      }
+      throw userError
+    }
+    
+    if (!user) {
       return {
         user: null,
         profile: null,
@@ -39,22 +57,22 @@ async function fetchAuthSession(): Promise<AuthData> {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
-    console.log('🔧 CLIENT AUTH: Profile fetch result:', {
+    logger.info('Profile fetch result:', {
       profile,
       profileError: profileError?.message,
       profileCode: profileError?.code,
       hasGymId: !!(profile?.gym_id),
-      userId: session.user.id
+      userId: user.id
     })
 
     // Profile not existing is not an error for new users
     const profileData = profileError?.code === 'PGRST116' ? null : profile
 
     const result = {
-      user: session.user,
+      user: user,
       profile: profileData as ProfileWithRBAC | null,
       isLoading: false,
       isAuthenticated: true,
@@ -62,7 +80,7 @@ async function fetchAuthSession(): Promise<AuthData> {
       error: profileError?.code !== 'PGRST116' ? profileError : null
     }
 
-    console.log('🔧 CLIENT AUTH: Final auth result:', { 
+    logger.info('Final auth result:', { 
       hasGym: result.hasGym, 
       hasProfile: !!result.profile,
       gymId: result.profile?.gym_id 
@@ -70,7 +88,7 @@ async function fetchAuthSession(): Promise<AuthData> {
 
     return result
   } catch (error) {
-    console.error('Auth session fetch error:', error)
+    logger.error('Auth session fetch error:', { error })
     return {
       user: null,
       profile: null,
@@ -90,7 +108,16 @@ export function useAuth() {
     queryKey: ['auth-session'],
     queryFn: fetchAuthSession,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 1,
+    retry: (failureCount, error) => {
+      // Don't retry on auth session missing errors
+      if (error?.message?.includes('Auth session missing') || 
+          error?.message?.includes('session_not_found')) {
+        return false
+      }
+      // Retry up to 2 times for other errors
+      return failureCount < 2
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   })
@@ -100,8 +127,14 @@ export function useAuth() {
     const supabase = createClient()
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      // Note: We intentionally don't use the session parameter to avoid security warnings
+      // The session data from onAuthStateChange could be insecure, so we refetch via getUser()
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-        queryClient.invalidateQueries({ queryKey: ['auth-session'] })
+        // Add a small delay to reduce race conditions with middleware
+        const delay = event === 'SIGNED_IN' ? 100 : 0
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['auth-session'] })
+        }, delay)
       }
     })
 
@@ -126,18 +159,18 @@ export function useLogout() {
 
   return useMutation({
     mutationFn: async () => {
-      console.log('🔧 LOGOUT: Starting logout process...')
+      logger.info('Starting logout process...')
       const supabase = createClient()
       const { error } = await supabase.auth.signOut()
       if (error) {
-        console.error('🔧 LOGOUT: Supabase signOut error:', error)
+        logger.error('Supabase signOut error:', { error })
         throw error
       }
-      console.log('🔧 LOGOUT: Supabase signOut successful')
+      logger.info('Supabase signOut successful')
       return { success: true, message: 'Logged out successfully' }
     },
     onSuccess: (result) => {
-      console.log('🔧 LOGOUT: onSuccess called with:', result)
+      logger.info('Logout onSuccess called:', { result })
       
       // Show success toast using toastActions
       toastActions.success('Logged Out', 'You have been successfully logged out')
@@ -150,7 +183,7 @@ export function useLogout() {
       }, 500)
     },
     onError: (error) => {
-      console.error('🔧 LOGOUT: onError called with:', error)
+      logger.error('Logout onError called:', { error })
       
       // Show error toast using toastActions
       toastActions.error('Logout Failed', error.message || 'An error occurred during logout')
@@ -228,7 +261,7 @@ export function useUpdateProfile() {
         queryClient.setQueryData(['auth-session'], context.previousAuth)
       }
       
-      console.error('Profile update error:', error)
+      logger.error('Profile update error:', { error })
       toastActions.error('Update Failed', 'Failed to update profile. Please try again.')
     },
     onSuccess: () => {

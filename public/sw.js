@@ -14,7 +14,6 @@ const STATIC_ASSETS = [
 ]
 
 self.addEventListener('install', (event) => {
-  console.log('Service Worker installing...')
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => cache.addAll(STATIC_ASSETS.filter(url => url !== '/offline')))
@@ -23,7 +22,6 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker activating...')
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -91,10 +89,10 @@ self.addEventListener('fetch', (event) => {
 
 // Handle background sync (optional)
 self.addEventListener('sync', (event) => {
-  console.log('Background sync triggered')
+  logger.info('Background sync event:', {event})
 })
 
 // Handle push notifications (optional)
 self.addEventListener('push', (event) => {
-  console.log('Push notification received')
+  logger.info('Push notification received:', {event})
 })

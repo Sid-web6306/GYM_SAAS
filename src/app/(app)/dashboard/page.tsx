@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { logger } from '@/lib/logger';
 import { 
   Users, 
   DollarSign, 
@@ -59,7 +60,7 @@ const DashboardPage = () => {
   // Handle auth errors
   React.useEffect(() => {
     if (authError) {
-      console.error('Auth error:', authError)
+      logger.error('Auth error:', {authError})
     }
   }, [authError])
 

@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/client'
 import { toastActions } from '@/stores/toast-store'
 import { useEffect } from 'react'
 import { useAuth } from './use-auth'
+import { logger } from '@/lib/logger'
 
 // Types
 export interface Gym {
@@ -121,12 +122,12 @@ export function useGymData(gymId: string | null) {
       if (error) {
         // Enhanced error handling for logout scenarios
         if (isAuthenticationError(error)) {
-          console.log('Gym fetch: Authentication/logout error - this is expected during logout')
+          logger.info('Gym fetch: Authentication/logout error - this is expected during logout')
           throw error
         }
         
         // Log detailed error info for debugging (only for non-auth errors)
-        console.error('Gym fetch error:', {
+        logger.error('Gym fetch error:', {
           error,
           errorType: typeof error,
           errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
@@ -158,7 +159,7 @@ export function useGymData(gymId: string | null) {
   useEffect(() => {
     // Cancel any ongoing queries when user logs out or loses authentication
     if (!isAuthenticated || !user) {
-      console.log('Gym data: Detected logout, cancelling gym queries')
+      logger.info('Gym data: Detected logout, cancelling gym queries')
       queryClient.cancelQueries({ queryKey: gymKeys.all })
       return
     }
@@ -182,7 +183,7 @@ export function useGymData(gymId: string | null) {
           filter: `id=eq.${gymId}`,
         },
         (payload) => {
-          console.log('Gym real-time update:', payload)
+          logger.info('Gym real-time update:', payload)
           
           if (payload.eventType === 'UPDATE' && payload.new) {
             // Update cache with real-time data (no toast - mutations handle user feedback)
@@ -223,11 +224,11 @@ export function useGymStats(gymId: string | null) {
       if (error) {
         // Handle authentication errors gracefully
         if (isAuthenticationError(error)) {
-          console.log('Stats fetch: Authentication error during logout - this is expected')
+          logger.info('Stats fetch: Authentication error during logout - this is expected')
           throw error
         }
         
-        console.error('Members fetch error for stats:', error)
+        logger.error('Members fetch error for stats:', {error})
         throw error
       }
 
@@ -317,11 +318,11 @@ export function useGymAnalytics(gymId: string | null) {
       if (error) {
         // Handle authentication errors gracefully
         if (isAuthenticationError(error)) {
-          console.log('Analytics fetch: Authentication error during logout - this is expected')
+          logger.info('Analytics fetch: Authentication error during logout - this is expected')
           throw error
         }
         
-        console.error('Members fetch error for analytics:', error)
+        logger.error('Members fetch error for analytics:', {error})
         throw error
       }
 
@@ -370,7 +371,7 @@ export function useUpdateGym() {
         .single()
       
       if (error) {
-        console.error('Gym update error:', error)
+        logger.error('Gym update error:', {error})
         throw error
       }
       
@@ -433,7 +434,7 @@ export function useCreateGym() {
         .single()
       
       if (error) {
-        console.error('Gym creation error:', error)
+        logger.error('Gym creation error:', {error})
         throw error
       }
       
@@ -580,17 +581,17 @@ export function useGymOwner(gymId: string | null) {
       if (error) {
         // Handle authentication errors gracefully
         if (isAuthenticationError(error)) {
-          console.log('Gym owner fetch: Authentication error during logout - this is expected')
+          logger.info('Gym owner fetch: Authentication error during logout - this is expected')
           throw error
         }
         
         // Handle access denied (user not in gym) - return null
         if (error.message?.includes('Access denied')) {
-          console.log('Gym owner fetch: Access denied - user not member of gym')
+          logger.info('Gym owner fetch: Access denied - user not member of gym')
           return null
         }
         
-        console.error('Gym owner fetch error:', error)
+        logger.error('Gym owner fetch error:', {error})
         throw error
       }
       

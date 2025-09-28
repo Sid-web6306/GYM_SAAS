@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
 import { useCallback, useMemo } from 'react'
-import { useAuth } from './use-auth'
-import { assignRoleToUser } from '@/actions/rbac.actions'
+import { useAuth } from '@/hooks/use-auth'
+import { logger } from '@/lib/logger'
+import { assignRoleToUser, deleteUserFromGym } from '@/actions/rbac.actions'
 import type { 
   GymRole, 
   Permission, 
@@ -46,7 +47,7 @@ export const useRBAC = (): RBACContext | null => {
       })
 
       if (error) {
-        console.error('Error fetching user permissions:', error)
+        logger.error('Error fetching user permissions:', {error})
         return null
       }
 
@@ -273,15 +274,20 @@ export const useRemoveRole = () => {
 
   return useMutation({
     mutationFn: async ({ user_id, gym_id }: { user_id: string; gym_id?: string }) => {
-      const supabase = createClient()
+      const targetGymId = gym_id || profile?.gym_id || ''
       
-      const { error } = await supabase
-        .from('user_roles')
-        .update({ is_active: false })
-        .eq('user_id', user_id)
-        .eq('gym_id', gym_id || profile?.gym_id || '')
+      if (!targetGymId) {
+        throw new Error('No gym ID available')
+      }
 
-      if (error) throw error
+      // Use the server action for proper permission checking and cleanup
+      const result = await deleteUserFromGym(user_id, targetGymId)
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to remove user')
+      }
+
+      return result
     },
     onSuccess: (_, variables) => {
       // Invalidate relevant queries

@@ -3,11 +3,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { logger } from '@/lib/logger'
 
 export interface StaffMember {
   id: string
   full_name: string | null
-  email: string
+  email: string | null
   default_role: string | null
   created_at: string
 }
@@ -70,7 +71,7 @@ export function useStaffData(gymId: string, filters?: StaffFilters & { enabled?:
       const { data, error, count } = await query
 
       if (error) {
-        console.error('Staff query error:', error)
+        logger.error('Staff query failed', { gymId, error: error.message })
         throw error
       }
 
@@ -146,7 +147,7 @@ export function useGymRoles(gymId: string) {
         .eq('is_active', true)
       
       if (error) {
-        console.error('Roles query error:', error)
+        logger.error('Roles query failed', { gymId, error: error.message })
         throw error
       }
       

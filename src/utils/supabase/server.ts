@@ -3,6 +3,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'  // ← F
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'  // ← For service role (no cookies needed)
 import { cookies } from 'next/headers'
 import { type Database } from '@/types/supabase'
+import { logger } from '@/lib/logger'
 
 // Get environment-specific cookie prefix to prevent cross-environment conflicts
 const getEnvironmentPrefix = () => {
@@ -49,7 +50,7 @@ export const createClient = async () => {
             console.log(`Server cookie set: ${envName} (environment: ${envPrefix})`)
           } catch (error) { 
             // Ignore errors on Server Components
-            console.warn('Server cookie set error:', error)
+            logger.warn('Server cookie set error:', {error})
           }
         },
         remove(name: string, options: CookieOptions) {
@@ -60,7 +61,7 @@ export const createClient = async () => {
             console.log(`Server cookie removed: ${envName} (environment: ${envPrefix})`)
           } catch (error) { 
             // Ignore errors on Server Components
-            console.warn('Server cookie remove error:', error)
+            logger.warn('Server cookie remove error:', {error})
           }
         },
       },

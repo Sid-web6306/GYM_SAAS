@@ -3,6 +3,7 @@
 import React, { useEffect, useTransition, useDeferredValue } from 'react'
 import { useAuth, useUpdateProfile } from '@/hooks/use-auth'
 import { useUpdateGym, useGymData, useGymOwner } from '@/hooks/use-gym-data'
+import { logger } from '@/lib/logger'
 import { useSettingsStore } from '@/stores/settings-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -118,7 +119,7 @@ const SettingsPage = () => {
       })
       toastActions.success('Profile Updated', 'Your profile has been updated successfully.')
     } catch (error) {
-      console.error('Profile update error:', error)
+      logger.error('Profile update error:', { error })
       toastActions.error('Update Failed', 'Failed to update profile. Please try again.')
     }
   }
@@ -136,7 +137,7 @@ const SettingsPage = () => {
       })
       toastActions.success('Gym Updated', 'Your gym information has been updated successfully.')
     } catch (error) {
-      console.error('Gym update error:', error)
+      logger.error('Gym update error:', {error})
       toastActions.error('Update Failed', 'Failed to update gym information. Please try again.')
     }
   }

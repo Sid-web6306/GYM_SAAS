@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -17,10 +22,10 @@ export type Database = {
     Functions: {
       graphql: {
         Args: {
+          extensions?: Json
           operationName?: string
           query?: string
           variables?: Json
-          extensions?: Json
         }
         Returns: Json
       }
@@ -34,26 +39,416 @@ export type Database = {
   }
   public: {
     Tables: {
-      gyms: {
+      attendance_sessions: {
+        Row: {
+          check_in_at: string
+          check_out_at: string | null
+          created_at: string
+          created_by: string | null
+          gym_id: string
+          id: string
+          member_id: string | null
+          method: string | null
+          notes: string | null
+          staff_user_id: string | null
+          subject_type: string
+          updated_at: string
+        }
+        Insert: {
+          check_in_at?: string
+          check_out_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          gym_id: string
+          id?: string
+          member_id?: string | null
+          method?: string | null
+          notes?: string | null
+          staff_user_id?: string | null
+          subject_type: string
+          updated_at?: string
+        }
+        Update: {
+          check_in_at?: string
+          check_out_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          gym_id?: string
+          id?: string
+          member_id?: string | null
+          method?: string | null
+          notes?: string | null
+          staff_user_id?: string | null
+          subject_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_sessions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_sessions_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_sessions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_portal_adoption"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "attendance_sessions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_sessions_staff_user_id_fkey"
+            columns: ["staff_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          amount: number | null
+          created_at: string
+          currency: string | null
+          description: string | null
+          document_date: string
+          download_url: string | null
+          file_size_bytes: number | null
+          hosted_url: string | null
+          id: string
+          metadata: Json | null
+          mime_type: string | null
+          razorpay_id: string | null
+          status: string | null
+          tags: string[] | null
+          title: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          document_date?: string
+          download_url?: string | null
+          file_size_bytes?: number | null
+          hosted_url?: string | null
+          id?: string
+          metadata?: Json | null
+          mime_type?: string | null
+          razorpay_id?: string | null
+          status?: string | null
+          tags?: string[] | null
+          title: string
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          document_date?: string
+          download_url?: string | null
+          file_size_bytes?: number | null
+          hosted_url?: string | null
+          id?: string
+          metadata?: Json | null
+          mime_type?: string | null
+          razorpay_id?: string | null
+          status?: string | null
+          tags?: string[] | null
+          title?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      feedback: {
         Row: {
           created_at: string
+          feedback_text: string | null
           id: string
-          name: string | null
-          owner_id?: string | null
+          metadata: Json | null
+          rating: number | null
+          reason: string
+          subscription_id: string | null
+          updated_at: string
+          user_id: string
+          would_recommend: boolean | null
         }
         Insert: {
           created_at?: string
+          feedback_text?: string | null
           id?: string
-          name?: string | null
-          owner_id?: string | null
+          metadata?: Json | null
+          rating?: number | null
+          reason: string
+          subscription_id?: string | null
+          updated_at?: string
+          user_id: string
+          would_recommend?: boolean | null
         }
         Update: {
           created_at?: string
+          feedback_text?: string | null
           id?: string
+          metadata?: Json | null
+          rating?: number | null
+          reason?: string
+          subscription_id?: string | null
+          updated_at?: string
+          user_id?: string
+          would_recommend?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string | null
+          email: string
+          expires_at: string
+          gym_id: string | null
+          id: string
+          invited_by: string | null
+          metadata: Json | null
+          role: string
+          status: string | null
+          token: string
+          updated_at: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string | null
+          email: string
+          expires_at: string
+          gym_id?: string | null
+          id?: string
+          invited_by?: string | null
+          metadata?: Json | null
+          role: string
+          status?: string | null
+          token: string
+          updated_at?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          gym_id?: string | null
+          id?: string
+          invited_by?: string | null
+          metadata?: Json | null
+          role?: string
+          status?: string | null
+          token?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_invitations_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_invitations_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_invitations_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_metrics: {
+        Row: {
+          active_members: number | null
+          checked_in_today: number | null
+          created_at: string
+          gym_id: string
+          id: string
+          metric_date: string
+          month_year: string
+          new_members: number | null
+          retention_rate: number | null
+          revenue: number | null
+          total_members: number | null
+          updated_at: string
+        }
+        Insert: {
+          active_members?: number | null
+          checked_in_today?: number | null
+          created_at?: string
+          gym_id: string
+          id?: string
+          metric_date?: string
+          month_year: string
+          new_members?: number | null
+          retention_rate?: number | null
+          revenue?: number | null
+          total_members?: number | null
+          updated_at?: string
+        }
+        Update: {
+          active_members?: number | null
+          checked_in_today?: number | null
+          created_at?: string
+          gym_id?: string
+          id?: string
+          metric_date?: string
+          month_year?: string
+          new_members?: number | null
+          retention_rate?: number | null
+          revenue?: number | null
+          total_members?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_metrics_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gyms: {
+        Row: {
+          address: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          id: string
+          is_active: boolean | null
+          logo_url: string | null
+          name: string | null
+          phone: string | null
+          settings: Json | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string | null
           name?: string | null
-          owner_id?: string | null
+          phone?: string | null
+          settings?: Json | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string | null
+          name?: string | null
+          phone?: string | null
+          settings?: Json | null
+          updated_at?: string
+          website?: string | null
         }
         Relationships: []
+      }
+      member_activities: {
+        Row: {
+          activity_time: string | null
+          activity_type: string
+          created_at: string
+          id: string
+          member_id: string
+          notes: string | null
+          timestamp: string
+        }
+        Insert: {
+          activity_time?: string | null
+          activity_type: string
+          created_at?: string
+          id?: string
+          member_id: string
+          notes?: string | null
+          timestamp?: string
+        }
+        Update: {
+          activity_time?: string | null
+          activity_type?: string
+          created_at?: string
+          id?: string
+          member_id?: string
+          notes?: string | null
+          timestamp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_activities_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_portal_adoption"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_activities_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       members: {
         Row: {
@@ -62,10 +457,16 @@ export type Database = {
           first_name: string | null
           gym_id: string
           id: string
+          invitation_count: number | null
           join_date: string | null
+          last_activity_at: string | null
           last_name: string | null
+          metadata: Json | null
           phone_number: string | null
+          portal_activated_at: string | null
+          portal_invited_at: string | null
           status: string | null
+          updated_at: string
           user_id: string | null
         }
         Insert: {
@@ -74,10 +475,16 @@ export type Database = {
           first_name?: string | null
           gym_id: string
           id?: string
+          invitation_count?: number | null
           join_date?: string | null
+          last_activity_at?: string | null
           last_name?: string | null
+          metadata?: Json | null
           phone_number?: string | null
+          portal_activated_at?: string | null
+          portal_invited_at?: string | null
           status?: string | null
+          updated_at?: string
           user_id?: string | null
         }
         Update: {
@@ -86,10 +493,16 @@ export type Database = {
           first_name?: string | null
           gym_id?: string
           id?: string
+          invitation_count?: number | null
           join_date?: string | null
+          last_activity_at?: string | null
           last_name?: string | null
+          metadata?: Json | null
           phone_number?: string | null
+          portal_activated_at?: string | null
+          portal_invited_at?: string | null
           status?: string | null
+          updated_at?: string
           user_id?: string | null
         }
         Relationships: [
@@ -102,197 +515,114 @@ export type Database = {
           },
         ]
       }
-      ,
-       attendance_sessions: {
-         Row: {
-           id: string
-           gym_id: string
-           subject_type: 'member' | 'staff'
-           member_id: string | null
-           staff_user_id: string | null
-           check_in_at: string
-           check_out_at: string | null
-           method: string | null
-           notes: string | null
-           created_by: string | null
-           created_at: string
-           updated_at: string
-         }
-         Insert: {
-           id?: string
-           gym_id?: string
-           subject_type: 'member' | 'staff'
-           member_id?: string | null
-           staff_user_id?: string | null
-           check_in_at?: string
-           check_out_at?: string | null
-           method?: string | null
-           notes?: string | null
-           created_by?: string | null
-           created_at?: string
-           updated_at?: string
-         }
-         Update: {
-           id?: string
-           gym_id?: string
-           subject_type?: 'member' | 'staff'
-           member_id?: string | null
-           staff_user_id?: string | null
-           check_in_at?: string
-           check_out_at?: string | null
-           method?: string | null
-           notes?: string | null
-           created_by?: string | null
-           created_at?: string
-           updated_at?: string
-         }
-         Relationships: [
-           {
-             foreignKeyName: "attendance_sessions_gym_id_fkey",
-             columns: ["gym_id"],
-             isOneToOne: false,
-             referencedRelation: "gyms",
-             referencedColumns: ["id"],
-           },
-           {
-             foreignKeyName: "attendance_sessions_member_id_fkey",
-             columns: ["member_id"],
-             isOneToOne: false,
-             referencedRelation: "members",
-             referencedColumns: ["id"],
-           },
-           {
-             foreignKeyName: "attendance_sessions_staff_user_id_fkey",
-             columns: ["staff_user_id"],
-             isOneToOne: false,
-             referencedRelation: "profiles",
-             referencedColumns: ["id"],
-           },
-         ]
-       }
-       ,
-      member_activities: {
+      payment_methods: {
         Row: {
-          id: string
-          member_id: string
-          activity_type: string
-          activity_date: string
-          duration_minutes: number | null
-          notes: string | null
           created_at: string
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          metadata: Json | null
+          razorpay_payment_method_id: string
+          type: string
           updated_at: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          member_id: string
-          activity_type: string
-          activity_date?: string
-          duration_minutes?: number | null
-          notes?: string | null
           created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          metadata?: Json | null
+          razorpay_payment_method_id: string
+          type: string
           updated_at?: string
+          user_id: string
         }
         Update: {
-          id?: string
-          member_id?: string
-          activity_type?: string
-          activity_date?: string
-          duration_minutes?: number | null
-          notes?: string | null
           created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          metadata?: Json | null
+          razorpay_payment_method_id?: string
+          type?: string
           updated_at?: string
+          user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "member_activities_member_id_fkey",
-            columns: ["member_id"],
-            isOneToOne: false,
-            referencedRelation: "members",
-            referencedColumns: ["id"],
-          },
-        ]
+        Relationships: []
       }
-      ,
-      gym_metrics: {
+      permissions: {
         Row: {
+          action: string
+          created_at: string | null
+          description: string | null
+          display_name: string
           id: string
-          gym_id: string
-          metric_type: string
-          metric_value: number
-          metric_date: string
-          created_at: string
-          updated_at: string
+          name: string
+          resource: string
         }
         Insert: {
+          action: string
+          created_at?: string | null
+          description?: string | null
+          display_name: string
           id?: string
-          gym_id: string
-          metric_type: string
-          metric_value: number
-          metric_date?: string
-          created_at?: string
-          updated_at?: string
+          name: string
+          resource: string
         }
         Update: {
+          action?: string
+          created_at?: string | null
+          description?: string | null
+          display_name?: string
           id?: string
-          gym_id?: string
-          metric_type?: string
-          metric_value?: number
-          metric_date?: string
-          created_at?: string
-          updated_at?: string
+          name?: string
+          resource?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "gym_metrics_gym_id_fkey",
-            columns: ["gym_id"],
-            isOneToOne: false,
-            referencedRelation: "gyms",
-            referencedColumns: ["id"],
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string
+          custom_permissions: Json | null
+          default_role: string | null
+          email: string | null
           full_name: string | null
           gym_id: string | null
           id: string
-          email: string
-          updated_at?: string
-          avatar_url?: string | null
-          preferences?: Json
-          default_role?: string | null
-          custom_permissions?: { [key: string]: boolean } | null
-          last_role_sync?: string | null
-          is_gym_owner?: boolean
+          is_gym_owner: boolean | null
+          last_role_sync: string | null
+          preferences: Json | null
+          updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
+          custom_permissions?: Json | null
+          default_role?: string | null
+          email?: string | null
           full_name?: string | null
           gym_id?: string | null
           id: string
-          email: string
-          updated_at?: string
-          avatar_url?: string | null
-          preferences?: Json
-          default_role?: string | null
-          custom_permissions?: { [key: string]: boolean } | null
+          is_gym_owner?: boolean | null
           last_role_sync?: string | null
-          is_gym_owner?: boolean
+          preferences?: Json | null
+          updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
+          custom_permissions?: Json | null
+          default_role?: string | null
+          email?: string | null
           full_name?: string | null
           gym_id?: string | null
           id?: string
-          email?: string
-          updated_at?: string
-          avatar_url?: string | null
-          preferences?: Json
-          default_role?: string | null
-          custom_permissions?: { [key: string]: boolean } | null
+          is_gym_owner?: boolean | null
           last_role_sync?: string | null
-          is_gym_owner?: boolean
+          preferences?: Json | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -304,848 +634,915 @@ export type Database = {
           },
         ]
       }
-      ,
-      roles: {
-        Row: {
-          id: string
-          name: string
-          display_name?: string | null
-          description?: string | null
-          level: number
-          is_system_role?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          display_name?: string | null
-          description?: string | null
-          level: number
-          is_system_role?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          display_name?: string | null
-          description?: string | null
-          level?: number
-          is_system_role?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      ,
-      permissions: {
-        Row: {
-          id: string
-          name: string
-          display_name?: string | null
-          description?: string | null
-          resource: string
-          action: string
-          created_at?: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          display_name?: string | null
-          description?: string | null
-          resource: string
-          action: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          display_name?: string | null
-          description?: string | null
-          resource?: string
-          action?: string
-          created_at?: string
-        }
-        Relationships: []
-      }
-      ,
       role_permissions: {
         Row: {
+          created_at: string | null
           id: string
-          role_id: string
           permission_id: string
-          created_at: string
+          role_id: string
         }
         Insert: {
+          created_at?: string | null
           id?: string
-          role_id: string
           permission_id: string
-          created_at?: string
+          role_id: string
         }
         Update: {
+          created_at?: string | null
           id?: string
-          role_id?: string
           permission_id?: string
-          created_at?: string
+          role_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "role_permissions_role_id_fkey",
-            columns: ["role_id"],
-            isOneToOne: false,
-            referencedRelation: "roles",
-            referencedColumns: ["id"],
+            foreignKeyName: "role_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "role_permissions_permission_id_fkey",
-            columns: ["permission_id"],
-            isOneToOne: false,
-            referencedRelation: "permissions",
-            referencedColumns: ["id"],
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
           },
         ]
       }
-      ,
-      subscription_plans: {
+      roles: {
         Row: {
-          id: string
-          name: string
+          created_at: string | null
           description: string | null
-          price_inr: number
-          billing_cycle: 'monthly' | 'annual'
-          razorpay_plan_id: string | null
-          plan_type?: string | null
-          member_limit?: number | null
-          features?: Json | null
-          is_active?: boolean
-          tier_level?: number | null
-          api_access_enabled?: boolean | null
-          multi_gym_enabled?: boolean | null
-          priority_support?: boolean | null
-          advanced_analytics?: boolean | null
-          created_at?: string
-          updated_at?: string | null
-        }
-        Insert: {
-          id?: string
+          display_name: string
+          id: string
+          is_system_role: boolean | null
+          level: number
           name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
           description?: string | null
-          price_inr: number
-          billing_cycle: 'monthly' | 'annual'
-          razorpay_plan_id?: string | null
-          plan_type?: string | null
-          member_limit?: number | null
-          features?: Json | null
-          is_active?: boolean
-          tier_level?: number | null
-          api_access_enabled?: boolean | null
-          multi_gym_enabled?: boolean | null
-          priority_support?: boolean | null
-          advanced_analytics?: boolean | null
-          created_at?: string
+          display_name: string
+          id?: string
+          is_system_role?: boolean | null
+          level?: number
+          name: string
           updated_at?: string | null
         }
         Update: {
+          created_at?: string | null
+          description?: string | null
+          display_name?: string
           id?: string
+          is_system_role?: boolean | null
+          level?: number
           name?: string
-          description?: string | null
-          price_inr?: number
-          billing_cycle?: 'monthly' | 'annual'
-          razorpay_plan_id?: string | null
-          plan_type?: string | null
-          member_limit?: number | null
-          features?: Json | null
-          is_active?: boolean
-          tier_level?: number | null
-          api_access_enabled?: boolean | null
-          multi_gym_enabled?: boolean | null
-          priority_support?: boolean | null
-          advanced_analytics?: boolean | null
-          created_at?: string
           updated_at?: string | null
         }
         Relationships: []
       }
-      ,
-      subscriptions: {
-        Row: {
-          id: string
-          user_id: string
-          subscription_plan_id: string
-          status: string
-          billing_cycle?: 'monthly' | 'annual' | null
-          current_period_start?: string | null
-          current_period_end?: string | null
-          paused_at?: string | null
-          ends_at?: string | null
-          canceled_at?: string | null
-          trial_start_date?: string | null
-          trial_end_date?: string | null
-          trial_status?: 'active' | 'expired' | null
-          razorpay_subscription_id?: string | null
-          razorpay_customer_id?: string | null
-          created_at?: string
-          updated_at?: string | null
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          subscription_plan_id: string
-          status: string
-          billing_cycle?: 'monthly' | 'annual' | null
-          current_period_start?: string | null
-          current_period_end?: string | null
-          paused_at?: string | null
-          ends_at?: string | null
-          canceled_at?: string | null
-          trial_start_date?: string | null
-          trial_end_date?: string | null
-          trial_status?: 'active' | 'expired' | null
-          razorpay_subscription_id?: string | null
-          razorpay_customer_id?: string | null
-          created_at?: string
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          subscription_plan_id?: string
-          status?: string
-          billing_cycle?: 'monthly' | 'annual' | null
-          current_period_start?: string | null
-          current_period_end?: string | null
-          paused_at?: string | null
-          ends_at?: string | null
-          canceled_at?: string | null
-          trial_start_date?: string | null
-          trial_end_date?: string | null
-          trial_status?: 'active' | 'expired' | null
-          razorpay_subscription_id?: string | null
-          razorpay_customer_id?: string | null
-          created_at?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "subscriptions_plan_id_fkey",
-            columns: ["subscription_plan_id"],
-            isOneToOne: false,
-            referencedRelation: "subscription_plans",
-            referencedColumns: ["id"],
-          },
-        ]
-      }
-      ,
-      feedback: {
-        Row: {
-          id: string
-          subscription_id: string
-          user_id: string
-          reason: string | null
-          feedback_text: string | null
-          rating: number | null
-          would_recommend: boolean | null
-          created_at?: string
-        }
-        Insert: {
-          id?: string
-          subscription_id: string
-          user_id: string
-          reason?: string | null
-          feedback_text?: string | null
-          rating?: number | null
-          would_recommend?: boolean | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          subscription_id?: string
-          user_id?: string
-          reason?: string | null
-          feedback_text?: string | null
-          rating?: number | null
-          would_recommend?: boolean | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      ,
       subscription_events: {
         Row: {
-          id?: string
-          subscription_id: string
-          event_type: string
-          event_data: Json | null
-          webhook_id: string | null
-          processing_duration_ms: number | null
-          created_at?: string
-        }
-        Insert: {
-          id?: string
-          subscription_id: string
-          event_type: string
-          event_data?: Json | null
-          webhook_id?: string | null
-          processing_duration_ms?: number | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          subscription_id?: string
-          event_type?: string
-          event_data?: Json | null
-          webhook_id?: string | null
-          processing_duration_ms?: number | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      ,
-      payment_methods: {
-        Row: {
-          id: string
-          user_id: string
-          razorpay_payment_method_id: string
-          type: string
-          card_brand: string | null
-          card_last4: string | null
-          card_exp_month: number | null
-          card_exp_year: number | null
-          is_default: boolean
-          is_active: boolean
-          metadata: Json | null
-          created_at?: string
-          updated_at?: string | null
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          razorpay_payment_method_id: string
-          type: string
-          card_brand?: string | null
-          card_last4?: string | null
-          card_exp_month?: number | null
-          card_exp_year?: number | null
-          is_default?: boolean
-          is_active?: boolean
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          razorpay_payment_method_id?: string
-          type?: string
-          card_brand?: string | null
-          card_last4?: string | null
-          card_exp_month?: number | null
-          card_exp_year?: number | null
-          is_default?: boolean
-          is_active?: boolean
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      ,
-      documents: {
-        Row: {
-          id: string
-          user_id: string
-          type: string
-          title: string
-          description: string | null
-          razorpay_id: string | null
-          download_url: string | null
-          hosted_url: string | null
-          amount: number | null
-          currency: string
-          status: string | null
-          document_date: string
-          tags: string[]
-          metadata: Json
-          file_size_bytes: number | null
-          mime_type: string
           created_at: string
-          updated_at: string
+          event_data: Json | null
+          event_type: string
+          id: string
+          processing_duration_ms: number | null
+          retry_count: number | null
+          subscription_id: string
+          webhook_id: string | null
         }
         Insert: {
-          id?: string
-          user_id: string
-          type: string
-          title: string
-          description?: string | null
-          razorpay_id?: string | null
-          download_url?: string | null
-          hosted_url?: string | null
-          amount?: number | null
-          currency?: string
-          status?: string | null
-          document_date?: string
-          tags?: string[]
-          metadata?: Json
-          file_size_bytes?: number | null
-          mime_type?: string
           created_at?: string
-          updated_at?: string
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          processing_duration_ms?: number | null
+          retry_count?: number | null
+          subscription_id: string
+          webhook_id?: string | null
         }
         Update: {
-          id?: string
-          user_id?: string
-          type?: string
-          title?: string
-          description?: string | null
-          razorpay_id?: string | null
-          download_url?: string | null
-          hosted_url?: string | null
-          amount?: number | null
-          currency?: string
-          status?: string | null
-          document_date?: string
-          tags?: string[]
-          metadata?: Json
-          file_size_bytes?: number | null
-          mime_type?: string
           created_at?: string
-          updated_at?: string
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          processing_duration_ms?: number | null
+          retry_count?: number | null
+          subscription_id?: string
+          webhook_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "documents_user_id_fkey",
-            columns: ["user_id"],
-            isOneToOne: false,
-            referencedRelation: "profiles",
-            referencedColumns: ["id"],
+            foreignKeyName: "subscription_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
           },
         ]
       }
-      ,
+      subscription_plans: {
+        Row: {
+          advanced_analytics: boolean | null
+          api_access_enabled: boolean | null
+          billing_cycle: string
+          created_at: string | null
+          currency: string | null
+          custom_reporting: boolean | null
+          data_retention_months: number | null
+          description: string | null
+          display_name: string | null
+          features: string[] | null
+          id: string
+          is_active: boolean | null
+          is_popular: boolean | null
+          max_members: number | null
+          max_staff: number | null
+          member_limit: number | null
+          multi_gym_enabled: boolean | null
+          name: string
+          plan_type: string
+          price_inr: number
+          price_monthly: number | null
+          price_yearly: number | null
+          priority_support: boolean | null
+          razorpay_plan_id: string | null
+          sort_order: number | null
+          tier_level: number
+          updated_at: string | null
+        }
+        Insert: {
+          advanced_analytics?: boolean | null
+          api_access_enabled?: boolean | null
+          billing_cycle: string
+          created_at?: string | null
+          currency?: string | null
+          custom_reporting?: boolean | null
+          data_retention_months?: number | null
+          description?: string | null
+          display_name?: string | null
+          features?: string[] | null
+          id?: string
+          is_active?: boolean | null
+          is_popular?: boolean | null
+          max_members?: number | null
+          max_staff?: number | null
+          member_limit?: number | null
+          multi_gym_enabled?: boolean | null
+          name: string
+          plan_type: string
+          price_inr: number
+          price_monthly?: number | null
+          price_yearly?: number | null
+          priority_support?: boolean | null
+          razorpay_plan_id?: string | null
+          sort_order?: number | null
+          tier_level?: number
+          updated_at?: string | null
+        }
+        Update: {
+          advanced_analytics?: boolean | null
+          api_access_enabled?: boolean | null
+          billing_cycle?: string
+          created_at?: string | null
+          currency?: string | null
+          custom_reporting?: boolean | null
+          data_retention_months?: number | null
+          description?: string | null
+          display_name?: string | null
+          features?: string[] | null
+          id?: string
+          is_active?: boolean | null
+          is_popular?: boolean | null
+          max_members?: number | null
+          max_staff?: number | null
+          member_limit?: number | null
+          multi_gym_enabled?: boolean | null
+          name?: string
+          plan_type?: string
+          price_inr?: number
+          price_monthly?: number | null
+          price_yearly?: number | null
+          priority_support?: boolean | null
+          razorpay_plan_id?: string | null
+          sort_order?: number | null
+          tier_level?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          amount: number
+          billing_cycle: string
+          canceled_at: string | null
+          created_at: string
+          currency: string
+          current_period_end: string
+          current_period_start: string
+          ends_at: string | null
+          failed_payment_count: number | null
+          id: string
+          last_payment_date: string | null
+          metadata: Json | null
+          next_payment_date: string | null
+          razorpay_customer_id: string | null
+          razorpay_price_id: string | null
+          razorpay_subscription_id: string | null
+          scheduled_change_data: Json | null
+          scheduled_change_effective_date: string | null
+          scheduled_change_type: string | null
+          starts_at: string
+          status: string
+          subscription_plan_id: string
+          trial_end_date: string | null
+          trial_start_date: string | null
+          trial_status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          billing_cycle?: string
+          canceled_at?: string | null
+          created_at?: string
+          currency?: string
+          current_period_end: string
+          current_period_start?: string
+          ends_at?: string | null
+          failed_payment_count?: number | null
+          id?: string
+          last_payment_date?: string | null
+          metadata?: Json | null
+          next_payment_date?: string | null
+          razorpay_customer_id?: string | null
+          razorpay_price_id?: string | null
+          razorpay_subscription_id?: string | null
+          scheduled_change_data?: Json | null
+          scheduled_change_effective_date?: string | null
+          scheduled_change_type?: string | null
+          starts_at?: string
+          status?: string
+          subscription_plan_id: string
+          trial_end_date?: string | null
+          trial_start_date?: string | null
+          trial_status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          billing_cycle?: string
+          canceled_at?: string | null
+          created_at?: string
+          currency?: string
+          current_period_end?: string
+          current_period_start?: string
+          ends_at?: string | null
+          failed_payment_count?: number | null
+          id?: string
+          last_payment_date?: string | null
+          metadata?: Json | null
+          next_payment_date?: string | null
+          razorpay_customer_id?: string | null
+          razorpay_price_id?: string | null
+          razorpay_subscription_id?: string | null
+          scheduled_change_data?: Json | null
+          scheduled_change_effective_date?: string | null
+          scheduled_change_type?: string | null
+          starts_at?: string
+          status?: string
+          subscription_plan_id?: string
+          trial_end_date?: string | null
+          trial_start_date?: string | null
+          trial_status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_subscription_plan_id_fkey"
+            columns: ["subscription_plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
-          id?: string
-          user_id: string
-          role_id: string
+          assigned_at: string | null
+          assigned_by: string | null
+          created_at: string | null
+          expires_at: string | null
           gym_id: string
-          is_active: boolean
-          assigned_by?: string | null
-          assigned_at?: string
-          expires_at?: string | null
-          created_at?: string
-          updated_at?: string
+          id: string
+          is_active: boolean | null
+          role_id: string
+          updated_at: string | null
+          user_id: string
         }
         Insert: {
-          id?: string
-          user_id: string
-          role_id: string
-          gym_id: string
-          is_active?: boolean
+          assigned_at?: string | null
           assigned_by?: string | null
-          assigned_at?: string
+          created_at?: string | null
           expires_at?: string | null
-          created_at?: string
-          updated_at?: string
+          gym_id: string
+          id?: string
+          is_active?: boolean | null
+          role_id: string
+          updated_at?: string | null
+          user_id: string
         }
         Update: {
-          id?: string
-          user_id?: string
-          role_id?: string
-          gym_id?: string
-          is_active?: boolean
+          assigned_at?: string | null
           assigned_by?: string | null
-          assigned_at?: string
+          created_at?: string | null
           expires_at?: string | null
-          created_at?: string
-          updated_at?: string
+          gym_id?: string
+          id?: string
+          is_active?: boolean | null
+          role_id?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "user_roles_user_id_fkey",
-            columns: ["user_id"],
-            isOneToOne: false,
-            referencedRelation: "profiles",
-            referencedColumns: ["id"],
+            foreignKeyName: "user_roles_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_roles_gym_id_fkey",
-            columns: ["gym_id"],
-            isOneToOne: false,
-            referencedRelation: "gyms",
-            referencedColumns: ["id"],
+            foreignKeyName: "user_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_roles_role_id_fkey",
-            columns: ["role_id"],
-            isOneToOne: false,
-            referencedRelation: "roles",
-            referencedColumns: ["id"],
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
-      ,
-      gym_invitations: {
+      webhook_events: {
         Row: {
+          event_type: string
           id: string
-          gym_id: string
-          invited_by: string
-          email: string
-          role: string
-          token: string
-          expires_at: string
-          status: 'pending' | 'accepted' | 'revoked' | 'expired'
-          metadata: Json | null
-          accepted_by?: string | null
-          accepted_at?: string | null
-          created_at?: string
-          updated_at?: string
+          processed_at: string | null
+          processing_duration_ms: number | null
+          webhook_id: string
         }
         Insert: {
+          event_type: string
           id?: string
-          gym_id: string
-          invited_by: string
-          email: string
-          role: string
-          token: string
-          expires_at: string
-          status?: 'pending' | 'accepted' | 'revoked' | 'expired'
-          metadata?: Json | null
-          accepted_by?: string | null
-          accepted_at?: string | null
-          created_at?: string
-          updated_at?: string
+          processed_at?: string | null
+          processing_duration_ms?: number | null
+          webhook_id: string
         }
         Update: {
+          event_type?: string
           id?: string
-          gym_id?: string
-          invited_by?: string
-          email?: string
-          role?: string
-          token?: string
-          expires_at?: string
-          status?: 'pending' | 'accepted' | 'revoked' | 'expired'
-          metadata?: Json | null
-          accepted_by?: string | null
-          accepted_at?: string | null
-          created_at?: string
-          updated_at?: string
+          processed_at?: string | null
+          processing_duration_ms?: number | null
+          webhook_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "gym_invitations_gym_id_fkey",
-            columns: ["gym_id"],
-            isOneToOne: false,
-            referencedRelation: "gyms",
-            referencedColumns: ["id"],
-          },
-          {
-            foreignKeyName: "gym_invitations_invited_by_fkey",
-            columns: ["invited_by"],
-            isOneToOne: false,
-            referencedRelation: "profiles",
-            referencedColumns: ["id"],
-          },
-          {
-            foreignKeyName: "gym_invitations_accepted_by_fkey",
-            columns: ["accepted_by"],
-            isOneToOne: false,
-            referencedRelation: "profiles",
-            referencedColumns: ["id"],
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      member_portal_adoption: {
+        Row: {
+          activation_time_hours: number | null
+          days_since_last_activity: number | null
+          email: string | null
+          first_name: string | null
+          gym_id: string | null
+          invitation_count: number | null
+          last_activity_at: string | null
+          last_name: string | null
+          member_created_at: string | null
+          member_id: string | null
+          portal_activated_at: string | null
+          portal_invited_at: string | null
+          portal_status: string | null
+          status: string | null
+        }
+        Insert: {
+          activation_time_hours?: never
+          days_since_last_activity?: never
+          email?: string | null
+          first_name?: string | null
+          gym_id?: string | null
+          invitation_count?: number | null
+          last_activity_at?: string | null
+          last_name?: string | null
+          member_created_at?: string | null
+          member_id?: string | null
+          portal_activated_at?: string | null
+          portal_invited_at?: string | null
+          portal_status?: never
+          status?: string | null
+        }
+        Update: {
+          activation_time_hours?: never
+          days_since_last_activity?: never
+          email?: string | null
+          first_name?: string | null
+          gym_id?: string | null
+          invitation_count?: number | null
+          last_activity_at?: string | null
+          last_name?: string | null
+          member_created_at?: string | null
+          member_id?: string | null
+          portal_activated_at?: string | null
+          portal_invited_at?: string | null
+          portal_status?: never
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "members_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_permissions_view: {
+        Row: {
+          gym_id: string | null
+          permissions: string[] | null
+          role_level: number | null
+          role_name: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
-      complete_user_profile: {
+      accept_invitation_by_hash: {
         Args: {
-          p_user_id: string
-          gym_name: string
+          hashed_token_param: string
+          user_email_param: string
+          user_id_param: string
         }
-        Returns: unknown
+        Returns: Json
       }
-      ,
-      get_user_id_by_email: {
+      add_payment_method: {
         Args: {
-          p_email: string
-        }
-        Returns: string | null
-      }
-      ,
-      has_permission: {
-        Args: {
-          p_user_id: string
-          p_gym_id: string
-          p_permission_name: string
-        }
-        Returns: boolean
-      }
-      ,
-      get_user_role: {
-        Args: {
-          user_uuid: string
-          gym_uuid: string
-        }
-        Returns: string | null
-      }
-      ,
-      get_user_permissions: {
-        Args: {
-          user_uuid: string
-          gym_uuid: string
-        }
-        Returns: string[]
-      }
-      ,
-      set_default_payment_method: {
-        Args: {
-          p_user_id: string
-          p_payment_method_id: string
-        }
-        Returns: unknown
-      }
-      ,
-      check_subscription_access: {
-        Args: {
-          p_user_id: string
-        }
-        Returns: boolean
-      }
-      ,
-      pause_subscription: {
-        Args: {
-          p_subscription_id: string
-        }
-        Returns: unknown
-      }
-      ,
-      resume_subscription: {
-        Args: {
-          p_subscription_id: string
-        }
-        Returns: unknown
-      }
-      ,
-      cancel_subscription: {
-        Args: {
-          p_subscription_id: string
-          p_cancel_at_period_end: boolean
-        }
-        Returns: unknown
-      }
-      ,
-      schedule_subscription_change: {
-        Args: {
-          p_subscription_id: string
-          p_change_type: string
-          p_effective_date: string
-          p_change_data: Json
-        }
-        Returns: unknown
-      }
-      ,
-      create_subscription: {
-        Args: {
-          p_user_id: string
-          p_plan_id: string
-          p_billing_cycle: 'monthly' | 'annual'
-          p_razorpay_customer_id: string
-          p_razorpay_subscription_id: string
-          p_razorpay_price_id: string
-          p_amount: number
-          p_current_period_start: string
-          p_current_period_end: string
-        }
-        Returns: unknown
-      }
-      ,
-      mark_expired_invitations: {
-        Args: Record<string, never>
-        Returns: unknown
-      }
-      ,
-      initialize_trial_subscription: {
-        Args: {
+          p_card_brand?: string
+          p_card_exp_month?: number
+          p_card_exp_year?: number
+          p_card_last4?: string
+          p_is_default?: boolean
+          p_razorpay_payment_method_id: string
+          p_type?: string
           p_user_id: string
         }
         Returns: string
       }
-      verify_invitation_by_hash: {
+      bulk_invite_members_to_portal: {
         Args: {
-          hashed_token_param: string
+          p_expires_in_hours?: number
+          p_gym_id: string
+          p_member_ids: string[]
+          p_message?: string
         }
-        Returns: {
-          valid: boolean
-          invitation?: {
-            id: string
-            email: string
-            role: string
-            gym: {
-              id: string
-              name: string
-            }
-            invited_by: {
-              name: string
-              email: string
-            }
-            expires_at: string
-            created_at: string
-            message?: string
-          }
-          user_status?: {
-            exists: boolean
-            has_role_in_gym: boolean
-            current_role: { name: string } | null
-          }
-          error?: string
-        }
+        Returns: Json
       }
-      accept_invitation_by_hash: {
+      cancel_subscription: {
+        Args: { p_cancel_at_period_end?: boolean; p_subscription_id: string }
+        Returns: boolean
+      }
+      check_gym_subscription_access: {
+        Args: { p_gym_id: string }
+        Returns: boolean
+      }
+      check_subscription_access: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
+      check_trial_access: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
+      cleanup_expired_invitations: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      complete_user_profile: {
+        Args: { gym_name: string; p_user_id: string }
+        Returns: string
+      }
+      convert_trial_to_subscription: {
         Args: {
-          hashed_token_param: string
-          user_id_param: string
-          user_email_param: string
+          p_plan_name: string
+          p_stripe_customer_id: string
+          p_stripe_subscription_id: string
+          p_user_id: string
         }
+        Returns: boolean
+      }
+      create_document: {
+        Args: {
+          p_amount?: number
+          p_currency?: string
+          p_description?: string
+          p_document_date?: string
+          p_download_url?: string
+          p_hosted_url?: string
+          p_metadata?: Json
+          p_razorpay_id?: string
+          p_status?: string
+          p_title: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      create_subscription: {
+        Args: {
+          p_amount: number
+          p_billing_cycle: string
+          p_current_period_end: string
+          p_current_period_start: string
+          p_plan_id: string
+          p_razorpay_customer_id: string
+          p_razorpay_price_id: string
+          p_razorpay_subscription_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      create_subscription_with_analytics: {
+        Args: {
+          p_amount: number
+          p_billing_cycle: string
+          p_current_period_end: string
+          p_plan_id: string
+          p_stripe_customer_id: string
+          p_stripe_price_id: string
+          p_stripe_subscription_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      end_attendance_session: {
+        Args: { p_checkout_at?: string; p_session_id: string }
         Returns: {
-          success: boolean
-          message?: string
-          assignment?: {
-            gym_id: string
-            gym_name: string
-            role: string
-          }
-          error?: string
-          details?: {
-            invitation_email?: string
-            user_email?: string
-          }
+          check_in_at: string
+          check_out_at: string | null
+          created_at: string
+          created_by: string | null
+          gym_id: string
+          id: string
+          member_id: string | null
+          method: string | null
+          notes: string | null
+          staff_user_id: string | null
+          subject_type: string
+          updated_at: string
         }
       }
       get_gym_owner_info: {
-        Args: {
-          gym_uuid: string
-        }
+        Args: { gym_uuid: string }
         Returns: {
-          owner_id: string
-          owner_full_name: string | null
           owner_email: string
+          owner_full_name: string
+          owner_id: string
         }[]
       }
-      ,
+      get_invitation_stats: {
+        Args: { gym_id_param?: string }
+        Returns: Json
+      }
       get_member_attendance: {
         Args: {
+          p_from?: string
           p_gym_id: string
-          p_search?: string | null
-          p_from?: string | null
-          p_to?: string | null
-          p_limit?: number | null
-          p_offset?: number | null
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_to?: string
         }
         Returns: {
-          session_id: string
+          check_in_at: string
+          check_out_at: string
           member_id: string
           name: string
           role: string
-          check_in_at: string
-          check_out_at: string | null
-          total_seconds: number
-        }[]
-      }
-      ,
-      get_staff_attendance: {
-        Args: {
-          p_gym_id: string
-          p_search?: string | null
-          p_from?: string | null
-          p_to?: string | null
-          p_limit?: number | null
-          p_offset?: number | null
-        }
-        Returns: {
           session_id: string
-          staff_user_id: string
-          name: string
-          role: string
-          check_in_at: string
-          check_out_at: string | null
           total_seconds: number
         }[]
-      }
-      ,
-      start_attendance_session: {
-        Args: {
-          p_subject_type: 'member' | 'staff'
-          p_member_id?: string | null
-          p_staff_user_id?: string | null
-          p_method?: string | null
-          p_notes?: string | null
-        }
-        Returns: Database['public']['Tables']['attendance_sessions']['Row']
-      }
-      ,
-      end_attendance_session: {
-        Args: {
-          p_session_id: string
-          p_checkout_at?: string | null
-        }
-        Returns: Database['public']['Tables']['attendance_sessions']['Row']
-      },
-      update_attendance_session: {
-        Args: {
-          p_session_id: string
-          p_check_in_at: string
-          p_check_out_at?: string | null
-          p_notes?: string | null
-        }
-        Returns: Database['public']['Tables']['attendance_sessions']['Row']
       }
       get_member_by_user_id: {
-        Args: {
-          p_user_id: string
-          p_gym_id?: string | null
+        Args: { p_gym_id?: string; p_user_id: string }
+        Returns: {
+          created_at: string
+          email: string | null
+          first_name: string | null
+          gym_id: string
+          id: string
+          invitation_count: number | null
+          join_date: string | null
+          last_activity_at: string | null
+          last_name: string | null
+          metadata: Json | null
+          phone_number: string | null
+          portal_activated_at: string | null
+          portal_invited_at: string | null
+          status: string | null
+          updated_at: string
+          user_id: string | null
         }
-        Returns: Database['public']['Tables']['members']['Row']
       }
       get_member_current_status: {
         Args: Record<PropertyKey, never>
         Returns: {
+          check_in_at: string
           is_checked_in: boolean
-          session_id: string | null
-          check_in_at: string | null
-          total_seconds: number | null
+          session_id: string
+          total_seconds: number
+        }[]
+      }
+      get_member_portal_stats: {
+        Args: { p_gym_id: string; p_period_days?: number }
+        Returns: Json
+      }
+      get_members_eligible_for_portal: {
+        Args: { p_gym_id: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          created_at: string
+          email: string
+          first_name: string
+          invitation_count: number
+          join_date: string
+          last_invited_at: string
+          last_name: string
+          member_id: string
         }[]
       }
       get_my_member_attendance: {
         Args: {
-          p_from?: string | null
-          p_to?: string | null
+          p_from?: string
           p_limit?: number
           p_offset?: number
+          p_to?: string
         }
         Returns: {
-          session_id: string
           check_in_at: string
-          check_out_at: string | null
+          check_out_at: string
+          method: string
+          notes: string
+          session_id: string
           total_seconds: number
-          method: string | null
-          notes: string | null
         }[]
       }
-      member_check_in: {
+      get_staff_attendance: {
         Args: {
-          p_method?: string
-          p_notes?: string | null
+          p_from?: string
+          p_gym_id: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_to?: string
         }
-        Returns: Database['public']['Tables']['attendance_sessions']['Row']
+        Returns: {
+          check_in_at: string
+          check_out_at: string
+          name: string
+          role: string
+          session_id: string
+          staff_user_id: string
+          total_seconds: number
+        }[]
+      }
+      get_user_gym_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_user_id_by_email: {
+        Args: { p_email: string }
+        Returns: string
+      }
+      get_user_permissions: {
+        Args: { gym_uuid: string; user_uuid: string }
+        Returns: string[]
+      }
+      get_user_role: {
+        Args: { gym_uuid: string; user_uuid: string }
+        Returns: string
+      }
+      has_permission: {
+        Args: { p_gym_id: string; p_permission_name: string; p_user_id: string }
+        Returns: boolean
+      }
+      has_role_level: {
+        Args: { gym_uuid: string; required_level: number; user_uuid: string }
+        Returns: boolean
+      }
+      initialize_trial_subscription: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
+      log_subscription_analytics: {
+        Args: {
+          p_amount?: number
+          p_billing_cycle?: string
+          p_churn_reason?: string
+          p_event_data?: Json
+          p_event_type: string
+          p_mrr_impact?: number
+          p_plan_name?: string
+          p_subscription_id?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      mark_expired_invitations: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      member_check_in: {
+        Args: { p_method?: string; p_notes?: string }
+        Returns: {
+          check_in_at: string
+          check_out_at: string | null
+          created_at: string
+          created_by: string | null
+          gym_id: string
+          id: string
+          member_id: string | null
+          method: string | null
+          notes: string | null
+          staff_user_id: string | null
+          subject_type: string
+          updated_at: string
+        }
       }
       member_check_out: {
-        Args: {
-          p_checkout_at?: string | null
+        Args: { p_checkout_at?: string }
+        Returns: {
+          check_in_at: string
+          check_out_at: string | null
+          created_at: string
+          created_by: string | null
+          gym_id: string
+          id: string
+          member_id: string | null
+          method: string | null
+          notes: string | null
+          staff_user_id: string | null
+          subject_type: string
+          updated_at: string
         }
-        Returns: Database['public']['Tables']['attendance_sessions']['Row']
+      }
+      pause_subscription: {
+        Args: { p_subscription_id: string }
+        Returns: boolean
+      }
+      record_member_activity: {
+        Args: {
+          activity_notes?: string
+          activity_type?: string
+          member_id: string
+        }
+        Returns: string
+      }
+      remove_payment_method: {
+        Args: { p_payment_method_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      resume_subscription: {
+        Args: { p_subscription_id: string }
+        Returns: boolean
+      }
+      schedule_subscription_change: {
+        Args: {
+          p_change_data?: Json
+          p_change_type: string
+          p_effective_date: string
+          p_subscription_id: string
+        }
+        Returns: boolean
+      }
+      set_default_payment_method: {
+        Args: { p_payment_method_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      start_attendance_session: {
+        Args: {
+          p_member_id?: string
+          p_method?: string
+          p_notes?: string
+          p_staff_user_id?: string
+          p_subject_type: string
+        }
+        Returns: {
+          check_in_at: string
+          check_out_at: string | null
+          created_at: string
+          created_by: string | null
+          gym_id: string
+          id: string
+          member_id: string | null
+          method: string | null
+          notes: string | null
+          staff_user_id: string | null
+          subject_type: string
+          updated_at: string
+        }
+      }
+      track_document_download: {
+        Args: {
+          p_document_type: string
+          p_download_method?: string
+          p_file_size?: number
+          p_ip_address?: unknown
+          p_stripe_invoice_id?: string
+          p_stripe_payment_intent_id?: string
+          p_stripe_session_id?: string
+          p_user_agent?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      track_member_portal_activation: {
+        Args: { p_member_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      track_payment_session: {
+        Args: {
+          p_amount_total?: number
+          p_customer_email?: string
+          p_customer_name?: string
+          p_expires_at?: string
+          p_payment_status?: string
+          p_session_status?: string
+          p_stripe_payment_intent_id?: string
+          p_stripe_session_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      update_attendance_session: {
+        Args: {
+          p_check_in_at: string
+          p_check_out_at?: string
+          p_notes?: string
+          p_session_id: string
+        }
+        Returns: {
+          check_in_at: string
+          check_out_at: string | null
+          created_at: string
+          created_by: string | null
+          gym_id: string
+          id: string
+          member_id: string | null
+          method: string | null
+          notes: string | null
+          staff_user_id: string | null
+          subject_type: string
+          updated_at: string
+        }
+      }
+      update_gym_metrics: {
+        Args: { date_param?: string; gym_id_param: string }
+        Returns: undefined
+      }
+      user_has_role_in_gym: {
+        Args: { p_gym_id: string; p_role_names: string[]; p_user_id: string }
+        Returns: boolean
+      }
+      verify_invitation_by_hash: {
+        Args: { hashed_token_param: string }
+        Returns: Json
       }
     }
     Enums: {
@@ -1157,21 +1554,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -1189,14 +1590,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -1212,14 +1615,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -1235,14 +1640,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -1250,14 +1657,16 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never

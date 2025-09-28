@@ -1,6 +1,7 @@
 // src/utils/supabase/client.ts
 import { createBrowserClient, type CookieOptions } from '@supabase/ssr'
 import { type Database } from '@/types/supabase'
+import { logger } from '@/lib/logger'
 
 // Get environment-specific cookie prefix to prevent cross-environment conflicts
 export const getEnvironmentPrefix = () => {
@@ -78,7 +79,7 @@ export function createClient() {
           }
 
           document.cookie = cookieString
-          console.log(`Cookie set: ${envName} (environment: ${envPrefix})`)
+          logger.info(`Cookie set: ${envName} (environment: ${envPrefix})`)
         },
         remove(name: string, options: CookieOptions) {
           // Only access document in browser environment
@@ -98,7 +99,7 @@ export function createClient() {
           }
           
           document.cookie = cookieString
-          console.log(`Cookie removed: ${envName} (environment: ${envPrefix})`)
+          logger.info(`Cookie removed: ${envName} (environment: ${envPrefix})`)
         }
       }
     }

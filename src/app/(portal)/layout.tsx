@@ -14,9 +14,11 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import React from 'react'
 import { PWAWrapper } from '@/components/pwa/PWAWrapper'
+import { RealtimeProvider } from '@/components/providers/realtime-provider-simple'
+import { PortalDataProvider } from '@/components/providers/portal-data-provider'
 
 export default function PortalLayout({
   children,
@@ -28,6 +30,14 @@ export default function PortalLayout({
   const pathname = usePathname()
   const router = useRouter()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  
+
+  // Handle redirect for unauthenticated users
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login')
+    }
+  }, [user, authLoading, router])
 
   // Show loading while auth is initializing
   if (authLoading) {
@@ -38,16 +48,16 @@ export default function PortalLayout({
     )
   }
 
-  // Redirect if not authenticated
+  // Don't render anything if user is not authenticated (redirect is in progress)
   if (!user) {
-    router.push('/login')
-    return null
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    )
   }
 
   // Since middleware now handles portal access control, we can simplify this
-  // If we reach here, user is authenticated and middleware has allowed access
-  // This means they have the 'member' role
-
   // If we reach here, user is authenticated and middleware has allowed access
   // This means they have the 'member' role
 
@@ -62,9 +72,10 @@ export default function PortalLayout({
   }
 
   return (
-    <>
-      <PWAWrapper />
-      <div className="min-h-screen bg-gray-50">
+    <RealtimeProvider>
+      <PortalDataProvider>
+        <PWAWrapper />
+        <div className="min-h-screen bg-gray-50">
         {/* Mobile header */}
         <div className="lg:hidden bg-white shadow-sm border-b">
           <div className="flex items-center justify-between px-4 py-3">
@@ -185,6 +196,7 @@ export default function PortalLayout({
           </div>
         </div>
       </div>
-    </>
+        </PortalDataProvider>
+      </RealtimeProvider>
   )
 }

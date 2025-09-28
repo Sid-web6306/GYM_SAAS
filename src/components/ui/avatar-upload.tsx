@@ -11,6 +11,7 @@ import { toastActions } from '@/stores/toast-store'
 import { validateImageFile, generateAvatarFilename, type AvatarSize } from '@/lib/avatar-utils'
 import { useUpdateProfile } from '@/hooks/use-auth'
 import { ImageEditor } from '@/components/ui/image-editor'
+import { logger } from '@/lib/logger'
 import {
   Dialog,
   DialogContent,
@@ -67,7 +68,7 @@ export function AvatarUpload({
     try {
       const filePath = extractPathFromStorageUrl(avatarUrl)
       if (!filePath) {
-        console.warn('Could not extract file path from avatar URL:', avatarUrl)
+        logger.warn('Could not extract file path from avatar URL:', {avatarUrl})
         return
       }
 
@@ -76,13 +77,13 @@ export function AvatarUpload({
         .remove([filePath])
 
       if (error) {
-        console.warn('Failed to delete old avatar file:', error.message)
+        logger.warn('Failed to delete old avatar file:', {error: error.message})
         // Don't throw - cleanup failure shouldn't break the main flow
       } else {
         console.log('Successfully deleted old avatar:', filePath)
       }
     } catch (error) {
-      console.warn('Error during avatar cleanup:', error)
+      logger.warn('Error during avatar cleanup:', {error})
       // Don't throw - cleanup failure shouldn't break the main flow
     }
   }

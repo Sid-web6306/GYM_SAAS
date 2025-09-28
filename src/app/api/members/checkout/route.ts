@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Call the member_check_out RPC function
     const { data: session, error: checkoutError } = await supabase
       .rpc('member_check_out', {
-        p_checkout_at: validatedData.checkout_at ? validatedData.checkout_at : null
+        p_checkout_at: validatedData.checkout_at ? validatedData.checkout_at : undefined
       })
 
     if (checkoutError) {

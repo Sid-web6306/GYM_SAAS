@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/client'
 import { toastActions } from '@/stores/toast-store'
 import { useEffect } from 'react'
 import { useAuth } from './use-auth'
+import { logger } from '@/lib/logger'
 
 // Helper function to identify authentication and logout-related errors
 function isAuthenticationError(error: unknown): boolean {
@@ -137,13 +138,13 @@ export function useMembers(gymId: string | null, filters?: MemberFilters) {
       if (error) {
         // Enhanced error handling for logout scenarios
         if (isAuthenticationError(error)) {
-          console.log('Members fetch: Authentication/logout error - this is expected during logout')
+          logger.debug('Members fetch: Authentication/logout error - this is expected during logout')
           throw error
         }
-        
+
         // Log detailed error info for debugging (only for non-auth errors)
-        console.error('Members fetch error:', {
-          error,
+        logger.error('Members fetch failed', {
+          error: error instanceof Error ? error.message : String(error),
           errorType: typeof error,
           errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
           gymId,
@@ -175,7 +176,7 @@ export function useMembers(gymId: string | null, filters?: MemberFilters) {
   useEffect(() => {
     // Cancel any ongoing queries when user logs out or loses authentication
     if (!isAuthenticated || !user) {
-      console.log('Members data: Detected logout, cancelling member queries')
+      logger.debug('Members data: Detected logout, cancelling member queries')
       queryClient.cancelQueries({ queryKey: membersKeys.all })
       return
     }
@@ -199,7 +200,7 @@ export function useMembers(gymId: string | null, filters?: MemberFilters) {
           filter: `gym_id=eq.${gymId}`,
         },
         (payload) => {
-          console.log('Members real-time update:', payload)
+          logger.debug('Members real-time update received', { eventType: payload.eventType, recordId: payload.new })
           
           // Only invalidate queries - no toasts (mutations handle user feedback)
           queryClient.invalidateQueries({ queryKey: membersKeys.lists() })
@@ -245,11 +246,11 @@ export function useMember(memberId: string | null) {
       if (error) {
         // Handle authentication errors gracefully
         if (isAuthenticationError(error)) {
-          console.log('Member fetch: Authentication error during logout - this is expected')
+          logger.debug('Member fetch: Authentication error during logout - this is expected')
           throw error
         }
         
-        console.error('Member fetch error:', error)
+        logger.error('Member fetch failed', { memberId, error: error instanceof Error ? error.message : String(error) })
         throw error
       }
       
@@ -321,11 +322,11 @@ export function useRecentActivity(gymId: string | null) {
       if (error) {
         // Handle authentication errors gracefully
         if (isAuthenticationError(error)) {
-          console.log('Activity fetch: Authentication error during logout - this is expected')
+          logger.debug('Activity fetch: Authentication error during logout - this is expected')
           throw error
         }
         
-        console.error('Activity fetch error:', error)
+        logger.error('Member activity fetch failed', { members, error: error instanceof Error ? error.message : String(error) })
         throw error
       }
       
@@ -370,11 +371,11 @@ export function useMembersStats(gymId: string | null) {
       if (error) {
         // Handle authentication errors gracefully
         if (isAuthenticationError(error)) {
-          console.log('Members stats fetch: Authentication error during logout - this is expected')
+          logger.debug('Members stats fetch: Authentication error during logout - this is expected')
           throw error
         }
         
-        console.error('Members stats fetch error:', error)
+        logger.error('Members stats fetch failed', { gymId, error: error instanceof Error ? error.message : String(error) })
         throw error
       }
 
@@ -411,22 +412,27 @@ export function useCreateMember() {
     mutationFn: async ({ gymId, memberData }: { gymId: string; memberData: CreateMemberData }) => {
       const supabase = createClient()
       
-      // Use RPC function to create member with automatic role assignment
-      // @ts-expect-error - RPC function not in generated types yet
-      const { data: memberId, error: rpcError } = await supabase.rpc('create_member_with_role', {
-        p_gym_id: gymId,
-        p_first_name: memberData.first_name,
-        p_last_name: memberData.last_name,
-        p_email: memberData.email || null,
-        p_phone_number: memberData.phone_number || null,
-        p_status: memberData.status || 'active',
-        p_join_date: memberData.join_date || new Date().toISOString(),
-      })
+      // Create member using regular database operations
+      const { data: newMember, error: createError } = await supabase
+        .from('members')
+        .insert({
+          gym_id: gymId,
+          first_name: memberData.first_name,
+          last_name: memberData.last_name,
+          email: memberData.email || null,
+          phone_number: memberData.phone_number || null,
+          status: memberData.status || 'active',
+          join_date: memberData.join_date || new Date().toISOString(),
+        })
+        .select('id')
+        .single()
       
-      if (rpcError) {
-        console.error('Member creation RPC error:', rpcError)
-        throw rpcError
+      if (createError) {
+        logger.error('Member creation failed', { error: createError.message })
+        throw createError
       }
+      
+      const memberId = newMember.id
       
       if (!memberId) {
         throw new Error('Failed to create member - no ID returned')
@@ -440,7 +446,7 @@ export function useCreateMember() {
         .single()
       
       if (fetchError) {
-        console.error('Member fetch error after creation:', fetchError)
+        logger.error('Member fetch failed after creation', { memberId, error: fetchError.message })
         throw fetchError
       }
       
@@ -467,7 +473,7 @@ export function useCreateMember() {
       toastActions.success('Member Added', 'New member has been added successfully.')
     },
     onError: (error) => {
-      console.error('Failed to create member:', error)
+      logger.error('Member creation mutation failed', { error: error instanceof Error ? error.message : String(error) })
       toastActions.error('Creation Failed', 'Failed to add member. Please try again.')
     },
   })
@@ -491,7 +497,7 @@ export function useUpdateMember() {
         .single()
       
       if (error) {
-        console.error('Member update error:', error)
+        logger.error('Member update failed', { memberId, error: error.message })
         throw error
       }
       
@@ -556,7 +562,7 @@ export function useDeleteMember() {
         .eq('id', memberId)
       
       if (error) {
-        console.error('Member deletion error:', error)
+        logger.error('Member deletion failed', { memberId, error: error.message })
         throw error
       }
       
@@ -616,7 +622,7 @@ export function useBulkUpdateMembers() {
         .select()
       
       if (error) {
-        console.error('Bulk member update error:', error)
+        logger.error('Bulk member update failed', { memberIds: memberIds.length, error: error.message })
         throw error
       }
       

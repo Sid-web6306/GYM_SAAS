@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
-import { useAuth } from './use-auth'
+import { useAuth } from '@/hooks/use-auth'
 import { createInvitation, revokeInvitation, resendInvitation, getGymInvitations } from '@/actions/invite.actions'
 import type { 
   InvitationWithDetails, 
@@ -400,7 +400,7 @@ export const useInviteVerification = (token: string) => {
     },
     onSuccess: () => {
       // Invalidate auth queries to refresh user data
-      queryClient.invalidateQueries({ queryKey: ['auth'] })
+      queryClient.invalidateQueries({ queryKey: ['auth-session'] })
       queryClient.invalidateQueries({ queryKey: ['rbac'] })
     },
   })

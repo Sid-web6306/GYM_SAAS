@@ -19,6 +19,7 @@ import {
 import { Users, Mail, BookUser, Crown, Dumbbell } from 'lucide-react'
 import { ROLE_COLORS } from '@/components/layout/RoleContextIndicator'
 import { StaffManagementGuard, AccessDenied } from '@/components/rbac/rbac-guards'
+import { UserManagement } from '@/components/rbac/UserManagement'
 
 type StaffProfile = {
   id: string
@@ -29,7 +30,7 @@ type StaffProfile = {
 }
 
 export default function StaffPage() {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const gymId = profile?.gym_id || null
 
   const { data, isLoading, error } = useQuery({
@@ -103,6 +104,7 @@ export default function StaffPage() {
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -148,6 +150,16 @@ export default function StaffPage() {
                                 </>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <UserManagement
+                              userId={p.id}
+                              userEmail={p.email}
+                              userName={p.full_name}
+                              userRole={p.default_role}
+                              gymId={gymId || ''}
+                              isCurrentUser={user?.id === p.id}
+                            />
                           </TableCell>
                         </TableRow>
                       ))

@@ -334,6 +334,10 @@ export async function PUT(request: NextRequest) {
     }
 
     // Check if user has permission to update invitations
+    if (!invitation.gym_id) {
+      return NextResponse.json({ error: 'Invalid invitation - no gym associated' }, { status: 400 })
+    }
+    
     const canUpdateInvites = await checkUserPermission(user.id, invitation.gym_id, 'staff.update')
     if (!canUpdateInvites) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
@@ -411,6 +415,10 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check if user has permission to delete invitations
+    if (!invitation.gym_id) {
+      return NextResponse.json({ error: 'Invalid invitation - no gym associated' }, { status: 400 })
+    }
+    
     const canDeleteInvites = await checkUserPermission(user.id, invitation.gym_id, 'staff.delete')
     if (!canDeleteInvites) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })

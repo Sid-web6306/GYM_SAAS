@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -24,7 +24,7 @@ export default function MemberHistoryPage() {
   
   const pageSize = 20
 
-  // Calculate date range based on filter
+  // Calculate date range based on filter - use completely stable dates
   const { from, to } = useMemo(() => {
     const now = new Date()
     switch (dateFilter) {
@@ -36,17 +36,17 @@ export default function MemberHistoryPage() {
       case 'week':
         return {
           from: subDays(now, 7).toISOString(),
-          to: now.toISOString()
+          to: endOfDay(now).toISOString()
         }
       case 'month':
         return {
           from: subDays(now, 30).toISOString(),
-          to: now.toISOString()
+          to: endOfDay(now).toISOString()
         }
       default:
         return { from: undefined, to: undefined }
     }
-  }, [dateFilter])
+  }, [dateFilter]) // Only recalculate when dateFilter changes
 
   const { 
     data: attendanceData, 
@@ -58,6 +58,11 @@ export default function MemberHistoryPage() {
     limit: pageSize,
     offset: currentPage * pageSize
   })
+  
+  // Debug logging to track when history page is rendered
+  React.useEffect(() => {
+    console.log('📊 History page rendered with filters:', { from, to, limit: pageSize, offset: currentPage * pageSize })
+  }, [from, to, pageSize, currentPage])
 
   // Filter attendance by search query
   const filteredAttendance = useMemo(() => {

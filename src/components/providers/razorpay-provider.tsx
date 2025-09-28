@@ -2,6 +2,7 @@
 
 import { ReactNode, Component } from 'react'
 import { clientConfig } from '@/lib/config'
+import { logger } from '@/lib/logger'
 
 interface RazorpayProviderProps {
   children: ReactNode
@@ -51,7 +52,7 @@ export function RazorpayProvider({ children }: RazorpayProviderProps) {
   const isConfigured = !!clientConfig.razorpayKeyId
 
   if (!isConfigured) {
-    console.warn('Razorpay is not configured. Payment features will be disabled.')
+    logger.warn('Razorpay is not configured. Payment features will be disabled.')
     return <>{children}</>
   }
 

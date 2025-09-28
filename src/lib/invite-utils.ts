@@ -8,7 +8,10 @@ import crypto from 'crypto'
 export function generateSecureToken(length: number = 32): string {
   return crypto
     .randomBytes(length)
-    .toString('base64url') // URL-safe base64 encoding
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '') // URL-safe base64 encoding
 }
 
 /**

@@ -123,13 +123,25 @@ async function handleGetPlans(supabase: SupabaseClient) {
 // Helper function to get current subscription
 async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: string) {
   try {
-    // Check subscription access
-    const { data: hasAccess, error: accessError } = await supabase.rpc('check_subscription_access', {
-      p_user_id: userId
+    // Get user's gym_id first
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('gym_id')
+      .eq('id', userId)
+      .single()
+
+    if (profileError || !profile?.gym_id) {
+      logger.error('Error getting user profile or gym_id:', { error: profileError?.message })
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
+    }
+
+    // Check gym subscription access
+    const { data: hasAccess, error: accessError } = await supabase.rpc('check_gym_subscription_access', {
+      p_gym_id: profile.gym_id
     })
 
     if (accessError) {
-      logger.error('Error checking subscription access:', { error: accessError.message })
+      logger.error('Error checking gym subscription access:', { error: accessError.message })
     }
 
     // Get current subscription details with plan information
@@ -191,9 +203,20 @@ async function handleCreateBillingPortal(supabase: SupabaseClient, user: Minimal
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
-    // Check if user has an active subscription
-    const { data: hasAccess, error: accessError } = await supabase.rpc('check_subscription_access', {
-      p_user_id: user.id
+    // Get user's gym_id first
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('gym_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError || !profile?.gym_id) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
+    }
+
+    // Check if gym has an active subscription
+    const { data: hasAccess, error: accessError } = await supabase.rpc('check_gym_subscription_access', {
+      p_gym_id: profile.gym_id
     })
 
     if (accessError || !hasAccess) {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { useRBAC } from "@/hooks/use-rbac"
+import { logger } from '@/lib/logger'
 import { Skeleton } from "@/components/ui/skeleton"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import {
@@ -55,7 +56,7 @@ export function AdaptiveNavigation({ className }: AdaptiveNavigationProps) {
       router.push('/')
       router.refresh()
     } catch (error) {
-      console.error('Logout error:', error)
+      logger.error('Logout error:', {error})
       toast.error('Failed to logout')
     }
   }

@@ -24,9 +24,21 @@ export async function GET() {
 
     if (memberError) {
       if (memberError.code === 'PGRST116') {
-        // No member record found
+        // No member record found - this should not happen if user accepted invitation properly
+        logger.warn('No member record found for authenticated user', { 
+          userId: user.id,
+          userEmail: user.email,
+          message: 'User may need to accept an invitation or contact admin'
+        })
+        
         return NextResponse.json({ 
-          error: 'No member record found for authenticated user' 
+          error: 'No member record found. Please contact your gym administrator to ensure you have been properly invited to the member portal.',
+          code: 'MEMBER_NOT_FOUND',
+          details: {
+            userId: user.id,
+            userEmail: user.email,
+            suggestion: 'Contact gym administrator or check for pending invitations'
+          }
         }, { status: 404 })
       }
       
