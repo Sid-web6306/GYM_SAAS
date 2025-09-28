@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, useDeferredValue, useCallback, me
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useDebounce } from '@/hooks/use-debounce'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { logger } from '@/lib/logger'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { QuickActions } from '@/components/attendance/QuickActions'
 import { Input } from '@/components/ui/input'
@@ -110,7 +111,7 @@ export default function AttendancePage() {
       await endAttendance.mutateAsync({ sessionId })
       toast.success(`${type === 'member' ? 'Member' : 'Staff'} checked out successfully! 👋`)
     } catch (error) {
-      console.error('Checkout failed:', error)
+      logger.error('Checkout failed:', {error})
       toast.error('Failed to check out. Please try again.')
     }
   }, [endAttendance])

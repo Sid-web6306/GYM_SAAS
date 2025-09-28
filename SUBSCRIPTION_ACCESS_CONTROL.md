@@ -249,8 +249,8 @@ The middleware now includes basic subscription access checks:
 
 ```typescript
 // In middleware.ts
-const { data: hasAccess } = await supabase.rpc('check_subscription_access', {
-  p_user_id: user.id
+const { data: hasAccess } = await supabase.rpc('check_gym_subscription_access', {
+  p_gym_id: profile?.gym_id
 })
 
 if (!hasAccess && !pathname.startsWith('/upgrade')) {

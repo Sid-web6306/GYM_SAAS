@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { useInvitations } from '@/hooks/use-invitations'
 import { useRBAC } from '@/hooks/use-rbac'
 import { toastActions } from '@/stores/toast-store'
+import { logger } from '@/lib/logger'
 import { type Member } from '@/types/member.types'
 import { InviteCreationErrorBoundary } from '@/components/invites/InvitationErrorBoundary'
 
@@ -100,7 +101,7 @@ export const MemberPortalInvite: React.FC<MemberPortalInviteProps> = ({
         toastActions.error('Failed to Send Portal Invitation', result.error || 'Unknown error')
       }
     } catch (error) {
-      console.error('Error sending member portal invitation:', error)
+      logger.error('Error sending member portal invitation:', {error})
       toastActions.error('Error', 'Failed to send portal invitation')
     } finally {
       setIsSubmitting(false)
@@ -118,7 +119,11 @@ export const MemberPortalInvite: React.FC<MemberPortalInviteProps> = ({
 
   return (
     <InviteCreationErrorBoundary>
-      <DropdownMenuItem onClick={() => setIsOpen(true)}>
+      <DropdownMenuItem onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsOpen(true)
+      }}>
         <Mail className="h-4 w-4 mr-2" />
         Invite to Portal
       </DropdownMenuItem>

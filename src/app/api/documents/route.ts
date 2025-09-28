@@ -45,9 +45,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user has subscription access
-    const { data: hasAccess, error: accessError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('check_subscription_access', {
-      p_user_id: user.id
+    // Get user's gym_id first
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('gym_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError || !profile?.gym_id) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
+    }
+
+    // Check if gym has subscription access
+    const { data: hasAccess, error: accessError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('check_gym_subscription_access', {
+      p_gym_id: profile.gym_id
     })
 
     if (accessError || !hasAccess) {
@@ -147,9 +158,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user has subscription access
-    const { data: hasAccess, error: accessError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('check_subscription_access', {
-      p_user_id: user.id
+    // Get user's gym_id first
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('gym_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError || !profile?.gym_id) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
+    }
+
+    // Check if gym has subscription access
+    const { data: hasAccess, error: accessError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('check_gym_subscription_access', {
+      p_gym_id: profile.gym_id
     })
 
     if (accessError || !hasAccess) {

@@ -18,21 +18,22 @@ import {
   CloudOff
 } from 'lucide-react'
 import { 
-  useMemberStatus, 
-  useMemberProfile, 
-  useMemberStats,
   useMemberCheckin, 
   useMemberCheckout 
 } from '@/hooks/use-member-portal'
+import { usePortalData } from '@/components/providers/portal-data-provider'
 import { useOfflineQueue } from '@/hooks/use-offline-queue'
 import { format } from 'date-fns'
 
 export default function MemberPortalDashboard() {
   const [checkinNotes, setCheckinNotes] = useState('')
   
-  const { data: profile, isLoading: profileLoading, error: profileError } = useMemberProfile()
-  const { data: status, isLoading: statusLoading, error: statusError, refetch: refetchStatus } = useMemberStatus()
-  const { stats, isLoading: statsLoading, error: statsError } = useMemberStats()
+  const { profile, status, stats } = usePortalData()
+  
+  // Extract data and loading states from the context
+  const { data: profileData, isLoading: profileLoading, error: profileError } = profile
+  const { data: statusData, isLoading: statusLoading, error: statusError, refetch: refetchStatus } = status
+  const { stats: statsData, isLoading: statsLoading, error: statsError } = stats
   const { isOnline, queuedItems, hasQueuedItems, processQueue } = useOfflineQueue()
   
   const checkinMutation = useMemberCheckin()
@@ -136,7 +137,7 @@ export default function MemberPortalDashboard() {
       {/* Welcome Header */}
       <div className="text-center lg:text-left">
         <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
-          Welcome back, {profile?.first_name || 'Member'}!
+          Welcome back, {profileData?.first_name || 'Member'}!
         </h1>
         <div className="flex items-center gap-2 mt-1 justify-center lg:justify-start">
           <span className="text-gray-600">
@@ -167,15 +168,15 @@ export default function MemberPortalDashboard() {
           ) : (
             <>
               <div className="flex items-center gap-3">
-                {status?.is_checked_in ? (
+                {statusData?.is_checked_in ? (
                   <>
                     <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse" />
                     <span className="font-medium text-green-700">
                       Checked In
                     </span>
-                    {status.check_in_at && (
+                    {statusData.check_in_at && (
                       <span className="text-sm text-gray-500">
-                        since {format(new Date(status.check_in_at), 'h:mm a')}
+                        since {format(new Date(statusData.check_in_at), 'h:mm a')}
                       </span>
                     )}
                   </>
@@ -189,12 +190,12 @@ export default function MemberPortalDashboard() {
                 )}
               </div>
 
-              {status?.is_checked_in && status.total_seconds && (
+              {statusData?.is_checked_in && statusData.total_seconds && (
                 <div className="bg-green-50 p-3 rounded-lg">
                   <div className="flex items-center gap-2 text-green-700">
                     <Clock className="h-4 w-4" />
                     <span className="font-medium">
-                      Current Session: {formatTime(status.total_seconds)}
+                      Current Session: {formatTime(statusData.total_seconds)}
                     </span>
                   </div>
                 </div>
@@ -202,7 +203,7 @@ export default function MemberPortalDashboard() {
 
               {/* Check-in/Check-out Buttons */}
               <div className="flex gap-3">
-                {status?.is_checked_in ? (
+                {statusData?.is_checked_in ? (
                   <Button
                     onClick={handleCheckout}
                     disabled={checkoutMutation.isPending}
@@ -235,7 +236,7 @@ export default function MemberPortalDashboard() {
               </div>
 
               {/* Notes input for check-in */}
-              {!status?.is_checked_in && (
+              {!statusData?.is_checked_in && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">
                     Notes (Optional)
@@ -268,7 +269,7 @@ export default function MemberPortalDashboard() {
               <Skeleton className="h-8 w-16" />
             ) : (
               <div className="text-2xl font-bold text-primary">
-                {stats?.weeklyVisits || 0}
+                {statsData?.weeklyVisits || 0}
                 <span className="text-sm text-gray-500 font-normal ml-1">visits</span>
               </div>
             )}
@@ -287,7 +288,7 @@ export default function MemberPortalDashboard() {
               <Skeleton className="h-8 w-20" />
             ) : (
               <div className="text-2xl font-bold text-primary">
-                {stats?.todayTotalTime ? formatTime(stats.todayTotalTime) : '0m'}
+                {statsData?.todayTotalTime ? formatTime(statsData.todayTotalTime) : '0m'}
                 <span className="text-sm text-gray-500 font-normal ml-1">total</span>
               </div>
             )}
@@ -306,9 +307,9 @@ export default function MemberPortalDashboard() {
               <Skeleton className="h-8 w-20" />
             ) : (
               <div className={`text-2xl font-bold ${
-                status?.is_checked_in ? 'text-green-600' : 'text-gray-400'
+                statusData?.is_checked_in ? 'text-green-600' : 'text-gray-400'
               }`}>
-                {status?.is_checked_in ? 'Active' : 'Away'}
+                {statusData?.is_checked_in ? 'Active' : 'Away'}
               </div>
             )}
           </CardContent>
@@ -336,9 +337,9 @@ export default function MemberPortalDashboard() {
                 </div>
               ))}
             </div>
-          ) : stats?.recentSessions?.length ? (
+          ) : statsData?.recentSessions?.length ? (
             <div className="space-y-3">
-              {stats.recentSessions.slice(0, 5).map((session) => (
+              {statsData.recentSessions.slice(0, 5).map((session: { session_id: string; check_in_at: string; check_out_at?: string; total_seconds?: number; notes?: string }) => (
                 <div key={session.session_id} className="flex items-center justify-between py-2 border-b last:border-b-0">
                   <div>
                     <p className="font-medium text-sm">
@@ -350,7 +351,7 @@ export default function MemberPortalDashboard() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium">
-                      {session.check_out_at ? formatTime(session.total_seconds) : 'In Progress'}
+                      {session.check_out_at ? formatTime(session.total_seconds || 0) : 'In Progress'}
                     </p>
                     <p className="text-xs text-gray-500">
                       {session.check_out_at ? 'Completed' : 'Active'}

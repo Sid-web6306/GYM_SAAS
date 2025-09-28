@@ -66,9 +66,6 @@ export const useToastStore = create<ToastStore>((set, get) => ({
     
     // Prevent duplicate toasts within 3 seconds
     if (lastShown && now - lastShown < 3000) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Preventing duplicate toast:', { type, title /* description intentionally omitted */ })
-      }
       return
     }
     

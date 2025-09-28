@@ -15,16 +15,8 @@ const VerifyEmailContent = () => {
   // Get email from URL params first (for unauthenticated users), then from user
   const email = searchParams.get('email') || user?.email || ''
 
-  // Don't show toast for already verified users - middleware will redirect them
-  // The OTPVerification component handles success toasts when verification completes
-
-  // Handle case where user is not authenticated but has email from URL
-  // This happens during login flow with unverified email
-  if (!isLoading && !isAuthenticated && email) {
-    console.log('🔧 VERIFY EMAIL: Unauthenticated user with email from URL:', email)
-  }
-
-  // No need for custom callback - let component handle redirect
+  // Get invite token from URL params
+  const inviteToken = searchParams.get('invite') || ''
 
   // Show loading state while checking auth
   if (isLoading) {
@@ -83,7 +75,7 @@ const VerifyEmailContent = () => {
         <CardContent className="pt-0">
           <OTPVerification
             email={email}
-            redirectTo="/onboarding"
+            redirectTo={inviteToken ? `/onboarding?invite=${inviteToken}` : "/onboarding"}
           />
         </CardContent>
       </Card>

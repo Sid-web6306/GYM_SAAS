@@ -42,7 +42,11 @@ const TABLE_QUERY_MAPPINGS = {
   ],
   attendance_sessions: (gymId: string) => [
     ['attendance', 'members', gymId],
-    ['attendance', 'staff', gymId]
+    ['attendance', 'staff', gymId],
+    // Member portal attendance queries
+    ['member-portal', 'attendance'],
+    ['member-portal', 'status'],
+    ['member-portal', 'profile']
   ]
 } as const
 
@@ -378,6 +382,74 @@ export function useRealtimeSync(gymId: string | null) {
       logger.realtime.error('Error setting up gym subscriptions', { 
         error: error instanceof Error ? error.message : 'Unknown error',
         gymId 
+      })
+    }
+    
+    // Set up member-specific attendance subscription for portal
+    const setupMemberAttendanceSubscription = () => {
+      const channelName = 'member-attendance-portal'
+      
+      if (channelsRef.current.has(channelName)) return
+
+      const channel = supabase
+        .channel(`realtime-${channelName}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'attendance_sessions',
+            filter: `member_id=eq.${user.id}`
+          },
+          (payload) => {
+            if (!isMountedRef.current) return
+
+            logger.realtime.update('Member attendance update received', { 
+              eventType: payload.eventType,
+              memberId: user.id,
+              gymId
+            })
+            
+            // Invalidate member portal queries
+            const memberPortalKeys = [
+              ['member-portal', 'attendance'],
+              ['member-portal', 'status'],
+              ['member-portal', 'profile']
+            ]
+            
+            memberPortalKeys.forEach(queryKey => {
+              if (!isMountedRef.current) return
+              
+              logger.realtime.update('Invalidating member portal queries', { 
+                queryKey,
+                immediate: true
+              })
+              
+              queryClient.invalidateQueries({
+                queryKey: queryKey,
+                exact: false,
+                refetchType: 'all'
+              })
+            })
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            logger.realtime.connect('Subscribed to member attendance updates', { channelName, memberId: user.id })
+          } else if (status === 'CHANNEL_ERROR') {
+            logger.realtime.error('Error subscribing to member attendance updates', { channelName, status })
+          }
+        })
+
+      channelsRef.current.set(channelName, channel)
+    }
+    
+    try {
+      setupMemberAttendanceSubscription()
+    } catch (error) {
+      logger.realtime.error('Error setting up member attendance subscription', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        memberId: user.id 
       })
     }
     

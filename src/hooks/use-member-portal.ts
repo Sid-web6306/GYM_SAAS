@@ -1,5 +1,6 @@
 'use client'
 
+// React import removed - not needed
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { logger } from '@/lib/logger'
 import { toastActions } from '@/stores/toast-store'
@@ -51,6 +52,8 @@ export const memberPortalKeys = {
   status: () => [...memberPortalKeys.all, 'status'] as const,
   attendance: (filters: { from?: string; to?: string; limit?: number; offset?: number }) => 
     [...memberPortalKeys.all, 'attendance', filters] as const,
+  // Stable query key for stats that doesn't change
+  stats: () => [...memberPortalKeys.all, 'stats'] as const,
 } as const
 
 // Hook to get member's own profile
@@ -90,8 +93,11 @@ export function useMemberStatus() {
       return data.status
     },
     refetchInterval: false,
-    staleTime: 15 * 1000, // 15 seconds
-    retry: 1
+    staleTime: 2 * 60 * 1000, // 2 minutes (status changes more frequently)
+    gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
+    retry: 1,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false
   })
 }
 
@@ -110,6 +116,8 @@ export function useMemberAttendance(filters: {
       attendance: MemberAttendanceRecord[]
       pagination: { limit: number; offset: number; has_more: boolean }
     }> => {
+      logger.info('⚠️ useMemberAttendance API call triggered - UNSTABLE QUERY KEY', { filters })
+      
       const params = new URLSearchParams()
       if (from) params.set('from', from)
       if (to) params.set('to', to)
@@ -123,13 +131,18 @@ export function useMemberAttendance(filters: {
         throw new Error(data.error || 'Failed to fetch attendance history')
       }
       
+      logger.debug('useMemberAttendance API call completed', { 
+        attendanceCount: data.attendance?.length || 0,
+        filters 
+      })
+      
       return {
         attendance: data.attendance,
         pagination: data.pagination
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes (increased from 2 minutes)
-    gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
+    staleTime: 10 * 60 * 1000, // 10 minutes (attendance data is stable)
+    gcTime: 30 * 60 * 1000, // 30 minutes garbage collection
     retry: 1,
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
     refetchOnMount: false // Don't refetch on component mount if data is fresh
@@ -244,33 +257,80 @@ export function useMemberCheckout() {
 }
 
 // Hook to get member stats (today's time, week visits, etc.)
+// Optimized to use single API call instead of multiple calls
 export function useMemberStats() {
   const memberProfile = useMemberProfile()
-  const today = new Date()
-  const weekStart = new Date(today)
-  weekStart.setDate(today.getDate() - 7)
   
-  const { data: weekAttendance } = useMemberAttendance({
-    from: weekStart.toISOString(),
-    to: today.toISOString(),
-    limit: 100
+  // Use a completely stable query that doesn't change on every render
+  const { data: weekAttendance, isLoading: attendanceLoading, error: attendanceError } = useQuery({
+    queryKey: ['member-portal-stats-global'], // Completely stable key
+    queryFn: async () => {
+      logger.info('🚀 useMemberStats API call triggered - STABLE QUERY KEY')
+      
+      // Calculate a stable week range
+      const now = new Date()
+      const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0)
+      const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+      
+      const params = new URLSearchParams()
+      params.set('from', weekStart.toISOString())
+      params.set('to', weekEnd.toISOString())
+      params.set('limit', '100')
+      params.set('offset', '0')
+      
+      const response = await fetch(`/api/members/attendance?${params}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch attendance history')
+      }
+      
+      logger.debug('useMemberStats API call completed', { 
+        attendanceCount: data.attendance?.length || 0
+      })
+      
+      return data
+    },
+    staleTime: 30 * 60 * 1000, // 30 minutes (increased from 10)
+    gcTime: 60 * 60 * 1000, // 60 minutes (increased from 30)
+    retry: 1,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    // Add query deduplication
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
+    // Prevent duplicate queries
+    enabled: true,
+    networkMode: 'online'
   })
   
-  const { data: todayAttendance } = useMemberAttendance({
-    from: new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString(),
-    to: today.toISOString(),
-    limit: 10
-  })
+  // Calculate stats from single dataset
+  const stats = {
+    weeklyVisits: weekAttendance?.attendance?.filter((a: MemberAttendanceRecord) => a.check_out_at).length || 0,
+    todayTotalTime: 0,
+    recentSessions: weekAttendance?.attendance?.slice(0, 5) || []
+  }
+  
+  // Calculate today's total time from week data
+  if (weekAttendance?.attendance) {
+    const today = new Date()
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
+    
+    stats.todayTotalTime = weekAttendance.attendance
+      .filter((session: MemberAttendanceRecord) => {
+        const sessionDate = new Date(session.check_in_at)
+        return sessionDate >= todayStart && sessionDate < todayEnd
+      })
+      .reduce((total: number, session: MemberAttendanceRecord) => {
+        return total + (session.check_out_at ? session.total_seconds : 0)
+      }, 0)
+  }
   
   return {
-    isLoading: memberProfile.isLoading,
-    error: memberProfile.error,
-    stats: {
-      weeklyVisits: weekAttendance?.attendance?.filter(a => a.check_out_at).length || 0,
-      todayTotalTime: todayAttendance?.attendance?.reduce((total, session) => {
-        return total + (session.check_out_at ? session.total_seconds : 0)
-      }, 0) || 0,
-      recentSessions: weekAttendance?.attendance?.slice(0, 5) || []
-    }
+    isLoading: memberProfile.isLoading || attendanceLoading,
+    error: memberProfile.error || attendanceError,
+    stats
   }
 }

@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/hooks/use-auth'
+import { logger } from '@/lib/logger'
 import { RequireAuth } from '@/components/auth/AuthGuard'
 
 import { useInviteVerification } from '@/hooks/use-invitations'
@@ -235,7 +236,7 @@ const OnboardingContent = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  // Get invite token from URL or user metadata
+  // Get invite token from URL or user metadata (stored during auth callback)
   const inviteToken = searchParams.get('invite') || user?.user_metadata?.pendingInviteToken || '';
   
   // Verify invitation if token exists
@@ -483,7 +484,12 @@ const OnboardingContent = () => {
                 </p>
                 <Button 
                   variant="outline" 
-                  onClick={() => router.push('/onboarding')}
+                  onClick={() => {
+                    // Remove invite token from URL and redirect to clean onboarding
+                    const url = new URL(window.location.href)
+                    url.searchParams.delete('invite')
+                    router.push(url.pathname)
+                  }}
                   className="cursor-pointer"
                 >
                   Decline & Create My Own Gym
@@ -545,7 +551,12 @@ const OnboardingContent = () => {
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Button onClick={() => router.push('/onboarding')} className="w-full cursor-pointer">
+                  <Button onClick={() => {
+                    // Remove invite token from URL and redirect to clean onboarding
+                    const url = new URL(window.location.href)
+                    url.searchParams.delete('invite')
+                    router.push(url.pathname)
+                  }} className="w-full cursor-pointer">
                     Continue with Gym Setup
                   </Button>
                   <Button variant="outline" onClick={() => router.push('/dashboard')} className="w-full cursor-pointer">
@@ -563,7 +574,7 @@ const OnboardingContent = () => {
   // it means invitation verification failed or is still loading
   if (inviteToken && user) {
     if (process.env.NODE_ENV === 'development') {
-      console.warn('🚨 ONBOARDING: User has invite token but reached gym setup form - this should not happen', {
+      logger.warn('🚨 ONBOARDING: User has invite token but reached gym setup form - this should not happen', {
         inviteToken: inviteToken.substring(0, 10) + '...',
         isValidInvite,
         hasInvitation: !!invitation,

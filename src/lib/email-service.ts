@@ -7,6 +7,9 @@ import {
   generateInvitationPreview,
   type InvitationEmailData 
 } from './email-templates/invitation-email';
+import { sendTemplateEmailViaMSG91 } from './msg91';
+import { logger } from './logger';
+import { serverConfig } from './config';
 
 export interface SendEmailOptions {
   from: string;
@@ -64,9 +67,7 @@ export class DevEmailService implements EmailService {
 /**
  * MSG91 email service implementation
  */
-import { sendTemplateEmailViaMSG91 } from './msg91';
-import { logger } from './logger';
-import { serverConfig } from './config';
+
 
 export class MSG91EmailService implements EmailService {
   // async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
@@ -202,8 +203,8 @@ export function getEmailService(): EmailService {
   // Use MSG91 for production or when API key is configured
   if (msg91ApiKey) {
     if (!msg91InvitationTemplateId) {
-      console.warn('⚠️  MSG91_INVITATION_TEMPLATE_ID not configured. Create templates in MSG91 dashboard first.');
-      console.log('📧 Falling back to development email service');
+      logger.warn('⚠️  MSG91_INVITATION_TEMPLATE_ID not configured. Create templates in MSG91 dashboard first.');
+      logger.info('📧 Falling back to development email service');
       return new DevEmailService();
     }
     console.log('✅ Using MSG91 email service with templates');
@@ -211,7 +212,7 @@ export function getEmailService(): EmailService {
   }
 
   // Fallback to dev service
-  console.warn('MSG91_API_KEY not configured, using dev service');
+  logger.warn('MSG91_API_KEY not configured, using dev service');
   return new DevEmailService();
 }
 

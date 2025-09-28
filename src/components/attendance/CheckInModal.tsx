@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
 import { Badge } from '@/components/ui/badge'
+import { logger } from '@/lib/logger'
 import { Separator } from '@/components/ui/separator'
 import { Search, Users, BookUser, Clock, CheckCircle, Loader2 } from 'lucide-react'
 import { useStartAttendance } from '@/hooks/use-attendance'
@@ -36,7 +37,7 @@ interface Member {
 interface StaffMember {
   id: string
   full_name: string | null
-  email: string
+  email: string | null
   default_role: string | null
 }
 
@@ -83,7 +84,7 @@ export function CheckInModal({ isOpen, onClose, type }: CheckInModalProps) {
         }
         return staffList.filter((s: StaffMember) => 
           (s.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          s.email.toLowerCase().includes(searchTerm.toLowerCase())
+          (s.email || '').toLowerCase().includes(searchTerm.toLowerCase())
         )
       })()
 
@@ -111,7 +112,7 @@ export function CheckInModal({ isOpen, onClose, type }: CheckInModalProps) {
       }, 2000)
       
     } catch (error) {
-      console.error('Check-in failed:', error)
+      logger.error('Check-in failed:', {error})
       toast.error('Check-in failed. Please try again.')
     }
   }
@@ -207,10 +208,10 @@ export function CheckInModal({ isOpen, onClose, type }: CheckInModalProps) {
                         "w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold",
                         type === 'member' ? 'bg-blue-600' : 'bg-green-600'
                       )}>
-                        {getPersonName(person).charAt(0).toUpperCase()}
+                        {person ? getPersonName(person)?.charAt(0)?.toUpperCase() || '?' : '?'}
                       </div>
                       <div>
-                        <p className="font-medium">{getPersonName(person)}</p>
+                        <p className="font-medium">{person ? getPersonName(person) : 'Unknown'}</p>
                         <div className="flex items-center gap-2">
                           {type === 'member' && (person as Member).email && (
                             <p className="text-sm text-muted-foreground">{(person as Member).email}</p>
@@ -240,12 +241,12 @@ export function CheckInModal({ isOpen, onClose, type }: CheckInModalProps) {
                 "w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold",
                 type === 'member' ? 'bg-blue-600' : 'bg-green-600'
               )}>
-                {getPersonName(selectedPerson).charAt(0).toUpperCase()}
+                {selectedPerson ? getPersonName(selectedPerson)?.charAt(0)?.toUpperCase() || '?' : '?'}
               </div>
               <div className="flex-1">
-                <p className="font-semibold">{getPersonName(selectedPerson)}</p>
+                <p className="font-semibold">{selectedPerson ? getPersonName(selectedPerson) : 'Unknown'}</p>
                 <Badge variant="secondary" className="text-xs">
-                  {getPersonRole(selectedPerson)}
+                  {selectedPerson ? getPersonRole(selectedPerson) : 'Unknown'}
                 </Badge>
               </div>
               <Button 

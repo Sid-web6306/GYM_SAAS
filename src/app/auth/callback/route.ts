@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import type { User, SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { logger } from '@/lib/logger'
 
 // Types for better type safety
 interface SocialProfileData {
@@ -32,17 +33,9 @@ export async function GET(request: Request) {
   const errorDescription = searchParams.get('error_description')
   const inviteToken = searchParams.get('invite')
   
-  console.log('Auth callback received:', { 
-    code: !!code, 
-    error, 
-    errorDescription,
-    inviteToken: !!inviteToken,
-    origin 
-  })
-  
   // Handle OAuth errors per Supabase documentation
   if (error) {
-    console.error('OAuth error in callback:', { error, errorDescription })
+    logger.error('OAuth error in callback:', { error, errorDescription })
     
     // Map OAuth errors to user-friendly messages
     switch (error) {
@@ -59,18 +52,17 @@ export async function GET(request: Request) {
   }
   
   if (!code) {
-    console.error('Auth callback: No authorization code received')
+    logger.error('Auth callback: No authorization code received')
     return NextResponse.redirect(`${origin}/login?message=social-auth-missing-code`)
   }
   
   try {
     const supabase = await createClient()
 
-    console.log('Exchanging code for session...')
     const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
     
     if (sessionError) {
-      console.error('Session exchange error:', sessionError)
+      logger.error('Session exchange error:', {sessionError})
       // Handle specific session exchange errors
       if (sessionError.message.includes('Invalid or expired code')) {
         return NextResponse.redirect(`${origin}/login?message=social-auth-expired`)
@@ -78,45 +70,31 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/login?message=social-auth-error&details=${encodeURIComponent(sessionError.message)}`)
     }
     
-    if (!data.session || !data.user) {
-      console.error('Auth callback: No session or user data received')
+    if (!data.session) {
+      logger.error('Auth callback: No session received')
       return NextResponse.redirect(`${origin}/login?message=social-auth-no-session`)
     }
 
-    const { user } = data
-    console.log('Auth callback: Session established', { 
-      userEmail: user.email,
-      userId: user.id,
-      emailConfirmed: user.email_confirmed_at,
-      provider: user.app_metadata?.provider,
-      lastSignIn: user.last_sign_in_at
-    })
+    // Get user data securely after session is established
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    
+    if (userError || !user) {
+      logger.error('Auth callback: Failed to get user data', {userError})
+      return NextResponse.redirect(`${origin}/login?message=social-auth-no-user`)
+    }
     
     // Extract social provider information
     const provider = user.app_metadata?.provider
     const isNewUser = !user.last_sign_in_at || user.created_at === user.last_sign_in_at
     const socialProfileData = extractSocialProfileData(user)
     
-    console.log('Social profile data extracted:', {
-      provider,
-      isNewUser,
-      profileData: socialProfileData
-    })
-    
     // Wait for database trigger to create profile with retry logic
     const profile = await waitForProfileCreation(supabase, user.id)
     
     if (!profile) {
-      console.error('Auth callback: Profile creation failed after retries')
+      logger.error('Auth callback: Profile creation failed after retries')
       return NextResponse.redirect(`${origin}/login?message=profile-creation-failed`)
     }
-
-    console.log('Auth callback: Profile found', { 
-      profile, 
-      hasGym: !!profile.gym_id,
-      role: profile.default_role,
-      isOwner: profile.is_gym_owner
-    })
 
     // Enrich profile with social data if missing
     await enrichProfileWithSocialData(supabase, user.id, profile, socialProfileData)
@@ -124,46 +102,16 @@ export async function GET(request: Request) {
     // Get invite token from URL params or user metadata
     const userInviteToken = inviteToken || user.user_metadata?.pendingInviteToken
 
-    // If user has an invitation token and is newly confirmed, try to accept the invitation
+    // Store invite token in user metadata for later processing (after OTP verification)
     if (userInviteToken && isNewUser && user.email) {
-      console.log('Auth callback: Attempting to auto-accept invitation', { 
-        token: userInviteToken.substring(0, 10) + '...', 
-        userEmail: user.email 
-      })
-      
       try {
-        // Call our invitation acceptance API
-        const response = await fetch(`${origin}/api/invites/verify`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${data.session?.access_token}`
-          },
-          body: JSON.stringify({
-            inviteToken: userInviteToken,
-            userEmail: user.email
-          })
+        // Store the invite token in user metadata for processing after OTP verification
+        await supabase.auth.updateUser({
+          data: { pendingInviteToken: userInviteToken }
         })
-
-        if (response.ok) {
-          const result = await response.json()
-          if (result.success) {
-            console.log('Auth callback: Invitation accepted successfully', result)
-            // Clear the pending invitation token
-            await supabase.auth.updateUser({
-              data: { pendingInviteToken: null }
-            })
-            // Redirect to dashboard since they're now part of a gym
-            return NextResponse.redirect(`${origin}/dashboard?welcome=true`)
-          } else {
-            console.log('Auth callback: Invitation acceptance failed', result.error)
-          }
-        } else {
-          console.log('Auth callback: Invitation acceptance request failed', response.status)
-        }
       } catch (error) {
-        console.error('Auth callback: Error accepting invitation:', error)
-        // Continue with normal flow if invitation acceptance fails
+        logger.error('Auth callback: Error storing invite token:', { error })
+        // Continue with normal flow if storing fails
       }
     }
 
@@ -171,7 +119,7 @@ export async function GET(request: Request) {
     return routeUserBasedOnProfile(origin, profile, provider, isNewUser, userInviteToken)
     
   } catch (error) {
-    console.error('Auth callback unexpected error:', error)
+    logger.error('Auth callback unexpected error:', {error})
     
     // Provide more detailed error information in development
     const errorDetails = error instanceof Error ? error.message : 'Unknown error'
@@ -191,7 +139,7 @@ async function waitForProfileCreation(supabase: SupabaseClient<Database>, userId
   const baseDelay = 100 // Start with 100ms
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    console.log(`Auth callback: Checking for profile (attempt ${attempt + 1}/${maxRetries})`)
+    logger.info(`Auth callback: Checking for profile (attempt ${attempt + 1}/${maxRetries})`)
     
     const { data: profile, error } = await supabase
       .from('profiles')
@@ -200,24 +148,24 @@ async function waitForProfileCreation(supabase: SupabaseClient<Database>, userId
       .single()
     
     if (profile) {
-      console.log('Auth callback: Profile found after', attempt + 1, 'attempts')
+      logger.info('Auth callback: Profile found after', { attempts: attempt + 1 })
       return profile as ProfileData
     }
     
     if (error && error.code !== 'PGRST116') {
-      console.error('Auth callback: Unexpected profile error:', error)
+      logger.error('Auth callback: Unexpected profile error:', {error})
       return null
     }
     
     // If not the last attempt, wait before retrying
     if (attempt < maxRetries - 1) {
       const delay = baseDelay * Math.pow(2, attempt) // Exponential backoff
-      console.log(`Auth callback: Profile not found, retrying in ${delay}ms...`)
+      logger.info(`Auth callback: Profile not found, retrying in ${delay}ms...`)
       await new Promise(resolve => setTimeout(resolve, delay))
     }
   }
   
-  console.error('Auth callback: Profile not found after', maxRetries, 'attempts')
+  logger.error('Auth callback: Profile not found after', { maxRetries })
   return null
 }
 
@@ -245,7 +193,7 @@ async function enrichProfileWithSocialData(
   }
   
   if (Object.keys(updates).length > 0) {
-    console.log('Auth callback: Enriching profile with social data:', updates)
+    logger.info('Auth callback: Enriching profile with social data:', updates)
     
     const { error: updateError } = await supabase
       .from('profiles')
@@ -256,7 +204,7 @@ async function enrichProfileWithSocialData(
       .eq('id', userId)
     
     if (updateError) {
-      console.error('Auth callback: Failed to update profile with social data:', updateError)
+      logger.error('Auth callback: Failed to update profile with social data:', {updateError})
       // Don't fail the auth flow for profile enrichment errors
     }
   }
@@ -272,34 +220,42 @@ function routeUserBasedOnProfile(
 ): NextResponse {
   // User has completed onboarding and has a gym
   if (profile.gym_id) {
-    console.log('Auth callback: User has gym, redirecting to dashboard', {
+    logger.info('Auth callback: User has gym, redirecting to dashboard', {
       gymId: profile.gym_id,
       role: profile.default_role,
       isOwner: profile.is_gym_owner
     })
+
     // If there's an invite token, try to handle it even if user has a gym
     if (inviteToken) {
       return NextResponse.redirect(`${origin}/dashboard?invite=${inviteToken}`)
+    }
+    if(profile.default_role === 'member') {
+      return NextResponse.redirect(`${origin}/portal`)
     }
     return NextResponse.redirect(`${origin}/dashboard`)
   }
   
   // User needs onboarding
-  console.log('Auth callback: User needs onboarding', {
+  logger.info('Auth callback: User needs onboarding', {
     isNewUser,
     provider,
     role: profile.default_role,
-    hasProfile: !!profile.id
+    hasProfile: !!profile.id,
+    hasInviteToken: !!inviteToken
   })
   
-  // For social auth users, provide context to onboarding
-  if (provider && isNewUser) {
-    const params = new URLSearchParams({ social: 'true', provider })
-    if (inviteToken) params.set('invite', inviteToken)
-    return NextResponse.redirect(`${origin}/onboarding?${params.toString()}`)
+  // For new users, always require email verification first (OTP)
+  if (isNewUser) {
+    logger.info('Auth callback: New user - redirecting to email verification')
+    // Store invite token in URL params for after verification
+    if (inviteToken) {
+      return NextResponse.redirect(`${origin}/verify-email?invite=${inviteToken}`)
+    }
+    return NextResponse.redirect(`${origin}/verify-email`)
   }
   
-  // Include invite token in onboarding URL if present
+  // For existing users, go directly to onboarding
   if (inviteToken) {
     return NextResponse.redirect(`${origin}/onboarding?invite=${inviteToken}`)
   }

@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { useInvitations } from '@/hooks/use-invitations'
 import { useRBAC } from '@/hooks/use-rbac'
 import { toastActions } from '@/stores/toast-store'
+import { logger } from '@/lib/logger'
 import { type GymRole, ROLE_LEVELS } from '@/types/rbac.types'
 import { InviteCreationErrorBoundary } from './InvitationErrorBoundary'
 
@@ -91,7 +92,7 @@ export const InviteButton: React.FC<InviteButtonProps> = ({
         toastActions.error('Failed to Create Invitation', result.error || 'Unknown error')
       }
     } catch (error) {
-      console.error('Error sending invitation:', error)
+      logger.error('Error sending invitation:', {error})
       toastActions.error('Error', 'Failed to send invitation')
     }
   }

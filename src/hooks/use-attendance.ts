@@ -33,9 +33,9 @@ export function useMemberAttendance(gymId: string | null, filters?: AttendanceFi
       const supabase = createClient()
       const { data, error } = await supabase.rpc('get_member_attendance', {
         p_gym_id: gymId,
-        p_search: filters?.search ?? null,
-        p_from: filters?.from ?? null,
-        p_to: filters?.to ?? null,
+        p_search: filters?.search ?? undefined,
+        p_from: filters?.from ?? undefined,
+        p_to: filters?.to ?? undefined,
         p_limit: filters?.limit ?? 50,
         p_offset: filters?.offset ?? 0,
       })
@@ -54,9 +54,9 @@ export function useStaffAttendance(gymId: string | null, filters?: AttendanceFil
       const supabase = createClient()
       const { data, error } = await supabase.rpc('get_staff_attendance', {
         p_gym_id: gymId,
-        p_search: filters?.search ?? null,
-        p_from: filters?.from ?? null,
-        p_to: filters?.to ?? null,
+        p_search: filters?.search ?? undefined,
+        p_from: filters?.from ?? undefined,
+        p_to: filters?.to ?? undefined,
         p_limit: filters?.limit ?? 50,
         p_offset: filters?.offset ?? 0,
       })
@@ -80,10 +80,10 @@ export function useStartAttendance(gymId?: string | null) {
       const supabase = createClient()
       const { data, error } = await supabase.rpc('start_attendance_session', {
         p_subject_type: args.subjectType,
-        p_member_id: args.memberId ?? null,
-        p_staff_user_id: args.staffUserId ?? null,
-        p_method: args.method ?? null,
-        p_notes: args.notes ?? null,
+        p_member_id: args.memberId ?? undefined,
+        p_staff_user_id: args.staffUserId ?? undefined,
+        p_method: args.method ?? undefined,
+        p_notes: args.notes ?? undefined,
       })
       if (error) throw error
       return data
@@ -167,8 +167,8 @@ export function useUpdateAttendanceSession(gymId?: string | null) {
       const { data, error } = await supabase.rpc('update_attendance_session', {
         p_session_id: args.sessionId,
         p_check_in_at: args.checkInAt,
-        p_check_out_at: args.checkOutAt ?? null,
-        p_notes: args.notes ?? null,
+        p_check_out_at: args.checkOutAt ?? undefined,
+        p_notes: args.notes ?? undefined,
       })
       if (error) throw error
       return data

@@ -14,12 +14,15 @@ import {
   Activity,
   Clock
 } from 'lucide-react'
-import { useMemberProfile, useMemberStats } from '@/hooks/use-member-portal'
+import { usePortalData } from '@/components/providers/portal-data-provider'
 import { format } from 'date-fns'
 
 export default function MemberProfilePage() {
-  const { data: profile, isLoading: profileLoading, error: profileError } = useMemberProfile()
-  const { stats, isLoading: statsLoading } = useMemberStats()
+  const { profile, stats } = usePortalData()
+  
+  // Extract data and loading states from the context
+  const { data: profileData, isLoading: profileLoading, error: profileError } = profile
+  const { stats: statsData, isLoading: statsLoading } = stats
 
   const getStatusColor = (status: string | null | undefined) => {
     switch (status) {
@@ -91,12 +94,12 @@ export default function MemberProfilePage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900">
-                    {profile?.first_name} {profile?.last_name}
+                    {profileData?.first_name} {profileData?.last_name}
                   </h3>
                   <p className="text-gray-500">Member</p>
                 </div>
-                <Badge className={getStatusColor(profile?.status)}>
-                  {profile?.status || 'Unknown'}
+                <Badge className={getStatusColor(profileData?.status)}>
+                  {profileData?.status || 'Unknown'}
                 </Badge>
               </div>
 
@@ -109,7 +112,7 @@ export default function MemberProfilePage() {
                     <Mail className="h-4 w-4 text-gray-400" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">Email</p>
-                      <p className="text-sm text-gray-600">{profile?.email || 'Not provided'}</p>
+                      <p className="text-sm text-gray-600">{profileData?.email || 'Not provided'}</p>
                     </div>
                   </div>
 
@@ -117,7 +120,7 @@ export default function MemberProfilePage() {
                     <Phone className="h-4 w-4 text-gray-400" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">Phone</p>
-                      <p className="text-sm text-gray-600">{profile?.phone_number || 'Not provided'}</p>
+                      <p className="text-sm text-gray-600">{profileData?.phone_number || 'Not provided'}</p>
                     </div>
                   </div>
                 </div>
@@ -130,7 +133,7 @@ export default function MemberProfilePage() {
                     <div>
                       <p className="text-sm font-medium text-gray-900">Join Date</p>
                       <p className="text-sm text-gray-600">
-                        {profile?.join_date ? format(new Date(profile.join_date), 'MMM d, yyyy') : 'Not set'}
+                        {profileData?.join_date ? format(new Date(profileData.join_date), 'MMM d, yyyy') : 'Not set'}
                       </p>
                     </div>
                   </div>
@@ -140,7 +143,7 @@ export default function MemberProfilePage() {
                     <div>
                       <p className="text-sm font-medium text-gray-900">Member Since</p>
                       <p className="text-sm text-gray-600">
-                        {profile?.created_at ? format(new Date(profile.created_at), 'MMM d, yyyy') : 'Unknown'}
+                        {profileData?.created_at ? format(new Date(profileData.created_at), 'MMM d, yyyy') : 'Unknown'}
                       </p>
                     </div>
                   </div>
@@ -176,21 +179,21 @@ export default function MemberProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="text-center p-4 bg-blue-50 rounded-lg">
                 <div className="text-2xl font-bold text-blue-600 mb-1">
-                  {stats?.weeklyVisits || 0}
+                  {statsData?.weeklyVisits || 0}
                 </div>
                 <p className="text-sm text-blue-700">Visits This Week</p>
               </div>
 
               <div className="text-center p-4 bg-green-50 rounded-lg">
                 <div className="text-2xl font-bold text-green-600 mb-1">
-                  {stats?.todayTotalTime ? formatTime(stats.todayTotalTime) : '0m'}
+                  {statsData?.todayTotalTime ? formatTime(statsData.todayTotalTime) : '0m'}
                 </div>
                 <p className="text-sm text-green-700">Time Today</p>
               </div>
 
               <div className="text-center p-4 bg-purple-50 rounded-lg">
                 <div className="text-2xl font-bold text-purple-600 mb-1">
-                  {stats?.recentSessions?.length || 0}
+                  {statsData?.recentSessions?.length || 0}
                 </div>
                 <p className="text-sm text-purple-700">Recent Sessions</p>
               </div>
@@ -200,7 +203,7 @@ export default function MemberProfilePage() {
       </Card>
 
       {/* Recent Sessions Preview */}
-      {!statsLoading && stats?.recentSessions && stats.recentSessions.length > 0 && (
+      {!statsLoading && statsData?.recentSessions && statsData.recentSessions.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -213,7 +216,7 @@ export default function MemberProfilePage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {stats.recentSessions.slice(0, 3).map((session) => (
+              {statsData.recentSessions.slice(0, 3).map((session: { session_id: string; check_in_at: string; check_out_at?: string; total_seconds?: number; notes?: string }) => (
                 <div key={session.session_id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-3">
                     {session.check_out_at ? (
@@ -232,7 +235,7 @@ export default function MemberProfilePage() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium">
-                      {formatTime(session.total_seconds)}
+                      {formatTime(session.total_seconds || 0)}
                     </p>
                     <p className="text-xs text-gray-500">
                       {session.check_out_at ? 'Completed' : 'Active'}

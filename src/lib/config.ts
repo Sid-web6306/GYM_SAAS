@@ -1,4 +1,5 @@
 // Environment configuration and validation
+import { logger } from './logger'
 const requiredEnvVars = {
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -25,7 +26,7 @@ function validateClientEnv() {
     .map(([key]) => key)
 
   if (missing.length > 0) {
-    console.warn(
+    logger.warn(
       `Missing required environment variables: ${missing.join(', ')}\n` +
       'Please check your .env.local file and make sure all required variables are set.\n' +
       'See packages/web/ENVIRONMENT_SETUP.md for detailed setup instructions.'
@@ -40,7 +41,7 @@ function validateServerEnv() {
     .map(([key]) => key)
 
   if (missing.length > 0) {
-    console.warn(
+    logger.warn(
       `Missing server environment variables: ${missing.join(', ')}\n` +
       'Some features may not work correctly. Check your .env.local file.'
     )

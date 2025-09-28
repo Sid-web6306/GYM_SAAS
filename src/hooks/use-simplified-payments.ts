@@ -204,7 +204,7 @@ export function useSimplifiedPayments() {
         const error = await response.json()
         throw new Error(error.error || 'Failed to create payment')
       }
-      console.log('Payment successful:', response)
+      logger.info('Payment successful:', {response})
 
       return response.json()
     },

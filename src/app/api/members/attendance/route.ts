@@ -37,8 +37,8 @@ export async function GET(request: NextRequest) {
     // Call the get_my_member_attendance RPC function
     const { data: attendanceHistory, error: attendanceError } = await supabase
       .rpc('get_my_member_attendance', {
-        p_from: from,
-        p_to: to,
+        p_from: from || undefined,
+        p_to: to || undefined,
         p_limit: limit,
         p_offset: offset
       })

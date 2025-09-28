@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 import type { 
   GymRole, 
   Permission, 
@@ -11,7 +12,6 @@ import type {
   Role,
   PermissionDefinition 
 } from '@/types/rbac.types'
-import { logger } from '@/lib/logger'
 
 // ========== VALIDATION SCHEMAS ==========
 
@@ -54,7 +54,7 @@ export async function checkUserPermission(
     })
 
     if (error) {
-      console.error('Error checking permission:', error)
+      logger.error('Error checking permission:', {error})
       return false
     }
 
@@ -79,13 +79,13 @@ export async function getUserRole(
     })
 
     if (error) {
-      console.error('Error getting user role:', error)
+      logger.error('Error getting user role:', {error})
       return null
     }
 
     return (data as GymRole) || null
   } catch (error) {
-    console.error('Error in getUserRole:', error)
+    logger.error('Error in getUserRole:', {error})
     return null
   }
 }
@@ -103,13 +103,13 @@ export async function getUserPermissions(
     })
 
     if (error) {
-      console.error('Error getting user permissions:', error)
+      logger.error('Error getting user permissions:', {error})
       return []
     }
 
     return (data as Permission[]) || []
   } catch (error) {
-    console.error('Error in getUserPermissions:', error)
+    logger.error('Error in getUserPermissions:', {error})
     return []
   }
 }
@@ -199,7 +199,7 @@ export async function assignRoleToUser(request: RoleAssignmentRequest) {
       })
 
     if (assignError) {
-      console.error('Error assigning role:', assignError)
+      logger.error('Error assigning role:', {assignError})
       return { success: false, error: 'Failed to assign role' }
     }
 
@@ -222,7 +222,7 @@ export async function assignRoleToUser(request: RoleAssignmentRequest) {
     }
 
   } catch (error) {
-    console.error('Error in assignRoleToUser:', error)
+    logger.error('Error in assignRoleToUser:', {error})
     return { success: false, error: 'Failed to assign role' }
   }
 }
@@ -251,7 +251,7 @@ export async function assignUserRole(formData: FormData) {
     return await assignRoleToUser(request)
 
   } catch (error) {
-    console.error('Error in assignUserRole:', error)
+    logger.error('Error in assignUserRole:', {error})
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message }
     }
@@ -307,7 +307,7 @@ export async function updateUserRole(formData: FormData) {
       .eq('gym_id', validatedData.gym_id)
 
     if (updateError) {
-      console.error('Error updating role:', updateError)
+      logger.error('Error updating role:', {updateError})
       return { success: false, error: 'Failed to update role' }
     }
 
@@ -329,7 +329,7 @@ export async function updateUserRole(formData: FormData) {
     return { success: true, message: 'Role updated successfully' }
 
   } catch (error) {
-    console.error('Error in updateUserRole:', error)
+    logger.error('Error in updateUserRole:', {error})
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message }
     }
@@ -353,44 +353,343 @@ export async function removeUserRole(formData: FormData) {
       gym_id: formData.get('gym_id')
     })
 
-    // Check permissions
-    const canManageStaff = await checkUserPermission(user.id, validatedData.gym_id, 'staff.delete')
-    if (!canManageStaff) {
-      return { success: false, error: 'Insufficient permissions to remove roles' }
+    // Check if user has permission to delete users
+    const canDeleteUser = await checkUserPermission(user.id, validatedData.gym_id, 'staff.delete')
+    logger.info('Permission check result:', { 
+      canDeleteUser,
+      user_id: user.id,
+      gym_id: validatedData.gym_id,
+      permission: 'staff.delete'
+    })
+    
+    if (!canDeleteUser) {
+      return { success: false, error: 'Insufficient permissions to remove users' }
     }
 
-    // Cannot remove owner role
+    // Prevent users from removing themselves
+    if (user.id === validatedData.user_id) {
+      return { success: false, error: 'You cannot remove yourself from the gym' }
+    }
+
+    // Get target user's role
     const targetRole = await getUserRole(validatedData.user_id, validatedData.gym_id)
+    
+    // Check if target user is an owner (only owners can remove other owners)
     if (targetRole === 'owner') {
-      return { success: false, error: 'Cannot remove owner role' }
+      const currentUserRole = await getUserRole(user.id, validatedData.gym_id)
+      if (currentUserRole !== 'owner') {
+        return { success: false, error: 'Only owners can remove other owners' }
+      }
+    }
+
+    // Check if user has an active role in this gym
+    const { data: existingRole, error: roleCheckError } = await supabase
+      .from('user_roles')
+      .select('id, is_active')
+      .eq('user_id', validatedData.user_id)
+      .eq('gym_id', validatedData.gym_id)
+      .eq('is_active', true)
+      .single()
+
+    if (roleCheckError && roleCheckError.code !== 'PGRST116') {
+      logger.error('Error checking user role:', { roleCheckError })
+      return { success: false, error: 'Failed to check user role' }
+    }
+
+    if (!existingRole) {
+      logger.warn('No active role found for user in gym:', { 
+        user_id: validatedData.user_id, 
+        gym_id: validatedData.gym_id 
+      })
+      return { success: false, error: 'User does not have an active role in this gym' }
     }
 
     // Deactivate user role
-    const { error: removeError } = await supabase
+    logger.info('Attempting to deactivate user role:', { 
+      role_id: existingRole.id,
+      user_id: validatedData.user_id, 
+      gym_id: validatedData.gym_id,
+      current_user: user.id 
+    })
+    
+    const { data: roleUpdateData, error: removeError } = await supabase
       .from('user_roles')
       .update({
         is_active: false,
         updated_at: new Date().toISOString()
       })
+      .eq('id', existingRole.id!)
+      .select()
+
+    if (removeError) {
+      logger.error('Error removing role:', { 
+        error: removeError,
+        role_id: existingRole.id,
+        user_id: validatedData.user_id,
+        gym_id: validatedData.gym_id 
+      })
+      return { success: false, error: 'Failed to remove role' }
+    }
+
+    logger.info('Role deactivation successful:', { 
+      updated_role: roleUpdateData,
+      role_id: existingRole.id 
+    })
+
+    logger.info('Successfully deactivated user role:', { 
+      role_id: existingRole.id,
+      user_id: validatedData.user_id, 
+      gym_id: validatedData.gym_id 
+    })
+
+    // Clean up user's gym-specific data
+    // 1. Deactivate member record if exists
+    await supabase
+      .from('members')
+      .update({ status: 'inactive' })
       .eq('user_id', validatedData.user_id)
       .eq('gym_id', validatedData.gym_id)
 
-    if (removeError) {
-      console.error('Error removing role:', removeError)
-      return { success: false, error: 'Failed to remove role' }
+    // 2. Note: member_activities are linked via member_id, so they'll be cleaned up when member is deactivated
+
+    // 3. Update user's profile to remove gym association
+    logger.info('Attempting to update profile:', { 
+      user_id: validatedData.user_id, 
+      gym_id: validatedData.gym_id,
+      current_user: user.id 
+    })
+    
+    const { data: profileUpdateData, error: profileUpdateError } = await supabase
+      .from('profiles')
+      .update({ 
+        gym_id: null,
+        default_role: 'member',
+        last_role_sync: new Date().toISOString()
+      })
+      .eq('id', validatedData.user_id)
+      .select()
+
+    if (profileUpdateError) {
+      logger.error('Profile update error:', { 
+        error: profileUpdateError,
+        user_id: validatedData.user_id,
+        gym_id: validatedData.gym_id 
+      })
+      return { success: false, error: 'Failed to update user profile' }
     }
+
+    logger.info('Profile update successful:', { 
+      updated_profile: profileUpdateData,
+      user_id: validatedData.user_id 
+    })
+
+    revalidatePath('/dashboard')
+    revalidatePath('/settings')
+    revalidatePath('/staff')
+
+    return { success: true, message: 'User successfully removed from gym' }
+
+  } catch (error) {
+    logger.error('Error in removeUserRole:', {error})
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.errors[0].message }
+    }
+    return { success: false, error: 'Failed to remove user' }
+  }
+}
+
+// New function for complete user deletion (more comprehensive than removeUserRole)
+export async function deleteUserFromGym(userId: string, gymId: string) {
+  try {
+    const supabase = await createClient()
+    
+    // Get current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Authentication required' }
+    }
+
+    // Check if user has permission to delete users
+    const canDeleteUser = await checkUserPermission(user.id, gymId, 'staff.delete')
+    if (!canDeleteUser) {
+      return { success: false, error: 'Insufficient permissions to delete users' }
+    }
+
+    // Prevent users from deleting themselves
+    if (user.id === userId) {
+      return { success: false, error: 'You cannot delete yourself' }
+    }
+
+    // Get target user's role
+    const targetRole = await getUserRole(userId, gymId)
+    
+    // Check if target user is an owner (only owners can delete other owners)
+    if (targetRole === 'owner') {
+      const currentUserRole = await getUserRole(user.id, gymId)
+      if (currentUserRole !== 'owner') {
+        return { success: false, error: 'Only owners can delete other owners' }
+      }
+    }
+
+    // Start comprehensive cleanup
+    logger.info('Starting user removal process:', { userId, gymId, deletedBy: user.id })
+    
+    // 1. Check if user has an active role in this gym
+    const { data: existingRole, error: roleCheckError } = await supabase
+      .from('user_roles')
+      .select('id, is_active')
+      .eq('user_id', userId)
+      .eq('gym_id', gymId)
+      .eq('is_active', true)
+      .single()
+
+    if (roleCheckError && roleCheckError.code !== 'PGRST116') {
+      logger.error('Error checking user role:', { roleCheckError })
+      return { success: false, error: 'Failed to check user role' }
+    }
+
+    if (!existingRole) {
+      logger.warn('No active role found for user in gym:', { 
+        user_id: userId, 
+        gym_id: gymId 
+      })
+      return { success: false, error: 'User does not have an active role in this gym' }
+    }
+
+    // Deactivate user role
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingRole.id!)
+
+    if (roleError) {
+      logger.error('Error deactivating user role:', { roleError })
+      return { success: false, error: 'Failed to remove user from gym' }
+    }
+
+    logger.info('Successfully deactivated user role:', { 
+      role_id: existingRole.id,
+      user_id: userId, 
+      gym_id: gymId 
+    })
+
+    // 2. Clean up member record
+    await supabase
+      .from('members')
+      .update({ status: 'inactive' })
+      .eq('user_id', userId)
+      .eq('gym_id', gymId)
+
+    // 3. Note: member_activities are linked via member_id, so they'll be cleaned up when member is deactivated
+
+    // 4. Clean up any pending invitations for this user
+    const { data: targetUser } = await supabase.auth.admin.getUserById(userId)
+    if (targetUser?.user?.email) {
+      await supabase
+        .from('gym_invitations')
+        .update({ 
+          status: 'revoked',
+          updated_at: new Date().toISOString()
+        })
+        .eq('email', targetUser.user.email)
+        .eq('gym_id', gymId)
+        .eq('status', 'pending')
+    }
+
+    // 5. Profile remains intact - user will be detected as inactive by middleware
+    logger.info('User role deactivated successfully - profile remains intact for reactivation:', {
+      userId,
+      gymId,
+      profileGymId: 'unchanged', // Profile gym_id stays the same
+      isActive: false // Only user_roles.is_active changed
+    })
+
+    logger.info('User successfully deleted from gym:', {
+      deleted_user_id: userId,
+      gym_id: gymId,
+      deleted_by: user.id
+    })
 
     revalidatePath('/dashboard')
     revalidatePath('/settings')
 
-    return { success: true, message: 'Role removed successfully' }
+    return { success: true, message: 'User successfully removed from gym' }
 
   } catch (error) {
-    console.error('Error in removeUserRole:', error)
-    if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message }
+    logger.error('Error in deleteUserFromGym:', { error })
+    return { success: false, error: 'Failed to delete user' }
+  }
+}
+
+export async function reactivateUser(userId: string, gymId: string) {
+  try {
+    const supabase = await createClient()
+    
+    // Get current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Authentication required' }
     }
-    return { success: false, error: 'Failed to remove role' }
+
+    // Check if user has permission to reactivate users
+    const canReactivateUser = await checkUserPermission(user.id, gymId, 'staff.update')
+    if (!canReactivateUser) {
+      return { success: false, error: 'Insufficient permissions to reactivate users' }
+    }
+
+    // Check if user has an inactive role in this gym
+    const { data: inactiveRole, error: roleCheckError } = await supabase
+      .from('user_roles')
+      .select('id, is_active')
+      .eq('user_id', userId)
+      .eq('gym_id', gymId)
+      .eq('is_active', false)
+      .single()
+
+    if (roleCheckError && roleCheckError.code !== 'PGRST116') {
+      logger.error('Error checking inactive user role:', { roleCheckError })
+      return { success: false, error: 'Failed to check user role' }
+    }
+
+    if (!inactiveRole) {
+      logger.warn('No inactive role found for user in gym:', { 
+        user_id: userId, 
+        gym_id: gymId 
+      })
+      return { success: false, error: 'User does not have an inactive role in this gym' }
+    }
+
+    // Reactivate user role
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .update({
+        is_active: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', inactiveRole.id!)
+
+    if (roleError) {
+      logger.error('Error reactivating user role:', { roleError })
+      return { success: false, error: 'Failed to reactivate user' }
+    }
+
+    logger.info('User successfully reactivated:', {
+      reactivated_user_id: userId,
+      gym_id: gymId,
+      reactivated_by: user.id
+    })
+
+    revalidatePath('/dashboard')
+    revalidatePath('/settings')
+
+    return { success: true, message: 'User successfully reactivated' }
+
+  } catch (error) {
+    logger.error('Error in reactivateUser:', { error })
+    return { success: false, error: 'Failed to reactivate user' }
   }
 }
 
@@ -423,13 +722,51 @@ export async function getGymRoles(gym_id: string): Promise<UserRole[]> {
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching gym roles:', error)
+      logger.error('Error fetching gym roles:', {error})
       return []
     }
 
     return data as UserRole[]
   } catch (error) {
-    console.error('Error in getGymRoles:', error)
+    logger.error('Error in getGymRoles:', {error})
+    return []
+  }
+}
+
+export async function getInactiveGymRoles(gym_id: string): Promise<UserRole[]> {
+  try {
+    const supabase = await createClient()
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return []
+    }
+
+    // Check if user has access to this gym (staff.read permission)
+    const hasAccess = await checkUserPermission(user.id, gym_id, 'staff.read')
+    if (!hasAccess) {
+      return []
+    }
+
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select(`
+        *,
+        role:roles(*),
+        gym:gyms(id, name)
+      `)
+      .eq('gym_id', gym_id)
+      .eq('is_active', false)
+      .order('updated_at', { ascending: false })
+
+    if (error) {
+      logger.error('Error fetching inactive gym roles:', {error})
+      return []
+    }
+
+    return (data || []) as UserRole[]
+  } catch (error) {
+    logger.error('Error in getInactiveGymRoles:', {error})
     return []
   }
 }
@@ -444,13 +781,13 @@ export async function getAllRoles(): Promise<Role[]> {
       .order('level', { ascending: false })
 
     if (error) {
-      console.error('Error fetching roles:', error)
+      logger.error('Error fetching roles:', {error})
       return []
     }
 
     return data as Role[]
   } catch (error) {
-    console.error('Error in getAllRoles:', error)
+    logger.error('Error in getAllRoles:', {error})
     return []
   }
 }
@@ -466,13 +803,13 @@ export async function getAllPermissions(): Promise<PermissionDefinition[]> {
       .order('action', { ascending: true })
 
     if (error) {
-      console.error('Error fetching permissions:', error)
+      logger.error('Error fetching permissions:', {error})
       return []
     }
 
     return data as PermissionDefinition[]
   } catch (error) {
-    console.error('Error in getAllPermissions:', error)
+    logger.error('Error in getAllPermissions:', {error})
     return []
   }
 }
@@ -514,7 +851,7 @@ export async function requirePermission(
 
     return { success: true }
   } catch (error) {
-    console.error('Error in requirePermission:', error)
+    logger.error('Error in requirePermission:', {error})
     return { success: false, error: 'Permission check failed' }
   }
 }
@@ -559,7 +896,7 @@ export async function requireRole(
 
     return { success: true }
   } catch (error) {
-    console.error('Error in requireRole:', error)
+    logger.error('Error in requireRole:', {error})
     return { success: false, error: 'Role check failed' }
   }
 }

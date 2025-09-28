@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import { logger } from '@/lib/logger'
 
 const EmailSchema = z.object({
   email: z.string().email()
@@ -44,7 +45,7 @@ export async function signupWithEmail(formData: FormData): Promise<AuthResult> {
       verifyEmail = validation.data.email
     }
   } catch (error) {
-    console.error('Signup error:', error)
+    logger.error('Signup error:', {error})
     return { error: 'An unexpected error occurred' }
   }
 
@@ -88,7 +89,7 @@ export async function loginWithEmail(formData: FormData): Promise<AuthResult> {
     shouldRedirectToVerify = true
     verifyEmail = validation.data.email
   } catch (error) {
-    console.error('Login error:', error)
+    logger.error('Login error:', {error})
     return { error: 'An unexpected error occurred' }
   }
 
@@ -128,7 +129,7 @@ export async function completeOnboarding(
     })
 
     if (error) {
-      console.error('Onboarding error:', error)
+      logger.error('Onboarding error:', {error})
       return { error: 'Failed to create gym. Please try again.' }
     }
 
@@ -138,14 +139,14 @@ export async function completeOnboarding(
     })
 
     if (trialError) {
-      console.error('Trial initialization error:', trialError)
+      logger.error('Trial initialization error:', {trialError})
       // Don't fail the onboarding if trial init fails, just log it
       // The user can still use the system and start trial later
     }
 
     shouldRedirectToDashboard = true
   } catch (error) {
-    console.error('Onboarding error:', error)
+    logger.error('Onboarding error:', {error})
     return { error: 'An unexpected error occurred' }
   }
 
@@ -173,7 +174,7 @@ export async function loginWithSocialProvider(
   const origin = headersList.get('origin')
 
   if (!origin) { 
-    console.error('Social login: No origin header found')
+    logger.error('Social login: No origin header found')
     redirect('/login?message=social-auth-error')
   }
 
@@ -205,15 +206,13 @@ export async function loginWithSocialProvider(
     },
   }
 
-  console.log(`Initiating ${provider} OAuth with options:`, authOptions)
-
   let redirectUrl = ''
 
   try {
     const { data, error } = await supabase.auth.signInWithOAuth(authOptions)
 
     if (error) { 
-      console.error(`${provider} OAuth error:`, error)
+      logger.error(`${provider} OAuth error:`, {error})
       
       // Handle specific OAuth errors
       if (error.message.includes('access_denied')) {
@@ -224,15 +223,14 @@ export async function loginWithSocialProvider(
         redirectUrl = '/login?message=social-auth-error'
       }
     } else if (data.url) { 
-      console.log(`Redirecting to ${provider} OAuth URL:`, data.url)
       redirectUrl = data.url
     } else { 
-      console.error(`${provider} OAuth: No redirect URL received`)
+      logger.error(`${provider} OAuth: No redirect URL received`)
       redirectUrl = '/login?message=social-auth-error'
     }
   } catch (error) {
     // Only log and handle actual unexpected errors
-    console.error(`${provider} OAuth unexpected error:`, error)
+    logger.error(`${provider} OAuth unexpected error:`, {error})
     redirectUrl = '/login?message=social-auth-error'
   }
 

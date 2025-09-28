@@ -68,7 +68,7 @@ export function SubscriptionPlansComponent({
   variant = 'default'
 }: SubscriptionPlansComponentProps) {
   const { plans, isLoading, createPayment, currentSubscription, error } = useSimplifiedPaymentSystem()
-  console.debug("plans", currentSubscription);
+  logger.debug("plans", currentSubscription);
   const { data: trialInfo, isLoading: trialLoading } = useTrialInfo()
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
@@ -227,8 +227,8 @@ export function SubscriptionPlansComponent({
   }
 
   const groupedPlans = groupPlansByType(plans)
-  console.debug("raw plans data:", plans);
-  console.debug("processed groupedPlans:", groupedPlans);
+  logger.debug("raw plans data:", plans);
+  logger.debug("processed groupedPlans:", {groupedPlans});
 
   if (groupedPlans.length === 0) {
     return (
@@ -350,7 +350,7 @@ export function SubscriptionPlansComponent({
           const annualPlan = planGroup.annual
           
           if (!plan) return null
-          console.debug("plan", plan);
+          logger.debug("plan", {plan});
 
           const isPopular = plan.tier_level === 2 // Professional plan
           const isLoading = createPayment.isPending && selectedPlan === plan.id

@@ -129,7 +129,28 @@ export async function createInvitation(formData: FormData): Promise<CreateInvite
       }
     }
 
-    // Check for existing pending invitation
+    // Generate secure token and expiration
+    const token = generateSecureToken()
+    const expiresAt = calculateExpirationTime(validatedData.expires_in_hours)
+    
+    // Log invitation creation (never log raw tokens for security)
+    logger.info("Creating invitation", { 
+      email: validatedData.email, 
+      role: validatedData.role,
+      gymId: targetGymId,
+      expiresAt 
+    })
+
+    // First, clean up any expired invitations for this email/gym combination
+    await supabase
+      .from('gym_invitations')
+      .update({ status: 'expired' })
+      .eq('gym_id', targetGymId)
+      .eq('email', validatedData.email)
+      .eq('status', 'pending')
+      .lt('expires_at', new Date().toISOString())
+
+    // Check for existing active pending invitation after cleanup
     const { data: existingInvite } = await supabase
       .from('gym_invitations')
       .select('id, expires_at')
@@ -145,19 +166,7 @@ export async function createInvitation(formData: FormData): Promise<CreateInvite
       }
     }
 
-    // Generate secure token and expiration
-    const token = generateSecureToken()
-    const expiresAt = calculateExpirationTime(validatedData.expires_in_hours)
-    
-    // Log invitation creation (never log raw tokens for security)
-    logger.info("Creating invitation", { 
-      email: validatedData.email, 
-      role: validatedData.role,
-      gymId: targetGymId,
-      expiresAt 
-    })
-
-    // Create invitation
+    // Create invitation with proper error handling for race conditions
     const { data: invitation, error: createError } = await supabase
       .from('gym_invitations')
       .insert({
@@ -180,6 +189,15 @@ export async function createInvitation(formData: FormData): Promise<CreateInvite
 
     if (createError) {
       logger.error('Error creating invitation:', { error: createError.message })
+      
+      // Handle specific constraint violation errors
+      if (createError.code === '23505' && createError.message.includes('idx_gym_invitations_unique_pending')) {
+        return { 
+          success: false, 
+          error: 'An active invitation already exists for this email address' 
+        }
+      }
+      
       return { success: false, error: 'Failed to create invitation' }
     }
 
@@ -301,6 +319,10 @@ export async function revokeInvitation(formData: FormData) {
     }
 
     // Check permissions
+    if (!invitation.gym_id) {
+      return { success: false, error: 'Invalid invitation - no gym associated' }
+    }
+    
     const canDeleteInvites = await checkUserPermission(user.id, invitation.gym_id, 'staff.delete')
     if (!canDeleteInvites) {
       return { success: false, error: 'Insufficient permissions to revoke invitations' }
@@ -371,6 +393,10 @@ export async function resendInvitation(formData: FormData) {
     }
 
     // Check permissions
+    if (!invitation.gym_id) {
+      return { success: false, error: 'Invalid invitation - no gym associated' }
+    }
+    
     const canUpdateInvites = await checkUserPermission(user.id, invitation.gym_id, 'staff.update')
     if (!canUpdateInvites) {
       return { success: false, error: 'Insufficient permissions to resend invitations' }

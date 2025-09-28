@@ -12,6 +12,9 @@ export interface Member {
   updated_at?: string
   gym_id: string
   user_id: string | null
+  portal_invited_at?: string | null
+  invitation_count?: number
+  last_activity_at?: string | null
 }
 
 export interface MemberStats {
