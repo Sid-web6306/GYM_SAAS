@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const { data: session, error: checkinError } = await supabase
       .rpc('member_check_in', {
         p_method: validatedData.method,
-        p_notes: validatedData.notes || null
+        p_notes: validatedData.notes
       })
 
     if (checkinError) {
