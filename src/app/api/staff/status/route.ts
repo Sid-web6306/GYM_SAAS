@@ -15,25 +15,37 @@ export async function GET() {
 
     logger.info('Staff status request', { userId: user.id })
 
-    // Get current status using the get_member_current_status function (works for staff too)
-    const { data: status, error: statusError } = await supabase
-      .rpc('get_member_current_status')
+    // Find the open session for this staff member (same logic as checkout)
+    const { data: openSession, error: findError } = await supabase
+      .from('attendance_sessions')
+      .select('id, check_in_at')
+      .eq('subject_type', 'staff')
+      .eq('staff_user_id', user.id)
+      .is('check_out_at', null)
+      .order('check_in_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-    if (statusError) {
-      logger.error('Staff status error:', { statusError })
+    if (findError) {
+      logger.error('Staff status error:', { findError })
       return NextResponse.json({ 
         error: 'Failed to get staff status' 
       }, { status: 500 })
     }
 
+    // Calculate status
+    const isCheckedIn = !!openSession
+    const checkInAt = openSession?.check_in_at || null
+    const totalSeconds = checkInAt ? Math.floor((Date.now() - new Date(checkInAt).getTime()) / 1000) : null
+
     // Return status data
     return NextResponse.json({
       success: true,
-      status: status?.[0] || {
-        is_checked_in: false,
-        session_id: null,
-        check_in_at: null,
-        total_seconds: null
+      status: {
+        is_checked_in: isCheckedIn,
+        session_id: openSession?.id || null,
+        check_in_at: checkInAt,
+        total_seconds: totalSeconds
       }
     })
 
