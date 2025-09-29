@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Find the open session for this staff member
-    const { data: openSession, error: findError } = await supabase
+    const { data: openSessions, error: findError } = await supabase
       .from('attendance_sessions')
       .select('id')
       .eq('subject_type', 'staff')
@@ -37,13 +37,21 @@ export async function POST(request: NextRequest) {
       .is('check_out_at', null)
       .order('check_in_at', { ascending: false })
       .limit(1)
-      .single()
 
-    if (findError || !openSession) {
+    if (findError) {
+      logger.error('Database error finding open session:', { findError })
+      return NextResponse.json({ 
+        error: 'Database error occurred while finding attendance session' 
+      }, { status: 500 })
+    }
+
+    if (!openSessions || openSessions.length === 0) {
       return NextResponse.json({ 
         error: 'No open attendance session found' 
       }, { status: 404 })
     }
+
+    const openSession = openSessions[0]
 
     // Call the end_attendance_session function
     const { data: session, error: checkoutError } = await supabase

@@ -75,6 +75,7 @@ export function useStaffCheckin() {
     onSuccess: (data) => {
       // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: staffPortalKeys.status() })
+      queryClient.invalidateQueries({ queryKey: ['staff', 'attendance'] })
       
       toastActions.success('Checked In', 'You have successfully checked in!')
       logger.info('Staff checked in successfully', { sessionId: data.session?.id })
@@ -111,6 +112,7 @@ export function useStaffCheckout() {
     onSuccess: (data) => {
       // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: staffPortalKeys.status() })
+      queryClient.invalidateQueries({ queryKey: ['staff', 'attendance'] })
       
       toastActions.success('Checked Out', 'You have successfully checked out!')
       logger.info('Staff checked out successfully', { sessionId: data.session?.id })
