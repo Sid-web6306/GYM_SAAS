@@ -67,7 +67,7 @@ export default function AttendancePage() {
   const deferredFromDate = useDeferredValue(fromDate)
   const deferredToDate = useDeferredValue(toDate)
   
-  // Attendance data queries - only fetch data for active view
+  // Attendance data queries - fetch data for both views to ensure accurate present counts
   const {
     data: memberAttendance,
     isLoading: membersLoading,
@@ -79,7 +79,7 @@ export default function AttendancePage() {
     limit: pageSize,
     offset: (currentPage - 1) * pageSize
   }, {
-    enabled: activeView === 'members' && !!gymId
+    enabled: !!gymId
   })
   
   const {
@@ -93,7 +93,7 @@ export default function AttendancePage() {
     limit: pageSize,
     offset: (currentPage - 1) * pageSize
   }, {
-    enabled: activeView === 'staff' && !!gymId
+    enabled: !!gymId
   })
   
   // URL state management
