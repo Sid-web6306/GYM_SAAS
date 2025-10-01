@@ -10,6 +10,7 @@ import { RazorpayProvider } from "@/components/providers/razorpay-provider";
 import { PWAWrapper } from "@/components/pwa/PWAWrapper";
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import { Toaster } from "@/components/ui/sonner";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -63,6 +64,7 @@ export default function RootLayout({
             </QueryProvider>
           </RazorpayProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
