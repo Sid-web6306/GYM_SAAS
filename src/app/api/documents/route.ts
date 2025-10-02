@@ -57,8 +57,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if gym has subscription access
-    const { data: hasAccess, error: accessError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('check_gym_subscription_access', {
-      p_gym_id: profile.gym_id
+    const { data: hasAccess, error: accessError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('check_subscription_access', {
+      p_user_id: user.id
     })
 
     if (accessError || !hasAccess) {
@@ -170,8 +170,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if gym has subscription access
-    const { data: hasAccess, error: accessError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('check_gym_subscription_access', {
-      p_gym_id: profile.gym_id
+    const { data: hasAccess, error: accessError } = await (supabase as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown, error: unknown }> }).rpc('check_subscription_access', {
+      p_user_id: user.id
     })
 
     if (accessError || !hasAccess) {

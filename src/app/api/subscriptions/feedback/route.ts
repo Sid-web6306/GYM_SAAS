@@ -19,11 +19,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Subscription ID and reason are required' }, { status: 400 })
     }
 
-    // Verify subscription belongs to user
-    const { data: subscription } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { eq: (column: string, value: string) => { single: () => Promise<{ data: unknown, error: unknown }> } } } } }).from('subscriptions')
+    // Get user's gym_id
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('gym_id')
+      .eq('id', user.id)
+      .single()
+    
+    if (!profile?.gym_id) {
+      return NextResponse.json({ error: 'User gym not found' }, { status: 404 })
+    }
+
+    // Verify subscription belongs to user and gym
+    const { data: subscription } = await supabase
+      .from('subscriptions')
       .select('id')
       .eq('id', subscriptionId)
       .eq('user_id', user.id)
+      .eq('gym_id', profile.gym_id)
       .single()
 
     if (!subscription) {
@@ -31,7 +44,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if feedback already exists for this subscription
-    const { data: existingFeedback } = await (supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { single: () => Promise<{ data: unknown, error: unknown }> } } } }).from('feedback')
+    const { data: existingFeedback } = await supabase
+      .from('feedback')
       .select('id')
       .eq('subscription_id', subscriptionId)
       .single()

@@ -35,7 +35,7 @@ class RazorpayErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Razorpay Error Boundary caught an error:', error, errorInfo)
+    logger.error('Razorpay Error Boundary caught an error:', {error, errorInfo})
   }
 
   render() {
