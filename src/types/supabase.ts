@@ -744,6 +744,51 @@ export type Database = {
           },
         ]
       }
+      subscription_owners: {
+        Row: {
+          created_at: string
+          gym_id: string
+          id: string
+          is_primary_owner: boolean | null
+          subscription_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          gym_id: string
+          id?: string
+          is_primary_owner?: boolean | null
+          subscription_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          gym_id?: string
+          id?: string
+          is_primary_owner?: boolean | null
+          subscription_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_owners_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_owners_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_plans: {
         Row: {
           advanced_analytics: boolean | null
@@ -845,6 +890,7 @@ export type Database = {
           current_period_start: string
           ends_at: string | null
           failed_payment_count: number | null
+          gym_id: string
           id: string
           last_payment_date: string | null
           metadata: Json | null
@@ -874,6 +920,7 @@ export type Database = {
           current_period_start?: string
           ends_at?: string | null
           failed_payment_count?: number | null
+          gym_id: string
           id?: string
           last_payment_date?: string | null
           metadata?: Json | null
@@ -903,6 +950,7 @@ export type Database = {
           current_period_start?: string
           ends_at?: string | null
           failed_payment_count?: number | null
+          gym_id?: string
           id?: string
           last_payment_date?: string | null
           metadata?: Json | null
@@ -923,6 +971,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "subscriptions_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "subscriptions_subscription_plan_id_fkey"
             columns: ["subscription_plan_id"]
@@ -995,27 +1050,69 @@ export type Database = {
       }
       webhook_events: {
         Row: {
+          created_at: string
+          error_message: string | null
           event_type: string
+          gym_id: string | null
           id: string
+          last_retry_at: string | null
           processed_at: string | null
           processing_duration_ms: number | null
+          raw_event: Json
+          razorpay_event_id: string | null
+          retry_count: number | null
+          status: string
+          subscription_id: string | null
           webhook_id: string
         }
         Insert: {
+          created_at?: string
+          error_message?: string | null
           event_type: string
+          gym_id?: string | null
           id?: string
+          last_retry_at?: string | null
           processed_at?: string | null
           processing_duration_ms?: number | null
+          raw_event: Json
+          razorpay_event_id?: string | null
+          retry_count?: number | null
+          status: string
+          subscription_id?: string | null
           webhook_id: string
         }
         Update: {
+          created_at?: string
+          error_message?: string | null
           event_type?: string
+          gym_id?: string | null
           id?: string
+          last_retry_at?: string | null
           processed_at?: string | null
           processing_duration_ms?: number | null
+          raw_event?: Json
+          razorpay_event_id?: string | null
+          retry_count?: number | null
+          status?: string
+          subscription_id?: string | null
           webhook_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "webhook_events_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -1139,10 +1236,6 @@ export type Database = {
         Args: { p_cancel_at_period_end?: boolean; p_subscription_id: string }
         Returns: boolean
       }
-      check_gym_subscription_access: {
-        Args: { p_gym_id: string }
-        Returns: boolean
-      }
       check_subscription_access: {
         Args: { p_user_id: string }
         Returns: boolean
@@ -1154,6 +1247,10 @@ export type Database = {
       cleanup_expired_invitations: {
         Args: Record<PropertyKey, never>
         Returns: Json
+      }
+      cleanup_old_webhook_events: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       complete_user_profile: {
         Args: { gym_name: string; p_user_id: string }

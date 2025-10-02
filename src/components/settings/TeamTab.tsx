@@ -37,6 +37,7 @@ import { ROLE_COLORS } from '@/components/layout/RoleContextIndicator'
 import type { GymRole } from '@/types/rbac.types'
 import type { InvitationWithDetails, InvitationFilters } from '@/types/invite.types'
 import { formatDistanceToNow } from 'date-fns'
+import { logger } from '@/lib/logger'
 
 // Form validation schema
 const inviteFormSchema = z.object({
@@ -93,7 +94,7 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
     resolver: zodResolver(inviteFormSchema),
     defaultValues: {
       email: '',
-      role: 'member',
+      role: 'trainer',
       expires_in_hours: 72,
       message: '',
       notify_user: true
@@ -119,7 +120,7 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
         toastActions.error('Failed to Send Invitation', result.error || 'Unknown error')
       }
     } catch (error) {
-      console.error('Error creating invitation:', error)
+      logger.error('Error creating invitation:', {error})
       toastActions.error('Error', 'Failed to send invitation')
     }
   }
@@ -243,12 +244,12 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
                 <DialogTrigger asChild>
                   <Button>
                     <UserPlus className="h-4 w-4 mr-2" />
-                    Invite Member
+                    Invitation
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Invite Team Member</DialogTitle>
+                    <DialogTitle>Invite</DialogTitle>
                     <DialogDescription>
                       Send an invitation to join your gym with a specific role.
                     </DialogDescription>

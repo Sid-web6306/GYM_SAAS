@@ -72,10 +72,4 @@ export function formatDurationFromSeconds(totalSeconds: number | null | undefine
   return `${hours}h ${minutes}m`
 }
 
-// Removed useStartAttendance - admin functionality no longer needed
-
-// Removed useEndAttendance - admin functionality no longer needed
-
-// Removed useUpdateAttendanceSession - edit functionality no longer needed
-
 

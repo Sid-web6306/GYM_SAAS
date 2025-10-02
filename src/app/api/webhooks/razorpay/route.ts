@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import crypto from 'crypto';
 import { createClient } from '@/utils/supabase/server';
-import { getRazorpay } from '@/lib/razorpay';
+import { PaymentService } from '@/services/payment.service';
 import { logger, performanceTracker } from '@/lib/logger';
 import { serverConfig } from '@/lib/config';
+// Import Razorpay's official webhook validation utility
+import { validateWebhookSignature } from 'razorpay/dist/utils/razorpay-utils';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
 
@@ -61,50 +62,57 @@ export async function POST(req: NextRequest) {
   const body = await req.text();
   const headersList = await headers();
   const razorpaySignature = headersList.get('x-razorpay-signature');
-  // const webhookId = headersList.get('x-razorpay-webhook-id') || `webhook_${Date.now()}`;
+  const webhookId = headersList.get('x-razorpay-webhook-id') || 
+                    `webhook_${Date.now()}_${Math.random().toString(36).substring(7)}`;
   
   const processingStart = Date.now();
   performanceTracker.start('razorpay-webhook');
 
-  // Check for duplicate webhook processing
   const supabase = await createClient();
-  // const { data: existingWebhook } = await supabase
-  //   .from('webhook_events')
-  //   .select('id')
-  //   .eq('webhook_id', webhookId)
-  //   .single();
 
-  // if (existingWebhook) {
-  //   logger.info('Webhook already processed, skipping', { webhookId });
-  //   return NextResponse.json({ 
-  //     received: true, 
-  //     status: 'already_processed',
-  //     webhook_id: webhookId 
-  //   });
-  // }
+  // ✅ Check for duplicate webhook processing (IDEMPOTENCY)
+  const { data: existingWebhook } = await supabase
+    .from('webhook_events')
+    .select('id, status')
+    .eq('webhook_id', webhookId)
+    .single();
 
-  // Verify webhook signature
+  if (existingWebhook) {
+    logger.info('Webhook already processed, skipping', { 
+      webhookId,
+      status: existingWebhook.status
+    });
+    return NextResponse.json({ 
+      received: true, 
+      status: 'already_processed',
+      webhook_id: webhookId 
+    });
+  }
+
+  // Verify webhook signature using Razorpay SDK
   if (!serverConfig.razorpayWebhookSecret) {
     logger.error('Razorpay webhook secret not configured');
     return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
   }
 
   try {
-    // Verify signature
-    const expectedSignature = crypto
-      .createHmac('sha256', serverConfig.razorpayWebhookSecret)
-      .update(body)
-      .digest('hex');
+    // ✅ Use Razorpay's official validation utility
+    const isValid = validateWebhookSignature(
+      body,
+      razorpaySignature || '',
+      serverConfig.razorpayWebhookSecret
+    );
 
-    if (!razorpaySignature || razorpaySignature !== expectedSignature) {
+    if (!isValid) {
       logger.error('Webhook signature verification failed', { 
-        received: razorpaySignature,
-        expected: expectedSignature.substring(0, 10) + '...'
+        webhookId,
+        signatureProvided: razorpaySignature?.substring(0, 10) + '...'
       });
       return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
     }
   } catch (err) {
     logger.error('Webhook signature verification error', { 
+      webhookId,
       error: err instanceof Error ? err.message : String(err) 
     });
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
@@ -115,10 +123,25 @@ export async function POST(req: NextRequest) {
   try {
     event = JSON.parse(body) as RazorpayWebhookEvent;
     
+    const eventId = event.payload?.payment?.entity?.id || event.payload?.subscription?.entity?.id || 'unknown';
+    
     logger.info('Processing Razorpay webhook', { 
-      eventType: event.event, 
-      eventId: event.payload?.payment?.entity?.id || event.payload?.subscription?.entity?.id || 'unknown'
+      eventType: event.event,
+      eventId,
+      webhookId
     });
+
+    // ✅ Create webhook event record immediately for idempotency
+    await supabase
+      .from('webhook_events')
+      .insert({
+        webhook_id: webhookId,
+        event_type: event.event,
+        status: 'processing',
+        raw_event: JSON.parse(body),
+        razorpay_event_id: eventId,
+        created_at: new Date().toISOString()
+      });
 
     switch (event.event) {
       case 'payment.captured':
@@ -164,23 +187,46 @@ export async function POST(req: NextRequest) {
     const processingDuration = Date.now() - processingStart;
     logger.info(`✅ Webhook processed successfully in ${processingDuration}ms`);
     
+    // ✅ Mark webhook as completed
+    await supabase
+      .from('webhook_events')
+      .update({ 
+        status: 'completed',
+        processed_at: new Date().toISOString(),
+        processing_duration_ms: processingDuration
+      })
+      .eq('webhook_id', webhookId);
+    
     return NextResponse.json({ 
       received: true, 
       event_type: event.event,
-      processing_time_ms: processingDuration 
+      processing_time_ms: processingDuration,
+      webhook_id: webhookId
     });
 
   } catch (error) {
     const processingDuration = Date.now() - processingStart;
-    logger.error('❌ Webhook processing error:', { error: error instanceof Error ? error.message : String(error) });
+    const errorInstance = error instanceof Error ? error : new Error(String(error));
     
-    // Log failed webhook processing
-    await logWebhookError(event, error as Error, supabase, processingDuration);
+    // Enhanced error logging
+    await logWebhookError(event, errorInstance, supabase, processingDuration);
+    
+    // ✅ Mark webhook as failed
+    await supabase
+      .from('webhook_events')
+      .update({ 
+        status: 'failed',
+        error_message: errorInstance.message,
+        processed_at: new Date().toISOString(),
+        processing_duration_ms: processingDuration
+      })
+      .eq('webhook_id', webhookId);
     
     return NextResponse.json({ 
       error: 'Webhook processing failed',
       event_type: event?.event || 'unknown',
-      processing_time_ms: processingDuration 
+      processing_time_ms: processingDuration,
+      webhook_id: webhookId
     }, { status: 500 });
   }
 }
@@ -278,15 +324,17 @@ async function handleSubscriptionActivated(
 
   if (!userId) {
     // Try to find user by customer ID
-    const razorpay = getRazorpay();
-    if (razorpay) {
+    if (PaymentService.isConfigured()) {
       try {
-        const customer = await razorpay.customers.fetch(subscription.customer_id);
-        if (customer.email) {
-          const { data: profile } = await supabase.rpc('get_user_id_by_email', {
-            p_email: customer.email
-          });
-          userId = profile;
+        const razorpay = PaymentService.getRazorpayInstance();
+        if (razorpay) {
+          const customer = await razorpay.customers.fetch(subscription.customer_id);
+          if (customer.email) {
+            const { data: profile } = await supabase.rpc('get_user_id_by_email', {
+              p_email: customer.email
+            });
+            userId = profile;
+          }
         }
       } catch (error) {
         logger.warn('⚠️ Could not fetch customer details', { 
@@ -325,10 +373,12 @@ async function handleSubscriptionActivated(
       .eq('razorpay_subscription_id', subscription.id);
 
     if (error) {
+      const errorInstance = new Error(`Failed to update subscription: ${error.message}`);
       logger.error('❌ Error updating subscription', { 
         error: error.message,
         subscriptionId: subscription.id
       });
+      await logWebhookError(event, errorInstance, supabase, Date.now() - processingStart);
     }
   } else {
     // Find plan by Razorpay plan ID
@@ -360,12 +410,14 @@ async function handleSubscriptionActivated(
     });
 
     if (error) {
+      const errorInstance = new Error(`Failed to create subscription: ${error.message}`);
       logger.error('❌ Error creating subscription', { 
         error: error.message,
         subscriptionId: subscription.id,
         userId,
         planId: plan.id
       });
+      await logWebhookError(event, errorInstance, supabase, Date.now() - processingStart);
       return;
     }
 
@@ -385,27 +437,29 @@ async function handleSubscriptionActivated(
         .neq('razorpay_subscription_id', subscription.id)
 
       if (previousSubs && previousSubs.length > 0) {
-        const razorpay = getRazorpay()
-        if (razorpay) {
-          for (const prev of previousSubs) {
-            if (prev.razorpay_subscription_id) {
-              try {
-                await razorpay.subscriptions.cancel(prev.razorpay_subscription_id, 0)
-                await supabase
-                  .from('subscriptions')
-                  .update({ status: 'canceled', canceled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-                  .eq('id', prev.id)
-                logger.info('Canceled previous active subscription after new activation', {
-                  userId,
-                  oldRazorpaySubscriptionId: prev.razorpay_subscription_id,
-                  newRazorpaySubscriptionId: subscription.id
-                })
-              } catch (cancelErr) {
-                logger.error('Failed to cancel previous subscription after new activation', {
-                  error: cancelErr instanceof Error ? cancelErr.message : String(cancelErr),
-                  userId,
-                  oldRazorpaySubscriptionId: prev.razorpay_subscription_id
-                })
+        if (PaymentService.isConfigured()) {
+          const razorpay = PaymentService.getRazorpayInstance()
+          if (razorpay) {
+            for (const prev of previousSubs) {
+              if (prev.razorpay_subscription_id) {
+                try {
+                  await razorpay.subscriptions.cancel(prev.razorpay_subscription_id, 0)
+                  await supabase
+                    .from('subscriptions')
+                    .update({ status: 'canceled', canceled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+                    .eq('id', prev.id)
+                  logger.info('Canceled previous active subscription after new activation', {
+                    userId,
+                    oldRazorpaySubscriptionId: prev.razorpay_subscription_id,
+                    newRazorpaySubscriptionId: subscription.id
+                  })
+                } catch (cancelErr) {
+                  logger.error('Failed to cancel previous subscription after new activation', {
+                    error: cancelErr instanceof Error ? cancelErr.message : String(cancelErr),
+                    userId,
+                    oldRazorpaySubscriptionId: prev.razorpay_subscription_id
+                  })
+                }
               }
             }
           }
@@ -665,13 +719,44 @@ async function logWebhookError(
   supabase: SupabaseClient,
   processingDuration: number
 ): Promise<void> {
+  const eventId = event?.payload?.subscription?.entity?.id || event?.payload?.payment?.entity?.id || 'unknown';
+  
   logger.error(`❌ Webhook error for ${event?.event || 'unknown'}`, {
     eventType: event?.event || 'unknown',
-    eventId: event?.payload?.subscription?.entity?.id || event?.payload?.payment?.entity?.id || 'unknown',
+    eventId,
     error: error.message,
     stack: error.stack,
     processingDuration
   });
 
-  void supabase;
+  // Also log detailed error to subscription_events table if it's subscription-related
+  if (event?.event?.startsWith('subscription.')) {
+    const razorpaySubscriptionId = event.payload?.subscription?.entity?.id;
+    
+    if (razorpaySubscriptionId) {
+      const { data } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('razorpay_subscription_id', razorpaySubscriptionId)
+        .single();
+      
+      if (data?.id) {
+        await supabase
+          .from('subscription_events')
+          .insert({
+            subscription_id: data.id,
+            event_type: 'error',
+            event_data: {
+              razorpay_event_id: eventId,
+              razorpay_event_type: event.event,
+              error_message: error.message,
+              error_stack: error.stack,
+              event_created: event.created_at || Math.floor(Date.now() / 1000)
+            },
+            webhook_id: eventId,
+            processing_duration_ms: processingDuration
+          });
+      }
+    }
+  }
 }

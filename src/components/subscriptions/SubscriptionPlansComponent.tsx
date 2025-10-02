@@ -20,6 +20,13 @@ import { useSimplifiedPaymentSystem } from '@/hooks/use-simplified-payments'
 import { OdometerNumber } from '@/components/ui/animated-number'
 import { useTrialInfo, isTrialActive, hasActiveSubscription } from '@/hooks/use-trial'
 import { logger } from '@/lib/logger'
+import { toastActions } from '@/stores/toast-store'
+import { 
+  EnhancedPaymentHandler, 
+  createEnhancedPaymentHandler, 
+  createPaymentDismissHandler,
+  createModalCleanupHandler
+} from '@/components/payments/EnhancedPaymentHandler'
 
 // Declare global Razorpay type for browser usage
 declare global {
@@ -67,11 +74,19 @@ export function SubscriptionPlansComponent({
   className = "",
   variant = 'default'
 }: SubscriptionPlansComponentProps) {
-  const { plans, isLoading, createPayment, currentSubscription, error } = useSimplifiedPaymentSystem()
+  const { plans, isLoading, createPayment, currentSubscription, error, refetch } = useSimplifiedPaymentSystem()
   logger.debug("plans", currentSubscription);
   const { data: trialInfo, isLoading: trialLoading } = useTrialInfo()
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
+  const [paymentDialog, setPaymentDialog] = useState<{
+    isOpen: boolean
+    paymentResponse?: {
+      razorpay_payment_id: string
+      razorpay_subscription_id: string
+      razorpay_signature: string
+    }
+  }>({ isOpen: false })
 
   // Determine user status priority: Trial first, then subscription
   const isOnTrial = trialInfo && isTrialActive(trialInfo)
@@ -123,7 +138,7 @@ export function SubscriptionPlansComponent({
       return
     }
 
-    // Default behavior: create payment
+    // Default behavior: create payment or update subscription
     setSelectedPlan(planId)
     try {
       const result = await createPayment.mutateAsync({
@@ -131,8 +146,40 @@ export function SubscriptionPlansComponent({
         planId,
         billingCycle
       })
-      logger.info('Razorpay checkout result:', {result})
-      if (result.checkout) {
+      logger.info('Payment/subscription result:', {result})
+      
+      // Check if subscription was updated instead of creating new payment
+      if (result.success && result.subscription) {
+        // Subscription was updated successfully
+        const message = result.refund 
+          ? `${result.message} Refund of ₹${result.refund.amount / 100} will be processed.`
+          : result.message || 'Your subscription has been updated successfully!'
+          
+        toastActions.success(
+          'Subscription Updated', 
+          message
+        )
+        setSelectedPlan(null)
+        
+        // Refresh subscription data
+        if (refetch) {
+          refetch()
+        }
+        return
+      }
+      
+      // Check if user already has this plan
+      if (result.error && result.error.includes('already have an active subscription')) {
+        toastActions.info(
+          'Already Subscribed', 
+          'You already have an active subscription for this plan.'
+        )
+        setSelectedPlan(null)
+        return
+      }
+      
+      // Check if this is an upgrade requiring payment
+      if (result.requiresPayment && result.checkout) {
         // Check if Razorpay is available
         if (typeof window.Razorpay === 'undefined') {
           throw new Error('Razorpay SDK not loaded. Please refresh the page and try again.')
@@ -140,15 +187,92 @@ export function SubscriptionPlansComponent({
         
         const razorpayOptions = {
           ...result.checkout,
-          handler: function(response: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) {
-            console.log('Payment successful:', response)
-            alert('Payment successful: ' + JSON.stringify(response))
+          handler: async (paymentResponse: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+            try {
+              // Call upgrade API to complete the subscription update
+              const upgradeResponse = await fetch('/api/payments/upgrade', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                  razorpay_order_id: paymentResponse.razorpay_order_id,
+                  razorpay_signature: paymentResponse.razorpay_signature,
+                  subscriptionId: result.subscriptionData?.subscriptionId,
+                  newPlanId: result.subscriptionData?.newPlanId,
+                  billingCycle: result.subscriptionData?.billingCycle,
+                  newAmount: result.subscriptionData?.newAmount
+                })
+              })
+
+              const upgradeResult = await upgradeResponse.json()
+              
+              console.log('Upgrade response:', upgradeResult)
+
+              if (upgradeResult.success) {
+                toastActions.success(
+                  'Subscription Upgraded', 
+                  'Your subscription has been upgraded successfully!'
+                )
+                
+                // Refresh subscription data
+                if (refetch) {
+                  refetch()
+                }
+              } else {
+                toastActions.error(
+                  'Upgrade Failed', 
+                  upgradeResult.error || 'Failed to upgrade subscription'
+                )
+              }
+            } catch (upgradeError) {
+              console.error('Upgrade payment verification failed:', upgradeError)
+              toastActions.error(
+                'Upgrade Failed', 
+                'Failed to complete subscription upgrade. Please contact support.'
+              )
+            }
+            setSelectedPlan(null)
           },
           modal: {
-            ondismiss: function() {
-              console.log('Payment modal dismissed by user')
+            ondismiss: createPaymentDismissHandler(() => {
               setSelectedPlan(null)
-            }
+            }),
+            onhidden: createModalCleanupHandler(() => {
+              setSelectedPlan(null)
+            })
+          }
+        }
+        
+        const razorpayCheckout = new window.Razorpay(razorpayOptions)
+        if (typeof razorpayCheckout.open === 'function') {
+          razorpayCheckout.open()
+        } else {
+          throw new Error('Razorpay checkout initialization failed')
+        }
+      } else if (result.checkout) {
+        // Regular subscription creation
+        // Check if Razorpay is available
+        if (typeof window.Razorpay === 'undefined') {
+          throw new Error('Razorpay SDK not loaded. Please refresh the page and try again.')
+        }
+        
+        const razorpayOptions = {
+          ...result.checkout,
+          handler: createEnhancedPaymentHandler((paymentResponse) => {
+            // Show the enhanced payment verification dialog
+            setPaymentDialog({
+              isOpen: true,
+              paymentResponse
+            })
+            setSelectedPlan(null)
+          }),
+          modal: {
+            ondismiss: createPaymentDismissHandler(() => {
+              setSelectedPlan(null)
+            }),
+            onhidden: createModalCleanupHandler(() => {
+              setSelectedPlan(null)
+            })
           }
         }
         
@@ -160,7 +284,8 @@ export function SubscriptionPlansComponent({
         }
       }
     } catch (error) {
-      console.error('Plan selection error:', error)
+      console.error('Payment/subscription operation failed:', error)
+      toastActions.error('Operation Failed', error instanceof Error ? error.message : 'Failed to process request')
     } finally {
       setSelectedPlan(null)
     }
@@ -481,6 +606,13 @@ export function SubscriptionPlansComponent({
           )
         })}
       </div>
+      
+      {/* Enhanced Payment Verification Dialog */}
+      <EnhancedPaymentHandler
+        isOpen={paymentDialog.isOpen}
+        onClose={() => setPaymentDialog({ isOpen: false })}
+        paymentResponse={paymentDialog.paymentResponse}
+      />
     </div>
   )
 }

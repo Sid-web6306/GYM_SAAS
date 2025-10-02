@@ -21,9 +21,48 @@ export interface PaymentResponse {
   sessionId?: string
   checkoutUrl?: string
   subscriptionId?: string
+  success?: boolean
+  message?: string
+  subscription?: {
+    id: string
+    status: string
+    plan_id: string
+    billing_cycle: string
+    amount: number
+  }
+  error?: string
+  requiresPayment?: boolean
+  orderId?: string
+  amount?: number
+  currency?: string
+  upgradeType?: 'billing_cycle_change' | 'tier_change' | 'plan_change'
+  refund?: {
+    refundId: string
+    amount: number
+    status: string
+  }
+  subscriptionData?: {
+    subscriptionId: string
+    newPlanId: string
+    billingCycle: 'monthly' | 'annual'
+    newAmount: number
+    currentPlan?: {
+      id: string
+      type: string
+      cycle: string
+      amount: number
+    }
+    newPlan?: {
+      id: string
+      type: string
+      cycle: string
+      amount: number
+    }
+  }
   checkout?: {
     key: string
-    subscription_id: string
+    subscription_id?: string
+    order_id?: string
     name: string
     description: string
     image: string
@@ -37,6 +76,7 @@ export interface PaymentResponse {
     modal?: {
       ondismiss?: () => void
     }
+    handler?: (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => void
   }
 }
 
@@ -486,6 +526,7 @@ export function useSimplifiedPaymentSystem() {
     hasAccess: subscriptions.hasAccess,
     trial: subscriptions.trial,
     subscriptionAction: subscriptions.subscriptionAction,
+    refetch: subscriptions.refetch,
     
     // Documents
     listDocuments: documents.listDocuments,

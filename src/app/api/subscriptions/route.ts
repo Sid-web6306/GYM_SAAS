@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { getRazorpay } from '@/lib/razorpay'
+import { PaymentService } from '@/services/payment.service'
 import { logger } from '@/lib/logger'
 import type { Tables } from '@/types/supabase'
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
+
+// Helper function to get user's gym_id
+async function getUserGymId(supabase: SupabaseClient, userId: string): Promise<string | null> {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('gym_id')
+    .eq('id', userId)
+    .single()
+  
+  return profile?.gym_id || null
+}
 
 // GET /api/subscriptions - Get subscription plans and user's current subscription
 export async function GET(request: NextRequest) {
@@ -136,8 +147,8 @@ async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: st
     }
 
     // Check gym subscription access
-    const { data: hasAccess, error: accessError } = await supabase.rpc('check_gym_subscription_access', {
-      p_gym_id: profile.gym_id
+    const { data: hasAccess, error: accessError } = await supabase.rpc('check_subscription_access', {
+      p_user_id: userId,
     })
 
     if (accessError) {
@@ -152,6 +163,7 @@ async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: st
         subscription_plans(*)
       `)
       .eq('user_id', userId)
+      .eq('gym_id', profile.gym_id)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(1)
@@ -198,8 +210,7 @@ async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: st
 type MinimalUser = { id: string; email?: string | null }
 async function handleCreateBillingPortal(supabase: SupabaseClient, user: MinimalUser) {
   try {
-    const razorpay = getRazorpay()
-    if (!razorpay) {
+    if (!PaymentService.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
@@ -215,12 +226,18 @@ async function handleCreateBillingPortal(supabase: SupabaseClient, user: Minimal
     }
 
     // Check if gym has an active subscription
-    const { data: hasAccess, error: accessError } = await supabase.rpc('check_gym_subscription_access', {
-      p_gym_id: profile.gym_id
+    const { data: hasAccess, error: accessError } = await supabase.rpc('check_subscription_access', {
+      p_user_id: user.id,
     })
 
     if (accessError || !hasAccess) {
       return NextResponse.json({ error: 'No active subscription found' }, { status: 400 })
+    }
+
+    // Get user's gym_id
+    const gymId = await getUserGymId(supabase, user.id)
+    if (!gymId) {
+      return NextResponse.json({ error: 'User gym not found' }, { status: 404 })
     }
 
     // Get current subscription to find Razorpay subscription ID
@@ -228,6 +245,7 @@ async function handleCreateBillingPortal(supabase: SupabaseClient, user: Minimal
       .from('subscriptions')
       .select('razorpay_subscription_id, razorpay_customer_id')
       .eq('user_id', user.id)
+      .eq('gym_id', gymId)
       .eq('status', 'active')
       .single()
 
@@ -239,7 +257,7 @@ async function handleCreateBillingPortal(supabase: SupabaseClient, user: Minimal
     // Since Razorpay doesn't have a built-in billing portal like Stripe, 
     // we'll return the subscription details for a custom billing interface
     try {
-      const razorpaySubscription = await razorpay.subscriptions.fetch(subscription.razorpay_subscription_id)
+      const razorpaySubscription = await PaymentService.fetchSubscription(subscription.razorpay_subscription_id)
       
       logger.info('Billing portal data retrieved:', {
         userId: user.id,
@@ -279,17 +297,23 @@ async function handlePauseSubscription(supabase: SupabaseClient, userId: string,
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
     }
 
-    const razorpay = getRazorpay()
-    if (!razorpay) {
+    if (!PaymentService.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
-    // Verify subscription belongs to user
+    // Get user's gym_id
+    const gymId = await getUserGymId(supabase, userId)
+    if (!gymId) {
+      return NextResponse.json({ error: 'User gym not found' }, { status: 404 })
+    }
+
+    // Verify subscription belongs to user and gym
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('id, razorpay_subscription_id')
       .eq('id', subscriptionId)
       .eq('user_id', userId)
+      .eq('gym_id', gymId)
       .single()
 
     if (!subscription) {
@@ -309,9 +333,7 @@ async function handlePauseSubscription(supabase: SupabaseClient, userId: string,
     // Pause in Razorpay if available
     if (subscription.razorpay_subscription_id) {
       try {
-        await razorpay.subscriptions.pause(subscription.razorpay_subscription_id, {
-          pause_at: 'now'
-        })
+        await PaymentService.pauseSubscription(subscription.razorpay_subscription_id, 'now')
       } catch (razorpayError) {
         logger.error('Error pausing Razorpay subscription:', { error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError) })
         // Don't fail the request if Razorpay update fails
@@ -339,17 +361,23 @@ async function handleResumeSubscription(supabase: SupabaseClient, userId: string
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
     }
 
-    const razorpay = getRazorpay()
-    if (!razorpay) {
+    if (!PaymentService.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
-    // Verify subscription belongs to user
+    // Get user's gym_id
+    const gymId = await getUserGymId(supabase, userId)
+    if (!gymId) {
+      return NextResponse.json({ error: 'User gym not found' }, { status: 404 })
+    }
+
+    // Verify subscription belongs to user and gym
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('id, razorpay_subscription_id')
       .eq('id', subscriptionId)
       .eq('user_id', userId)
+      .eq('gym_id', gymId)
       .single()
 
     if (!subscription) {
@@ -376,9 +404,7 @@ async function handleResumeSubscription(supabase: SupabaseClient, userId: string
       while (attempt < maxAttempts) {
         try {
           attempt++
-          await razorpay.subscriptions.resume(razorpaySubscriptionId, {
-            resume_at: 'now'
-          })
+          await PaymentService.resumeSubscription(razorpaySubscriptionId, 'now')
           break
         } catch (razorpayError) {
           lastError = razorpayError
@@ -461,17 +487,23 @@ async function handleCancelSubscription(
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
     }
 
-    const razorpay = getRazorpay()
-    if (!razorpay) {
+    if (!PaymentService.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
-    // Verify subscription belongs to user
+    // Get user's gym_id
+    const gymId = await getUserGymId(supabase, userId)
+    if (!gymId) {
+      return NextResponse.json({ error: 'User gym not found' }, { status: 404 })
+    }
+
+    // Verify subscription belongs to user and gym
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('id, razorpay_subscription_id')
       .eq('id', subscriptionId)
       .eq('user_id', userId)
+      .eq('gym_id', gymId)
       .single()
 
     if (!subscription) {
@@ -519,10 +551,10 @@ async function handleCancelSubscription(
       try {
         if (cancelAtPeriodEnd) {
           // Schedule cancellation at period end
-          await razorpay.subscriptions.cancel(subscription.razorpay_subscription_id, 1)
+          await PaymentService.cancelSubscription(subscription.razorpay_subscription_id, true)
         } else {
           // Cancel immediately
-          await razorpay.subscriptions.cancel(subscription.razorpay_subscription_id, 0)
+          await PaymentService.cancelSubscription(subscription.razorpay_subscription_id, false)
         }
       } catch (razorpayError) {
         logger.error('Error canceling Razorpay subscription:', { error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError) })
@@ -562,12 +594,19 @@ async function handleChangePlan(
       return NextResponse.json({ error: 'Subscription ID, new plan ID, and billing cycle are required' }, { status: 400 })
     }
 
-    // Verify subscription belongs to user
+    // Get user's gym_id
+    const gymId = await getUserGymId(supabase, userId)
+    if (!gymId) {
+      return NextResponse.json({ error: 'User gym not found' }, { status: 404 })
+    }
+
+    // Verify subscription belongs to user and gym
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('id, razorpay_subscription_id, subscription_plan_id, current_period_end')
       .eq('id', subscriptionId)
       .eq('user_id', userId)
+      .eq('gym_id', gymId)
       .single()
 
     if (!subscription) {
@@ -589,13 +628,12 @@ async function handleChangePlan(
     // Try to schedule the plan change in Razorpay at cycle end (pending update)
     let razorpayUpdateAttempted = false
     let razorpayUpdateSucceeded = false
-    const razorpay = getRazorpay()
-    if (razorpay && subscription.razorpay_subscription_id && newPlan.razorpay_plan_id) {
+    if (PaymentService.isConfigured() && subscription.razorpay_subscription_id && newPlan.razorpay_plan_id) {
       razorpayUpdateAttempted = true
       try {
-        await razorpay.subscriptions.update(subscription.razorpay_subscription_id, {
+        await PaymentService.updateSubscription(subscription.razorpay_subscription_id, {
           plan_id: newPlan.razorpay_plan_id,
-          schedule_change_at: 'cycle_end'
+          schedule_change_at: 'now'
         })
         razorpayUpdateSucceeded = true
       } catch (razorpayError) {

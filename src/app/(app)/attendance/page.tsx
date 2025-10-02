@@ -43,6 +43,17 @@ export default function AttendancePage() {
   
   // Get gym ID from user profile
   const gymId = profile?.gym_id || null
+  
+  // Initialize URL params on mount
+  useEffect(() => {
+    const currentView = searchParams.get('view')
+    if (!currentView) {
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('view', 'members')
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
 
   // Function to update URL when view changes
   const updateView = useCallback((view: 'members' | 'staff') => {
@@ -67,18 +78,37 @@ export default function AttendancePage() {
   const deferredFromDate = useDeferredValue(fromDate)
   const deferredToDate = useDeferredValue(toDate)
   
-  // Attendance data queries - fetch data for both views to ensure accurate present counts
-  const {
-    data: memberAttendance,
-    isLoading: membersLoading,
-    error: membersError
-  } = useMemberAttendance(gymId, {
+  // Memoize filter objects to prevent unnecessary re-renders
+  // This ensures stable queryKeys for react-query, which triggers proper refetches
+  // when filter values actually change (date, search, pagination)
+  const memberFilters = useMemo(() => ({
     search: deferredMemberSearch || undefined,
     from: deferredFromDate || undefined,
     to: deferredToDate || undefined,
     limit: pageSize,
     offset: (currentPage - 1) * pageSize
-  }, {
+  }), [deferredMemberSearch, deferredFromDate, deferredToDate, currentPage, pageSize])
+  
+  const staffFilters = useMemo(() => ({
+    search: deferredStaffSearch || undefined,
+    from: deferredFromDate || undefined,
+    to: deferredToDate || undefined,
+    limit: pageSize,
+    offset: (currentPage - 1) * pageSize
+  }), [deferredStaffSearch, deferredFromDate, deferredToDate, currentPage, pageSize])
+  
+  // For present counts, we need all current check-ins without date filters
+  const presentFilters = useMemo(() => ({
+    limit: 1000,
+    offset: 0
+  }), [])
+  
+  // Attendance data queries for history view
+  const {
+    data: memberAttendance,
+    isLoading: membersLoading,
+    error: membersError
+  } = useMemberAttendance(gymId, memberFilters, {
     enabled: !!gymId
   })
   
@@ -86,13 +116,20 @@ export default function AttendancePage() {
     data: staffAttendance,
     isLoading: staffLoading,
     error: staffError
-  } = useStaffAttendance(gymId, {
-    search: deferredStaffSearch || undefined,
-    from: deferredFromDate || undefined,
-    to: deferredToDate || undefined,
-    limit: pageSize,
-    offset: (currentPage - 1) * pageSize
-  }, {
+  } = useStaffAttendance(gymId, staffFilters, {
+    enabled: !!gymId
+  })
+  
+  // Separate queries for present counts (no date filter, only current check-ins)
+  const {
+    data: membersPresentData
+  } = useMemberAttendance(gymId, presentFilters, {
+    enabled: !!gymId
+  })
+  
+  const {
+    data: staffPresentData
+  } = useStaffAttendance(gymId, presentFilters, {
     enabled: !!gymId
   })
   
@@ -148,16 +185,16 @@ export default function AttendancePage() {
     }
   }, [staffCheckoutMutation])
   
-  // Calculate present counts for display
+  // Calculate present counts for display (from unfiltered data)
   const presentCounts = useMemo(() => {
-    const membersPresent = memberAttendance?.filter(row => !row.check_out_at).length || 0
-    const staffPresent = staffAttendance?.filter(row => !row.check_out_at).length || 0
+    const membersPresent = membersPresentData?.filter(row => !row.check_out_at).length || 0
+    const staffPresent = staffPresentData?.filter(row => !row.check_out_at).length || 0
     return {
       membersPresent,
       staffPresent,
       totalPresent: membersPresent + staffPresent
     }
-  }, [memberAttendance, staffAttendance])
+  }, [membersPresentData, staffPresentData])
   
   // Reset search when switching views
   useEffect(() => {
@@ -168,20 +205,28 @@ export default function AttendancePage() {
     }
   }, [activeView])
   
-  // Log page view and data
+  // Log page view and data for debugging
   useEffect(() => {
-    logger.info('Attendance page viewed', { 
+    logger.info('Attendance page state', { 
       view: activeView, 
       gymId,
+      filters: {
+        fromDate: deferredFromDate,
+        toDate: deferredToDate,
+        memberSearch: deferredMemberSearch,
+        staffSearch: deferredStaffSearch,
+        page: currentPage
+      },
       hasFilters: !!(deferredFromDate || deferredToDate || deferredMemberSearch || deferredStaffSearch),
       memberAttendanceCount: memberAttendance?.length || 0,
       staffAttendanceCount: staffAttendance?.length || 0,
       membersLoading,
       staffLoading,
       membersError: !!membersError,
-      staffError: !!staffError
+      staffError: !!staffError,
+      presentCounts
     })
-  }, [activeView, gymId, deferredFromDate, deferredToDate, deferredMemberSearch, deferredStaffSearch, memberAttendance, staffAttendance, membersLoading, staffLoading, membersError, staffError])
+  }, [activeView, gymId, deferredFromDate, deferredToDate, deferredMemberSearch, deferredStaffSearch, currentPage, memberAttendance, staffAttendance, membersLoading, staffLoading, membersError, staffError, presentCounts])
 
   return (
     <div className="space-y-6 sm:space-y-8 p-4 sm:p-6 md:p-8">
@@ -366,11 +411,12 @@ export default function AttendancePage() {
                 className="pl-10"
               />
             </div>
-            <div className="flex gap-3 items-center">
+            <div className="w-full md:w-auto">
               <DateRangePopover
                 value={{ from: fromDate, to: toDate }}
                 weekStartsOn={1}
                 onChange={handleDateRangeChange}
+                numberOfMonths={1}
               />
             </div>
           </div>

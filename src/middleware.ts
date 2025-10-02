@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger'
 // Types for better type safety
 interface UserProfile {
   gym_id: string | null
+  id: string | null
   user_roles?: Array<{
     role_id: string
     is_active: boolean
@@ -146,10 +147,10 @@ const fetchUserProfile = async (supabase: SupabaseClient, userId: string): Promi
 }
 
 // Subscription access check with caching
-const checkSubscriptionAccess = async (supabase: SupabaseClient, gymId: string): Promise<boolean> => {
+const checkSubscriptionAccess = async (supabase: SupabaseClient, userId: string): Promise<boolean> => {
   try {
-    const { data: hasAccess, error } = await supabase.rpc('check_gym_subscription_access', {
-      p_gym_id: gymId
+    const { data: hasAccess, error } = await supabase.rpc('check_subscription_access', {
+      p_user_id: userId
     })
 
     if (error) {
@@ -351,18 +352,29 @@ export async function middleware(request: NextRequest) {
         return createRedirect('/portal', request)
       }
 
-      // Check subscription access for protected routes
-      if (profileData?.gym_id && !pathname.startsWith('/upgrade') && !pathname.startsWith('/settings')) {
-        const hasAccess = await checkSubscriptionAccess(supabase, profileData.gym_id)
+      // ✅ Check subscription access for protected routes (includes trial expiry check)
+      if (profileData?.id && !pathname.startsWith('/upgrade') && !pathname.startsWith('/settings')) {
+        const hasAccess = await checkSubscriptionAccess(supabase, profileData.id)
         
         if (!hasAccess) {
+          logger.warn('⚠️ Subscription access denied - redirecting to upgrade', { 
+            gymId: profileData.gym_id, 
+            pathname,
+            hasAccess
+          })
+          
           const redirectResponse = createRedirect('/upgrade', request)
-          redirectResponse.cookies.set('subscription_status', 'no_access', {
+          
+          // Set cookie to indicate why they're being redirected
+          redirectResponse.cookies.set('subscription_redirect_reason', 'trial_expired', {
             httpOnly: false,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             maxAge: CONFIG.COOKIE_MAX_AGE
           })
+          
+          setToastCookie(redirectResponse, 'trial_expired')
+          
           return redirectResponse
         }
       }
