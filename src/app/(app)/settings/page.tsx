@@ -2,6 +2,7 @@
 
 import React, { useEffect, useTransition, useDeferredValue } from 'react'
 import { useAuth, useUpdateProfile } from '@/hooks/use-auth'
+import { EmailUpdateDialog } from '@/components/settings/EmailUpdateDialog'
 import { useUpdateGym, useGymData, useGymOwner } from '@/hooks/use-gym-data'
 import { logger } from '@/lib/logger'
 import { useSettingsStore } from '@/stores/settings-store'
@@ -41,7 +42,6 @@ import {
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(100, 'Name must be less than 100 characters'),
   email: z.string().email('Invalid email address'),
-  // phone_number removed - not available in profiles table
 })
 
 const gymSchema = z.object({
@@ -57,6 +57,9 @@ const SettingsPage = () => {
   const updateProfileMutation = useUpdateProfile()
   const updateGymMutation = useUpdateGym()
   
+  // Email update dialog state
+  const [isEmailUpdateOpen, setIsEmailUpdateOpen] = React.useState(false)
+  
   // Preload heavy tabs for better performance
   useTabPreloading()
   
@@ -69,7 +72,6 @@ const SettingsPage = () => {
   const { selectedTab, setSelectedTab } = useSettingsStore()
   const [, startTransition] = useTransition()
   const deferredTab = useDeferredValue(selectedTab)
-  
 
   // Profile form
   const profileForm = useForm<ProfileFormData>({
@@ -77,7 +79,6 @@ const SettingsPage = () => {
     defaultValues: {
       full_name: profile?.full_name || '',
       email: user?.email || '',
-      // phone_number removed - not available in profiles table
     },
   })
 
@@ -94,8 +95,7 @@ const SettingsPage = () => {
     if (profile) {
       profileForm.reset({
         full_name: profile.full_name || '',
-        email: user?.email || '',
-        // phone_number: profile.phone_number || '',
+        email: user?.email || ''
       })
     }
   }, [profile, user, profileForm])
@@ -115,7 +115,6 @@ const SettingsPage = () => {
     try {
       await updateProfileMutation.mutateAsync({
         full_name: data.full_name,
-        // phone_number: data.phone_number || null,
       })
       toastActions.success('Profile Updated', 'Your profile has been updated successfully.')
     } catch (error) {
@@ -282,20 +281,28 @@ const SettingsPage = () => {
 
                     <div className="space-y-2">
                       <Label htmlFor="email">Email Address</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="Enter your email"
-                        disabled
-                        {...profileForm.register('email')}
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        Email cannot be changed. Contact support if you need to update your email.
-                      </p>
+                      <div className="flex gap-2">
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="Enter your email"
+                          disabled
+                          {...profileForm.register('email')}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsEmailUpdateOpen(true)}
+                          className="shrink-0"
+                        >
+                          Update
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
-                    {/* Phone number field removed - not available in profiles table */}
 
                   <Separator />
 
@@ -444,6 +451,22 @@ const SettingsPage = () => {
 
        </div>
      </div>
+     
+     {/* Email Update Dialog */}
+     <EmailUpdateDialog
+       isOpen={isEmailUpdateOpen}
+       onClose={() => setIsEmailUpdateOpen(false)}
+       currentEmail={user?.email || ''}
+       onEmailUpdated={() => {
+         // Small delay to ensure the data is updated before resetting the form
+         setTimeout(() => {
+           profileForm.reset({
+             full_name: profile?.full_name || '',
+             email: user?.email || ''
+           })
+         }, 200)
+       }}
+     />
    </div>
  )
 }

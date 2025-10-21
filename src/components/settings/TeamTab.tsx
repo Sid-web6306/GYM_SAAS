@@ -42,7 +42,7 @@ import { logger } from '@/lib/logger'
 // Form validation schema
 const inviteFormSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
-  role: z.enum(['owner', 'manager', 'staff', 'trainer', 'member'], {
+  role: z.enum(['owner', 'manager', 'staff', 'trainer'], {
     required_error: 'Please select a role'
   }),
   expires_in_hours: z.number().min(1).max(168),
@@ -276,13 +276,13 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
                       <Label htmlFor="role">Role</Label>
                       <Select
                         value={form.watch('role')}
-                        onValueChange={(value) => form.setValue('role', value as GymRole)}
+                        onValueChange={(value) => form.setValue('role', value as 'manager' | 'staff' | 'trainer')}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select a role" />
                         </SelectTrigger>
                         <SelectContent>
-                          {(['member', 'staff', 'trainer', 'manager', 'owner'] as GymRole[])
+                          {(['staff', 'trainer', 'manager', 'owner'] as GymRole[])
                             .filter(role => canInviteRole(role))
                             .map(role => (
                               <SelectItem key={role} value={role}>

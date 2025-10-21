@@ -4,20 +4,27 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import { 
+  getLoginErrorMessage, 
+  getSignupErrorMessage,
+  shouldRedirectToLogin
+} from '@/lib/auth-messages'
 
 const EmailSchema = z.object({
   email: z.string().email()
 })
 
+
 export type AuthResult = {
   success?: boolean
   error?: string
+  message?: string
 }
 
 // Signup with email (passwordless)
 export async function signupWithEmail(formData: FormData): Promise<AuthResult> {
-  let shouldRedirectToLogin = false
-  let shouldRedirectToVerify = false
+  let needsLoginRedirect = false
+  let needsVerifyRedirect = false
   let verifyEmail = ''
 
   try {
@@ -35,13 +42,16 @@ export async function signupWithEmail(formData: FormData): Promise<AuthResult> {
     })
 
     if (error) {
-      if (error.message.includes('already registered')) {
-        shouldRedirectToLogin = true
+      // Check if user already exists → redirect to login
+      const userExists = shouldRedirectToLogin(error.message)
+      if (userExists) {
+        needsLoginRedirect = true
       } else {
-        return { error: error.message }
+        // Transform error to user-friendly message
+        return { error: getSignupErrorMessage(error) }
       }
     } else {
-      shouldRedirectToVerify = true
+      needsVerifyRedirect = true
       verifyEmail = validation.data.email
     }
   } catch (error) {
@@ -50,10 +60,10 @@ export async function signupWithEmail(formData: FormData): Promise<AuthResult> {
   }
 
   // Handle redirects outside try-catch
-  if (shouldRedirectToLogin) {
-    redirect('/login?message=user-exists')
+  if (needsLoginRedirect) {
+    redirect('/login?message=account-exists')
   }
-  if (shouldRedirectToVerify) {
+  if (needsVerifyRedirect) {
     redirect(`/verify-email?email=${encodeURIComponent(verifyEmail)}`)
   }
 
@@ -80,10 +90,8 @@ export async function loginWithEmail(formData: FormData): Promise<AuthResult> {
     })
 
     if (error) {
-      if (error.message.includes('User not found')) {
-        return { error: 'No account found with this email address' }
-      }
-      return { error: error.message }
+      // Transform error to user-friendly message
+      return { error: getLoginErrorMessage(error) }
     }
 
     shouldRedirectToVerify = true
@@ -156,6 +164,155 @@ export async function completeOnboarding(
   }
 
   return { error: 'An unexpected error occurred' }
+}
+
+// Update user email with verification
+export async function updateUserEmail(formData: FormData): Promise<AuthResult> {
+  try {
+    const newEmail = formData.get('newEmail') as string
+    const validation = EmailSchema.safeParse({ email: newEmail })
+    
+    if (!validation.success) {
+      return { error: 'Please enter a valid email address' }
+    }
+
+    const supabase = await createClient()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    
+    if (userError || !user) {
+      return { error: 'Authentication required' }
+    }
+
+    // Check if it's the same email
+    if (user.email === newEmail) {
+      return { error: 'This is already your current email address' }
+    }
+
+    // Use updateUser method to initiate email change
+    // This will send verification emails to both current and new email addresses
+    const { error } = await supabase.auth.updateUser({
+      email: newEmail
+    })
+
+    if (error) {
+      logger.error('Email update error:', { error })
+      return { error: 'Failed to initiate email change. Please try again.' }
+    }
+
+    return {
+      success: true,
+      message: 'Verification code sent to your new email address'
+    }
+  } catch (error) {
+    logger.error('Email update error:', { error })
+    return { error: 'An unexpected error occurred' }
+  }
+}
+
+// Resend email verification code
+export async function resendEmailVerification(formData: FormData): Promise<AuthResult> {
+  try {
+    const newEmail = formData.get('newEmail') as string
+    
+    if (!newEmail) {
+      return { error: 'Email is required' }
+    }
+
+    const supabase = await createClient()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    
+    if (userError || !user) {
+      return { error: 'Authentication required' }
+    }
+
+    // Check if it's the same email
+    if (user.email === newEmail) {
+      return { error: 'This is already your current email address' }
+    }
+
+    // For resend, we need to call updateUser again
+    // The resend method with type: 'email_change' only works if there's an active email change request
+    // Since updateUser creates the email change context, we call it again for resend
+    const { error } = await supabase.auth.updateUser({
+      email: newEmail
+    })
+
+    if (error) {
+      logger.error('Resend email verification error:', { error })
+      
+      // Handle rate limiting specifically
+      if (error.message.includes('rate limit') || error.message.includes('429')) {
+        return { error: 'Please wait a moment before requesting another verification code.' }
+      }
+      
+      return { error: 'Failed to resend verification code. Please try again.' }
+    }
+
+    return { 
+      success: true, 
+      message: 'Verification code resent successfully' 
+    }
+  } catch (error) {
+    logger.error('Resend email verification error:', { error })
+    return { error: 'An unexpected error occurred' }
+  }
+}
+
+// Verify email update with OTP
+export async function verifyEmailUpdate(formData: FormData): Promise<AuthResult> {
+  try {
+    const newEmail = formData.get('newEmail') as string
+    const token = formData.get('token') as string
+    
+    if (!newEmail || !token) {
+      return { error: 'Email and verification code are required' }
+    }
+
+    const supabase = await createClient()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    
+    if (userError || !user) {
+      return { error: 'Authentication required' }
+    }
+
+    // Verify the OTP for email change
+    // The type should be 'email_change' for email updates
+    const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+      email: newEmail,
+      token,
+      type: 'email_change'
+    })
+
+    if (verifyError || !verifyData.user) {
+      return { error: 'Invalid verification code' }
+    }
+
+    // After successful email verification, the user's session might be updated
+    // We need to ensure the session is properly refreshed
+    if (verifyData.session) {
+      // Set the new session if one is returned
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: verifyData.session.access_token,
+        refresh_token: verifyData.session.refresh_token
+      })
+      
+      if (sessionError) {
+        logger.warn('Session update after email verification failed:', { error: sessionError })
+        // Don't fail the email update for session issues
+      }
+    }
+
+    // The email is automatically updated by Supabase when verifyOtp succeeds
+    // The database trigger will automatically sync the email to profiles table
+
+    return { 
+      success: true, 
+      message: 'Email address updated successfully' 
+    }
+  } catch (error) {
+    logger.error('Email verification error:', { error })
+    return { error: 'An unexpected error occurred' }
+  }
 }
 
 // Social login server action
@@ -239,4 +396,3 @@ export async function loginWithSocialProvider(
     redirect(redirectUrl)
   }
 }
-

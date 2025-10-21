@@ -118,9 +118,7 @@ export interface ProfileWithRBAC {
   created_at: string;
   updated_at: string;
   email: string;
-  phone_number?: string | null;
-  phone_verified?: boolean | null;
-  phone_verified_at?: string | null;
+  email_verified?: boolean | null;
   avatar_url: string | null;
   preferences: Record<string, unknown>;
   // RBAC fields

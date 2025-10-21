@@ -35,7 +35,7 @@ const CONFIG = {
 
 // Route definitions - centralized for easier maintenance
 const ROUTES = {
-  AUTH: ['/login', '/signup', '/verify-email', '/confirm-email'],
+  AUTH: ['/login', '/signup', '/verify-email', '/confirm-email', '/verify-phone'],
   APP: ['/dashboard', '/members', '/staff', '/attendance', '/settings', '/team', '/upgrade'],
   PUBLIC: ['/', '/contact', '/privacy-policy', '/terms-of-service', '/refund-policy'],
   PORTAL: ['/portal'],
