@@ -588,11 +588,14 @@ export type Database = {
           custom_permissions: Json | null
           default_role: string | null
           email: string | null
+          email_verified: boolean | null
           full_name: string | null
           gym_id: string | null
           id: string
           is_gym_owner: boolean | null
           last_role_sync: string | null
+          phone: string | null
+          phone_verified: boolean | null
           preferences: Json | null
           updated_at: string
         }
@@ -602,6 +605,7 @@ export type Database = {
           custom_permissions?: Json | null
           default_role?: string | null
           email?: string | null
+          email_verified?: boolean | null
           full_name?: string | null
           gym_id?: string | null
           id: string
@@ -616,6 +620,7 @@ export type Database = {
           custom_permissions?: Json | null
           default_role?: string | null
           email?: string | null
+          email_verified?: boolean | null
           full_name?: string | null
           gym_id?: string | null
           id?: string

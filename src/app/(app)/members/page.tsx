@@ -59,7 +59,10 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { MemberManagementGuard, AnalyticsGuard, AccessDenied } from '@/components/rbac/rbac-guards'
 import { EnhancedMemberDialog } from '@/components/members/EnhancedMemberDialog'
 import { BulkPortalInvite } from '@/components/members/BulkPortalInvite'
+import { BulkImportDialog } from '@/components/members/BulkImportDialog'
 import { MemberActionsMenu, MemberPortalStatusBadge } from '@/components/members/MemberActionsMenu'
+import { exportMembersToCSV } from '@/lib/member-csv'
+import { toast } from 'sonner'
 
 
 const MembersPage = () => {
@@ -78,6 +81,7 @@ const MembersPage = () => {
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [bulkInviteDialogOpen, setBulkInviteDialogOpen] = useState(false)
+  const [bulkImportDialogOpen, setBulkImportDialogOpen] = useState(false)
 
   const pageSize = 10
 
@@ -141,6 +145,28 @@ const MembersPage = () => {
   const openDeleteDialog = (memberId: string) => {
     setSelectedMemberId(memberId)
     setDeleteDialogOpen(true)
+  }
+
+  const handleExportMembers = async () => {
+    if (!members || members.length === 0) {
+      toast.error('No members to export')
+      return
+    }
+
+    try {
+      const timestamp = new Date().toISOString().split('T')[0]
+      const filename = `members-export-${timestamp}.csv`
+      await exportMembersToCSV(members, filename)
+      toast.success(`Exported members successfully`)
+    } catch (error) {
+      logger.error('Error exporting members:', { error: error instanceof Error ? error.message : String(error) })
+      toast.error('Failed to export members')
+    }
+  }
+
+  const handleImportSuccess = () => {
+    refetchMembers()
+    toast.success('Members imported successfully. Refreshing list...')
   }
 
   const getStatusBadge = (status: string | null) => {
@@ -228,15 +254,22 @@ const MembersPage = () => {
             Export
           </Button>
         }>
-          <Button variant="outline" size="sm" className="w-full sm:w-auto">
+          <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleExportMembers}>
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
         </AnalyticsGuard>
-        <Button variant="outline" size="sm" className="w-full sm:w-auto">
-          <Upload className="h-4 w-4 mr-2" />
-          Import
-        </Button>
+        <MemberManagementGuard action="create" fallback={
+          <Button variant="outline" size="sm" className="w-full sm:w-auto" disabled title="Import requires staff privileges">
+            <Upload className="h-4 w-4 mr-2" />
+            Import
+          </Button>
+        }>
+          <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setBulkImportDialogOpen(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Import
+          </Button>
+        </MemberManagementGuard>
         <MemberManagementGuard action="create" fallback={
           <Button disabled className="w-full sm:w-auto" title="Adding members requires staff privileges">
             <UserPlus className="h-4 w-4 mr-2" />
@@ -577,6 +610,12 @@ const MembersPage = () => {
         />
       )}
 
+      {/* Bulk Import Dialog */}
+      <BulkImportDialog
+        open={bulkImportDialogOpen}
+        onOpenChange={setBulkImportDialogOpen}
+        onSuccess={handleImportSuccess}
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

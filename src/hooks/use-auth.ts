@@ -120,6 +120,7 @@ export function useAuth() {
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
+    refetchOnMount: true,
   })
 
   // Handle auth state changes
@@ -129,13 +130,14 @@ export function useAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       // Note: We intentionally don't use the session parameter to avoid security warnings
       // The session data from onAuthStateChange could be insecure, so we refetch via getUser()
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
         // Add a small delay to reduce race conditions with middleware
         const delay = event === 'SIGNED_IN' ? 100 : 0
         setTimeout(() => {
           queryClient.invalidateQueries({ queryKey: ['auth-session'] })
         }, delay)
       }
+      // Don't invalidate on TOKEN_REFRESHED to prevent infinite loops during profile updates
     })
 
     return () => subscription.unsubscribe()

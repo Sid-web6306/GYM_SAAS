@@ -1,4 +1,13 @@
-// Enhanced auth messages with social authentication support
+/**
+ * Enhanced Auth Messages
+ * 
+ * This file handles:
+ * 1. URL query parameter → User-friendly message mapping
+ * 2. Supabase error → User-friendly message transformation
+ */
+
+// ========== URL PARAMETER MESSAGES ==========
+// These are shown when redirecting with ?message=key
 export const AUTH_MESSAGES = {
   // Email OTP verification
   'check-email': {
@@ -199,4 +208,153 @@ export function displayAuthMessage(searchParams: URLSearchParams, showToast?: (t
   }
   
   return null;
+}
+
+// ========== SUPABASE ERROR MESSAGE TRANSFORMATION ==========
+// These transform confusing Supabase errors into user-friendly messages
+
+interface ErrorMapping {
+  pattern: RegExp
+  userMessage: string
+  redirectTo?: 'login' | 'signup'
+}
+
+const ERROR_MAPPINGS: ErrorMapping[] = [
+  // ===== LOGIN ERRORS =====
+  {
+    pattern: /signups?.*(not|are)?\s*(allowed|disabled)/i,
+    userMessage: 'No account found with this phone number. Please sign up to create an account.',
+    redirectTo: 'signup'
+  },
+  {
+    pattern: /user not found|not found|doesn't exist|does not exist/i,
+    userMessage: 'No account found. Please check your phone number or sign up to create an account.',
+    redirectTo: 'signup'
+  },
+  
+  // ===== SIGNUP ERRORS =====
+  {
+    pattern: /already.*registered|user.*already.*exists|email.*taken|phone.*taken/i,
+    userMessage: 'An account with this phone number already exists. Please log in instead.',
+    redirectTo: 'login'
+  },
+  {
+    pattern: /signup.*disabled|new.*registration.*disabled/i,
+    userMessage: 'New signups are currently disabled. Please contact support.',
+  },
+  
+  // ===== OTP/VERIFICATION ERRORS =====
+  {
+    pattern: /otp.*disabled|sms.*disabled/i,
+    userMessage: 'Phone authentication is currently unavailable. Please try email or contact support.',
+  },
+  {
+    pattern: /invalid.*otp|otp.*invalid|incorrect.*code|wrong.*code/i,
+    userMessage: 'Invalid verification code. Please check the code and try again.',
+  },
+  {
+    pattern: /otp.*expired|code.*expired|token.*expired/i,
+    userMessage: 'Verification code has expired. Please request a new one.',
+  },
+  {
+    pattern: /failed.*to.*send.*sms|sms.*failed|sms.*error/i,
+    userMessage: 'Failed to send SMS. Please check your phone number and try again.',
+  },
+  
+  // ===== RATE LIMITING =====
+  {
+    pattern: /rate.*limit|too.*many.*requests|429|too.*many.*attempts/i,
+    userMessage: 'Too many attempts. Please wait a few minutes before trying again.',
+  },
+  
+  // ===== NETWORK ERRORS =====
+  {
+    pattern: /network|fetch.*failed|connection.*failed/i,
+    userMessage: 'Network error. Please check your connection and try again.',
+  },
+  
+  // ===== ACCOUNT STATUS =====
+  {
+    pattern: /account.*disabled|user.*disabled|account.*suspended/i,
+    userMessage: 'This account has been disabled. Please contact support.',
+  },
+  {
+    pattern: /email.*not.*confirmed|phone.*not.*confirmed/i,
+    userMessage: 'Please verify your account first.',
+  },
+  
+  // ===== VALIDATION ERRORS =====
+  {
+    pattern: /invalid.*phone|phone.*invalid|invalid.*format/i,
+    userMessage: 'Invalid phone number format. Please include country code (e.g., +1234567890).',
+  },
+  {
+    pattern: /invalid.*email|email.*invalid/i,
+    userMessage: 'Invalid email address. Please check and try again.',
+  },
+]
+
+/**
+ * Transform Supabase error into user-friendly message
+ */
+export function transformAuthError(error: string | Error): {
+  message: string
+  redirectTo?: 'login' | 'signup'
+} {
+  const errorMsg = typeof error === 'string' ? error : error.message
+  
+  // Find matching error pattern
+  for (const mapping of ERROR_MAPPINGS) {
+    if (mapping.pattern.test(errorMsg)) {
+      return {
+        message: mapping.userMessage,
+        redirectTo: mapping.redirectTo
+      }
+    }
+  }
+  
+  // Default fallback message
+  return {
+    message: 'An error occurred. Please try again or contact support.',
+  }
+}
+
+/**
+ * Get user-friendly error message for login
+ */
+export function getLoginErrorMessage(error: string | Error): string {
+  const { message } = transformAuthError(error)
+  return message
+}
+
+/**
+ * Get user-friendly error message for signup  
+ */
+export function getSignupErrorMessage(error: string | Error): string {
+  const { message } = transformAuthError(error)
+  return message
+}
+
+/**
+ * Get user-friendly error message for OTP verification
+ */
+export function getOTPErrorMessage(error: string | Error): string {
+  const { message } = transformAuthError(error)
+  return message
+}
+
+/**
+ * Check if error indicates user should sign up instead of log in
+ */
+export function shouldRedirectToSignup(error: string | Error): boolean {
+  const errorMsg = typeof error === 'string' ? error : error.message
+  return /user not found|not found|signups?.*(not|are)?\s*(allowed|disabled)/i.test(errorMsg)
+}
+
+/**
+ * Check if error indicates user should log in instead of sign up
+ */
+export function shouldRedirectToLogin(error: string | Error): boolean {
+  const errorMsg = typeof error === 'string' ? error : error.message
+  return /already.*registered|user.*already.*exists|email.*taken|phone.*taken/i.test(errorMsg)
 }
