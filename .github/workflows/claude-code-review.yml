@@ -1,0 +1,20 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Claude Code Review
+        uses: anthropics/anthropic-cursor-vscode@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
