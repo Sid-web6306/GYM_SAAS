@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
-import { createInvitation, revokeInvitation, resendInvitation, getGymInvitations } from '@/actions/invite.actions'
 import type { 
   InvitationWithDetails, 
   CreateInvitationRequest, 
@@ -46,7 +45,15 @@ export const useInvitations = (
     queryKey: invitationKeys.list(targetGymId || '', filters),
     queryFn: async () => {
       if (!targetGymId) return { success: false, invitations: [] }
-      return await getGymInvitations(targetGymId)
+      
+      const response = await fetch(`/api/invites?gym_id=${targetGymId}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch invitations')
+      }
+      
+      return { success: true, invitations: data.invitations || [] }
     },
     enabled: !!targetGymId,
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -126,15 +133,26 @@ export const useInvitations = (
   // Create invitation mutation with enhanced error handling
   const createMutation = useMutation({
     mutationFn: async (data: CreateInvitationRequest) => {
-      const formData = new FormData()
-      formData.append('email', data.email)
-      formData.append('role', data.role)
-      if (data.gym_id) formData.append('gym_id', data.gym_id)
-      formData.append('expires_in_hours', String(data.expires_in_hours || 72))
-      if (data.message) formData.append('message', data.message)
-      formData.append('notify_user', String(data.notify_user !== false))
+      const response = await fetch('/api/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: data.email,
+          role: data.role,
+          gym_id: data.gym_id || targetGymId,
+          expires_in_hours: data.expires_in_hours || 72,
+          message: data.message,
+          notify_user: data.notify_user !== false
+        })
+      })
 
-      return await createInvitation(formData)
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create invitation')
+      }
+
+      return { success: true, invitation: result.invitation }
     },
     onSuccess: () => {
       if (targetGymId) {
@@ -157,9 +175,17 @@ export const useInvitations = (
   // Revoke invitation mutation with enhanced error handling
   const revokeMutation = useMutation({
     mutationFn: async (invitationId: string) => {
-      const formData = new FormData()
-      formData.append('invite_id', invitationId)
-      return await revokeInvitation(formData)
+      const response = await fetch(`/api/invites?invite_id=${invitationId}`, {
+        method: 'DELETE'
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to revoke invitation')
+      }
+
+      return result
     },
     onSuccess: () => {
       if (targetGymId) {
@@ -180,9 +206,19 @@ export const useInvitations = (
   // Resend invitation mutation with enhanced error handling
   const resendMutation = useMutation({
     mutationFn: async (invitationId: string) => {
-      const formData = new FormData()
-      formData.append('invite_id', invitationId)
-      return await resendInvitation(formData)
+      const response = await fetch('/api/invites/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invite_id: invitationId })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to resend invitation')
+      }
+
+      return result
     },
     onSuccess: () => {
       if (targetGymId) {
@@ -266,7 +302,7 @@ export const useInvitations = (
   return {
     invitations,
     isLoading,
-    error: error?.message || invitationsData?.error || null,
+    error: error?.message || null,
     refetch,
     createInvitation: createMutation.mutateAsync,
     revokeInvitation: revokeMutation.mutateAsync,
@@ -425,11 +461,19 @@ export const useBulkInviteOperations = (gymId?: string) => {
   const bulkRevokeMutation = useMutation({
     mutationFn: async (invitationIds: string[]) => {
       const results = await Promise.allSettled(
-        invitationIds.map(id => {
-          const formData = new FormData()
-          formData.append('invite_id', id)
-          return revokeInvitation(formData)
-        })
+        invitationIds.map(id => 
+          fetch(`/api/invites?invite_id=${id}`, { method: 'DELETE' })
+            .then(async (res) => {
+              const data = await res.json()
+              if (!res.ok) {
+                throw new Error(data.error || 'Failed to revoke invitation')
+              }
+              if (!data.success) {
+                throw new Error(data.error || 'Failed to revoke invitation')
+              }
+              return data
+            })
+        )
       )
 
       const successful = results.filter(r => r.status === 'fulfilled').length
@@ -448,11 +492,23 @@ export const useBulkInviteOperations = (gymId?: string) => {
   const bulkResendMutation = useMutation({
     mutationFn: async (invitationIds: string[]) => {
       const results = await Promise.allSettled(
-        invitationIds.map(id => {
-          const formData = new FormData()
-          formData.append('invite_id', id)
-          return resendInvitation(formData)
-        })
+        invitationIds.map(id =>
+          fetch('/api/invites/resend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ invite_id: id })
+          })
+            .then(async (res) => {
+              const data = await res.json()
+              if (!res.ok) {
+                throw new Error(data.error || 'Failed to resend invitation')
+              }
+              if (!data.success) {
+                throw new Error(data.error || 'Failed to resend invitation')
+              }
+              return data
+            })
+        )
       )
 
       const successful = results.filter(r => r.status === 'fulfilled').length

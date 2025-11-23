@@ -6,7 +6,6 @@
 import { createClient } from '@/utils/supabase/client'
 import { type Member } from '@/types/member.types'
 import { logger } from '@/lib/logger'
-import { createInvitation } from '@/actions/invite.actions'
 
 // Type definitions for member operations
 export interface CreateMemberData {
@@ -140,57 +139,60 @@ export class MemberService {
         throw new Error('Member already has portal access')
       }
 
-      // Use the same createInvitation function that "Invite to Portal" uses
-      const formData = new FormData()
-      formData.set('email', member.email)
-      formData.set('role', 'member')
-      formData.set('expires_in_hours', (options.expires_in_hours || 72).toString())
-      // Only include custom message if send_welcome_message is enabled
-      if (options.send_welcome_message && options.message) {
-        formData.set('message', options.message)
-      }
-      formData.set('notify_user', 'true') // Always send invitation email when portal access is enabled
-      formData.set('gym_id', member.gym_id)
-      
-      // Debug: Log the FormData values
-      logger.debug('🔍 MemberService.enablePortalAccess FormData:', {
-        email: formData.get('email'),
-        notify_user: formData.get('notify_user'),
-        role: formData.get('role'),
-        metadata: formData.get('metadata')
-      })
-      
-      // Add metadata for portal invitation
-      const metadata = {
-        member_id: memberId,
-        member_name: `${member.first_name} ${member.last_name}`.trim(),
-        portal_invitation: true,
-        custom_message: options.message,
-        send_welcome_message: options.send_welcome_message
-      }
-      formData.set('metadata', JSON.stringify(metadata))
-
-      // Call the same createInvitation function used by "Invite to Portal"
-      const result = await createInvitation(formData)
-
-      if (result.success) {
-        logger.info('Portal access enabled successfully', { 
-          memberId, 
-          invitationId: result.invitation?.id,
-          emailSent: result.emailSent,
-          recipientEmail: member.email
-        })
-
-        return {
-          success: true,
-          invitation_id: result.invitation?.id,
-          warning: result.warning // Pass through any email warnings
+      // Prepare request body
+      const requestBody = {
+        email: member.email,
+        role: 'member' as const,
+        gym_id: member.gym_id,
+        expires_in_hours: options.expires_in_hours || 72,
+        message: options.message,
+        notify_user: true, // Always send invitation email when portal access is enabled
+        metadata: {
+          member_id: memberId,
+          member_name: `${member.first_name} ${member.last_name}`.trim(),
+          portal_invitation: true,
+          custom_message: options.message,
+          send_welcome_message: options.send_welcome_message
         }
-      } else {
+      }
+
+      // Debug: Log the request
+      logger.debug('🔍 MemberService.enablePortalAccess request:', {
+        email: requestBody.email,
+        notify_user: requestBody.notify_user,
+        role: requestBody.role,
+        metadata: requestBody.metadata
+      })
+
+      // Call the API endpoint
+      const response = await fetch('/api/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        logger.error('Portal access enablement failed', {
+          memberId,
+          error: result.error || 'Failed to create portal invitation'
+        })
         return {
           success: false,
           error: result.error || 'Failed to create portal invitation'
         }
+      }
+
+      logger.info('Portal access enabled successfully', { 
+        memberId, 
+        invitationId: result.invitation?.id,
+        recipientEmail: member.email
+      })
+
+      return {
+        success: true,
+        invitation_id: result.invitation?.id
       }
     } catch (error) {
       logger.error('Portal access enablement failed', { 

@@ -5,7 +5,6 @@ import { createClient } from '@/utils/supabase/client'
 import { useCallback, useMemo } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { logger } from '@/lib/logger'
-import { assignRoleToUser, deleteUserFromGym } from '@/actions/rbac-client.actions'
 import type { 
   GymRole, 
   Permission, 
@@ -241,14 +240,20 @@ export const useAssignRole = () => {
         throw new Error('No gym ID available')
       }
 
-      // Use the server action for secure role assignment
-      const result = await assignRoleToUser(finalRequest)
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to assign role')
+      // Use API endpoint for role assignment
+      const response = await fetch('/api/rbac', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(finalRequest)
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to assign role')
       }
 
-      return result
+      return data
     },
     onSuccess: (_, variables) => {
       const gymId = variables.gym_id || profile?.gym_id || ''
@@ -282,14 +287,18 @@ export const useRemoveRole = () => {
         throw new Error('No gym ID available')
       }
 
-      // Use the server action for proper permission checking and cleanup
-      const result = await deleteUserFromGym(user_id, targetGymId)
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to remove user')
+      // Use API endpoint for user removal
+      const response = await fetch(`/api/rbac?user_id=${user_id}&gym_id=${targetGymId}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to remove user')
       }
 
-      return result
+      return data
     },
     onSuccess: (_, variables) => {
       // Invalidate relevant queries
