@@ -1,9 +1,11 @@
+'use client'
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/utils/supabase/client'
 import { useCallback, useMemo } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { logger } from '@/lib/logger'
-import { assignRoleToUser, deleteUserFromGym } from '@/actions/rbac.actions'
+import { assignRoleToUser, deleteUserFromGym } from '@/actions/rbac-client.actions'
 import type { 
   GymRole, 
   Permission, 

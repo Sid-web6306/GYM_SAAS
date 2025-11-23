@@ -150,7 +150,7 @@ export function PersonalDetailsStep({
 
       {/* Help Text */}
       <p className="text-center text-sm text-gray-500">
-        Step 1 of {(userEmail && userPhone) ? '2' : '4'} • Personal Information
+        Step 1 of 2 • Personal Information
       </p>
     </form>
   )

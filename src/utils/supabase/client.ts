@@ -40,14 +40,62 @@ export function createClient() {
             return undefined
           }
           
-          // Use environment-specific cookie names
-          const envName = `${envPrefix}-${name}`
-          return document.cookie
-            .split('; ')
-            .find(row => row.startsWith(`${envName}=`))
-            ?.split('=')
-            .slice(1)
-            .join('=')
+          try {
+            // Use environment-specific cookie names
+            const envName = `${envPrefix}-${name}`
+            const cookieValue = document.cookie
+              .split('; ')
+              .find(row => row.startsWith(`${envName}=`))
+              ?.split('=')
+              .slice(1)
+              .join('=')
+            
+            if (!cookieValue) {
+              return undefined
+            }
+            
+            // Decode URL-encoded cookie value
+            let decodedValue: string
+            try {
+              decodedValue = decodeURIComponent(cookieValue)
+            } catch (decodeError) {
+              // If URL decoding fails, try using the raw value
+              // but log a warning
+              logger.warn('Cookie URL decode failed, using raw value', {
+                cookieName: envName,
+                error: decodeError
+              })
+              decodedValue = cookieValue
+            }
+            
+            // Validate that the decoded value can be safely used
+            // Check for invalid UTF-8 sequences by attempting to encode
+            try {
+              // This will throw if the string contains invalid UTF-8
+              new TextEncoder().encode(decodedValue)
+            } catch (utf8Error) {
+              // Cookie contains invalid UTF-8, clear it and return undefined
+              logger.warn('Invalid UTF-8 in cookie, clearing corrupted cookie', {
+                cookieName: envName,
+                error: utf8Error
+              })
+              
+              // Clear the corrupted cookie
+              document.cookie = `${envName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+              
+              return undefined
+            }
+            
+            return decodedValue
+          } catch (error) {
+            // Catch any other errors in cookie retrieval
+            logger.error('Error reading cookie', {
+              cookieName: name,
+              envPrefix,
+              error
+            })
+            return undefined
+          }
         },
         set(name: string, value: string, options: CookieOptions) {
           // Only access document in browser environment

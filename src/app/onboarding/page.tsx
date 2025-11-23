@@ -7,7 +7,7 @@ import { Loader2, AlertCircle } from 'lucide-react'
 import { toastActions } from '@/stores/toast-store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { useAuth } from '@/hooks/use-auth'
+import { useAuth, usePostOnboardingSync } from '@/hooks/use-auth'
 import { logger } from '@/lib/logger'
 import { RequireAuth } from '@/components/auth/AuthGuard'
 import { useInviteVerification } from '@/hooks/use-invitations'
@@ -30,6 +30,7 @@ const OnboardingContent = () => {
   const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const postOnboardingSync = usePostOnboardingSync()
 
   // Onboarding state
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(1)
@@ -181,11 +182,12 @@ const OnboardingContent = () => {
 
       toastActions.success('Success!', 'Your gym has been set up successfully')
       
-      // Add a small delay to prevent race conditions with auth state changes
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Invalidate queries to refresh data after onboarding
+      await postOnboardingSync()
       
-      // Use window.location.href instead of router.push to avoid client-side navigation issues
-      window.location.href = '/dashboard?welcome=true'
+      // Use router.push instead of window.location.href to preserve React Query cache
+      // This avoids full page reload and allows cached data to persist
+      router.push('/dashboard?welcome=true')
     } catch (error) {
       logger.error('Onboarding error:', { error })
       toastActions.error('Error', 'An unexpected error occurred')

@@ -38,9 +38,53 @@ export const createClient = async () => {
     {
       cookies: {
         get(name: string) {
-          // Use environment-specific cookie names
-          const envName = `${envPrefix}-${name}`
-          return cookieStore.get(envName)?.value
+          try {
+            // Use environment-specific cookie names
+            const envName = `${envPrefix}-${name}`
+            const cookie = cookieStore.get(envName)
+            
+            if (!cookie?.value) {
+              return undefined
+            }
+            
+            // Validate cookie value for invalid UTF-8 sequences
+            try {
+              // This will throw if the string contains invalid UTF-8
+              new TextEncoder().encode(cookie.value)
+              return cookie.value
+            } catch (utf8Error) {
+              // Cookie contains invalid UTF-8, log and return undefined
+              logger.warn('Invalid UTF-8 in server cookie, ignoring', {
+                cookieName: envName,
+                error: utf8Error
+              })
+              
+              // Try to clear the corrupted cookie
+              try {
+                cookieStore.set({ 
+                  name: envName, 
+                  value: '', 
+                  expires: new Date(0),
+                  path: '/'
+                })
+              } catch (clearError) {
+                logger.warn('Failed to clear corrupted cookie', {
+                  cookieName: envName,
+                  error: clearError
+                })
+              }
+              
+              return undefined
+            }
+          } catch (error) {
+            // Catch any other errors in cookie retrieval
+            logger.error('Error reading server cookie', {
+              cookieName: name,
+              envPrefix,
+              error
+            })
+            return undefined
+          }
         },
         set(name: string, value: string, options: CookieOptions) {
           try {
