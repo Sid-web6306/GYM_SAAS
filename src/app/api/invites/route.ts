@@ -14,7 +14,8 @@ const createInviteSchema = z.object({
   gym_id: z.string().uuid().optional(),
   expires_in_hours: z.number().min(1).max(168).default(72), // 1 hour to 7 days, default 3 days
   message: z.string().max(500).optional(),
-  notify_user: z.boolean().default(true)
+  notify_user: z.boolean().default(true),
+  metadata: z.record(z.unknown()).optional() // Accept metadata object to preserve member portal information
 })
 
 const updateInviteSchema = z.object({
@@ -236,6 +237,17 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date()
     expiresAt.setHours(expiresAt.getHours() + validatedData.expires_in_hours)
 
+    // Merge provided metadata with default metadata
+    // This preserves member portal information (member_id, member_name, portal_invitation, etc.)
+    const defaultMetadata = {
+      message: validatedData.message,
+      notify_user: validatedData.notify_user,
+      invited_by_name: user.user_metadata?.full_name || user.email
+    }
+    const finalMetadata = validatedData.metadata 
+      ? { ...defaultMetadata, ...validatedData.metadata }
+      : defaultMetadata
+
     // Create invitation
     const { data: invitation, error: createError } = await supabase
       .from('gym_invitations')
@@ -247,11 +259,7 @@ export async function POST(request: NextRequest) {
         token: hashToken(token), // Store hashed version
         expires_at: expiresAt.toISOString(),
         status: 'pending',
-        metadata: {
-          message: validatedData.message,
-          notify_user: validatedData.notify_user,
-          invited_by_name: user.user_metadata?.full_name || user.email
-        }
+        metadata: finalMetadata
       })
       .select()
       .single()

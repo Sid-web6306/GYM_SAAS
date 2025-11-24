@@ -276,7 +276,7 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
                       <Label htmlFor="role">Role</Label>
                       <Select
                         value={form.watch('role')}
-                        onValueChange={(value) => form.setValue('role', value as 'manager' | 'staff' | 'trainer')}
+                        onValueChange={(value) => form.setValue('role', value as 'owner' | 'manager' | 'staff' | 'trainer')}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select a role" />

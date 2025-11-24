@@ -11,6 +11,7 @@ import { PWAWrapper } from "@/components/pwa/PWAWrapper";
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import { Toaster } from "@/components/ui/sonner";
 import { Analytics } from "@vercel/analytics/next";
+import { SupabaseErrorHandler } from "@/components/providers/supabase-error-handler";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -56,6 +57,7 @@ export default function RootLayout({
           <RazorpayProvider>
             <QueryProvider>
               <SessionProvider>
+                <SupabaseErrorHandler />
                 {children}
                 <PWAWrapper />
                 <ServiceWorkerRegister />

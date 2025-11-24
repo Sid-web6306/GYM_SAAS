@@ -39,6 +39,40 @@ async function fetchAuthSession(): Promise<AuthData> {
           error: null
         }
       }
+      
+      // Handle invalid UTF-8 sequence errors (corrupted cookies)
+      if (userError.message?.includes('Invalid UTF-8 sequence')) {
+        logger.warn('Invalid UTF-8 in auth session, clearing corrupted cookies and treating as unauthenticated', {
+          error: userError
+        })
+        
+        // Try to clear all Supabase cookies to fix the issue
+        try {
+          const envPrefix = process.env.NODE_ENV === 'development' ? 'dev' : 'prod'
+          const cookieNames = [
+            `${envPrefix}-sb-access-token`,
+            `${envPrefix}-sb-refresh-token`,
+            `${envPrefix}-sb-provider-token`,
+            `${envPrefix}-sb-provider-refresh-token`
+          ]
+          
+          cookieNames.forEach(cookieName => {
+            document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+          })
+        } catch (clearError) {
+          logger.warn('Failed to clear corrupted cookies', { error: clearError })
+        }
+        
+        return {
+          user: null,
+          profile: null,
+          isLoading: false,
+          isAuthenticated: false,
+          hasGym: false,
+          error: null
+        }
+      }
+      
       throw userError
     }
     
@@ -88,6 +122,43 @@ async function fetchAuthSession(): Promise<AuthData> {
 
     return result
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    
+    // Handle invalid UTF-8 sequence errors (corrupted cookies)
+    if (errorMessage.includes('Invalid UTF-8 sequence')) {
+      logger.warn('Invalid UTF-8 in auth session (caught in catch block), clearing corrupted cookies', {
+        error
+      })
+      
+      // Try to clear all Supabase cookies to fix the issue
+      try {
+        if (typeof document !== 'undefined') {
+          const envPrefix = process.env.NODE_ENV === 'development' ? 'dev' : 'prod'
+          const cookieNames = [
+            `${envPrefix}-sb-access-token`,
+            `${envPrefix}-sb-refresh-token`,
+            `${envPrefix}-sb-provider-token`,
+            `${envPrefix}-sb-provider-refresh-token`
+          ]
+          
+          cookieNames.forEach(cookieName => {
+            document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+          })
+        }
+      } catch (clearError) {
+        logger.warn('Failed to clear corrupted cookies in catch block', { error: clearError })
+      }
+      
+      return {
+        user: null,
+        profile: null,
+        isLoading: false,
+        isAuthenticated: false,
+        hasGym: false,
+        error: null
+      }
+    }
+    
     logger.error('Auth session fetch error:', { error })
     return {
       user: null,
@@ -107,20 +178,28 @@ export function useAuth() {
   const authQuery = useQuery({
     queryKey: ['auth-session'],
     queryFn: fetchAuthSession,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - auth data doesn't change frequently
     retry: (failureCount, error) => {
+      const errorMessage = error?.message || String(error || '')
+      
       // Don't retry on auth session missing errors
-      if (error?.message?.includes('Auth session missing') || 
-          error?.message?.includes('session_not_found')) {
+      if (errorMessage.includes('Auth session missing') || 
+          errorMessage.includes('session_not_found')) {
         return false
       }
+      
+      // Don't retry on invalid UTF-8 errors (corrupted cookies)
+      if (errorMessage.includes('Invalid UTF-8 sequence')) {
+        return false
+      }
+      
       // Retry up to 2 times for other errors
       return failureCount < 2
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    refetchOnMount: true,
+    refetchOnMount: false, // Only refetch if data is stale (respects staleTime) - middleware already validates
   })
 
   // Handle auth state changes
@@ -274,18 +353,39 @@ export function useUpdateProfile() {
 }
 
 // Post-onboarding sync for refreshing data
+// Debounce helper to prevent multiple rapid calls
+let syncDebounceTimer: NodeJS.Timeout | null = null
+const SYNC_DEBOUNCE_MS = 500
+
 export function usePostOnboardingSync() {
-  const { refetch } = useAuth()
   const queryClient = useQueryClient()
 
   return async () => {
-    queryClient.removeQueries({ queryKey: ['auth-session'] })
-    const result = await refetch()
-    
-    queryClient.removeQueries({ queryKey: ['gym'] })
-    queryClient.removeQueries({ queryKey: ['members'] })
-    
-    return result
+    // Debounce to prevent multiple rapid calls
+    return new Promise<{ data: AuthData | undefined; error: Error | null }>((resolve) => {
+      if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer)
+      }
+      
+      syncDebounceTimer = setTimeout(async () => {
+        try {
+          // Invalidate queries instead of removing - this respects cache and only refetches if stale
+          // This is more efficient and prevents unnecessary API calls
+          await queryClient.invalidateQueries({ queryKey: ['auth-session'] })
+          await queryClient.invalidateQueries({ queryKey: ['gym'] })
+          await queryClient.invalidateQueries({ queryKey: ['members'] })
+          
+          // Get the updated data from cache (or it will refetch if stale)
+          const authData = queryClient.getQueryData<AuthData>(['auth-session'])
+          
+          resolve({ data: authData, error: null })
+        } catch (error) {
+          resolve({ data: undefined, error: error as Error })
+        } finally {
+          syncDebounceTimer = null
+        }
+      }, SYNC_DEBOUNCE_MS)
+    })
   }
 }
 

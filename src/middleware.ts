@@ -238,8 +238,52 @@ export async function middleware(request: NextRequest) {
       {
         cookies: {
           get(name: string) {
-            const envName = `${envPrefix}-${name}`
-            return request.cookies.get(envName)?.value
+            try {
+              const envName = `${envPrefix}-${name}`
+              const cookie = request.cookies.get(envName)
+              
+              if (!cookie?.value) {
+                return undefined
+              }
+              
+              // Validate cookie value for invalid UTF-8 sequences
+              try {
+                // This will throw if the string contains invalid UTF-8
+                new TextEncoder().encode(cookie.value)
+                return cookie.value
+              } catch (utf8Error) {
+                // Cookie contains invalid UTF-8, log and return undefined
+                logger.warn('Invalid UTF-8 in middleware cookie, ignoring', {
+                  cookieName: envName,
+                  error: utf8Error
+                })
+                
+                // Clear the corrupted cookie in the response
+                try {
+                  response.cookies.set({ 
+                    name: envName, 
+                    value: '', 
+                    expires: new Date(0),
+                    path: '/'
+                  })
+                } catch (clearError) {
+                  logger.warn('Failed to clear corrupted cookie in middleware', {
+                    cookieName: envName,
+                    error: clearError
+                  })
+                }
+                
+                return undefined
+              }
+            } catch (error) {
+              // Catch any other errors in cookie retrieval
+              logger.error('Error reading middleware cookie', {
+                cookieName: name,
+                envPrefix,
+                error
+              })
+              return undefined
+            }
           },
           set(name: string, value: string, options: Record<string, unknown>) {
             const envName = `${envPrefix}-${name}`
@@ -257,9 +301,40 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    // Get user authentication status
-    const { data: { user }, error } = await supabase.auth.getUser()
-    const isAuthenticated = !error && Boolean(user)
+    // Get user authentication status with error handling for corrupted cookies
+    let isAuthenticated = false
+    let user = null
+    
+    try {
+      const { data: { user: authUser }, error } = await supabase.auth.getUser()
+      
+      // Handle invalid UTF-8 sequence errors (corrupted cookies)
+      if (error?.message?.includes('Invalid UTF-8 sequence')) {
+        logger.warn('Invalid UTF-8 in middleware auth check, treating as unauthenticated', {
+          error
+        })
+        isAuthenticated = false
+        user = null
+      } else {
+        isAuthenticated = !error && Boolean(authUser)
+        user = authUser
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      
+      // Handle invalid UTF-8 sequence errors (corrupted cookies)
+      if (errorMessage.includes('Invalid UTF-8 sequence')) {
+        logger.warn('Invalid UTF-8 in middleware auth check (caught in catch), treating as unauthenticated', {
+          error
+        })
+        isAuthenticated = false
+        user = null
+      } else {
+        logger.error('Middleware auth check error:', { error })
+        isAuthenticated = false
+        user = null
+      }
+    }
 
     // Route type checks
     const isPublicRoute = (ROUTES.PUBLIC as readonly string[]).includes(pathname)

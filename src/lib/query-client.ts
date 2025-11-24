@@ -35,7 +35,7 @@ function makeQueryClient() {
         gcTime: 10 * 60 * 1000, // 10 minutes - data stays in cache for 10 minutes
         retry: 3,
         refetchOnWindowFocus: false, // Don't refetch on window focus
-        refetchOnMount: true, // Refetch when component mounts
+        refetchOnMount: false, // Only refetch if data is stale (respects staleTime)
         refetchOnReconnect: true, // Refetch when network reconnects
         
         // Scroll preservation and layout stability
