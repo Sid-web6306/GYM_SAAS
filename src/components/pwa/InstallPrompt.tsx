@@ -34,6 +34,7 @@ export function InstallPrompt() {
   const [isIOS, setIsIOS] = useState(false)
   const [isInstalled, setIsInstalled] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [hasPromptEvent, setHasPromptEvent] = useState(false)
 
   // Prevent SSR issues
   useEffect(() => {
@@ -71,7 +72,12 @@ export function InstallPrompt() {
     // Listen for the beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault()
-      setDeferredPrompt(e as BeforeInstallPromptEvent)
+      const promptEvent = e as BeforeInstallPromptEvent
+      setDeferredPrompt(promptEvent)
+      setHasPromptEvent(true)
+      
+      // Store the prompt globally for access
+      window.deferredPrompt = promptEvent
       
       // Show install prompt after a shorter delay
       setTimeout(() => {
@@ -94,7 +100,7 @@ export function InstallPrompt() {
     // Fallback: Show prompt even without beforeinstallprompt event
     // This helps with browsers that don't fire the event or when conditions aren't met
     const fallbackTimer = setTimeout(() => {
-      if (!isInstalled && !deferredPrompt && !showInstallPrompt) {
+      if (!isInstalled && !hasPromptEvent && !showInstallPrompt) {
         // Check if we should show the fallback prompt
         const isPWACapable = 'serviceWorker' in navigator && window.location.protocol === 'https:'
         const isNotStandalone = !window.matchMedia('(display-mode: standalone)').matches
@@ -110,7 +116,7 @@ export function InstallPrompt() {
       window.removeEventListener('appinstalled', handleAppInstalled)
       clearTimeout(fallbackTimer)
     }
-  }, [mounted, isInstalled, deferredPrompt, showInstallPrompt])
+  }, [mounted, isInstalled, deferredPrompt, showInstallPrompt, hasPromptEvent])
 
   // Don't render anything during SSR or before mount
   if (!mounted) {
@@ -132,10 +138,9 @@ export function InstallPrompt() {
         console.error('Error installing PWA:', error)
       }
     } else {
-      // Fallback: Show manual instructions
+      // For browsers without native install prompt, just dismiss and let user find browser's install option
       setShowInstallPrompt(false)
-      // You could show a modal with manual install instructions here
-      alert('To install this app:\n\n• Chrome/Edge: Look for the install icon in the address bar\n• Safari (iOS): Tap Share → Add to Home Screen\n• Firefox: Look for the install option in the menu')
+      // The user can look for the browser's native install option in the address bar or menu
     }
   }
 
@@ -180,7 +185,9 @@ export function InstallPrompt() {
         <DynamicCardDescription>
           {isIOS 
             ? 'Tap the share button and select "Add to Home Screen"' 
-            : 'Install Gym SaaS for quick access and offline use'}
+            : deferredPrompt 
+              ? 'Install Centric Fit for quick access and offline use'
+              : 'Look for the install icon in your browser\'s address bar or menu'}
         </DynamicCardDescription>
       </DynamicCardHeader>
       <DynamicCardContent className="pt-0">
@@ -194,7 +201,7 @@ export function InstallPrompt() {
           <div className="flex gap-3">
             <DynamicButton onClick={handleInstall} className="flex-1" size="sm">
               <DynamicDownload className="h-4 w-4 mr-2" />
-              Install
+              {deferredPrompt ? 'Install' : 'Got it'}
             </DynamicButton>
             <DynamicButton onClick={handleDismiss} variant="outline" size="sm">
               Later

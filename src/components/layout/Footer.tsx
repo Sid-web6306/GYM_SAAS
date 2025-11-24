@@ -12,7 +12,7 @@ export default function Footer() {
               <div className="p-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
                 <Dumbbell className="h-6 w-6 text-white" />
               </div>
-              <span className="text-2xl font-bold">GymSaaS</span>
+              <span className="text-2xl font-bold">Centric Fit</span>
             </div>
             <p className="text-slate-300 mb-4">
               Modern gym management software designed for fitness professionals.
@@ -96,7 +96,7 @@ export default function Footer() {
         <div className="border-t border-slate-800 mt-8 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <div className="flex items-center space-x-4 text-sm text-slate-400">
-              <span>© 2025 GymSaaS. All rights reserved.</span>
+              <span>© 2025 Centric Fit. All rights reserved.</span>
             </div>
             <div className="flex items-center space-x-6 text-sm text-slate-400">
               <span>Made with ❤️ in India</span>

@@ -1,8 +1,8 @@
 // Simple Service Worker for PWA functionality
 // No hardcoded chunk precaching to avoid build conflicts
 
-const CACHE_NAME = 'gym-saas-v1'
-const STATIC_CACHE = 'gym-saas-static-v1'
+const CACHE_NAME = 'centric-fit-v1'
+const STATIC_CACHE = 'centric-fit-static-v1'
 
 // Basic files to cache (avoiding dynamic chunks)
 const STATIC_ASSETS = [

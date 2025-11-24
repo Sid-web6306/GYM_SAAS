@@ -72,7 +72,7 @@ export function GymNameStep({ onNext, onBack, initialValue = '', isLoading = fal
         </div>
         
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Welcome to Gym SaaS!</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Welcome to Centric Fit!</h2>
           <p className="text-gray-600 mt-2">
             Let&apos;s start by setting up your gym profile
           </p>

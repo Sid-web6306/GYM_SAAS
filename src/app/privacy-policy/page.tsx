@@ -6,7 +6,7 @@ export default function PrivacyPolicyPage() {
     <LegalLayout title="Privacy Policy">
       <PolicySection title="Introduction">
         <p>
-          At GymSaaS (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;), we are committed to protecting your privacy and personal information. 
+          At Centric Fit (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;), we are committed to protecting your privacy and personal information. 
           This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use 
           our gym management software service.
         </p>
@@ -145,7 +145,7 @@ export default function PrivacyPolicyPage() {
         <p>If you have any questions about this Privacy Policy, please contact us:</p>
         <div className="bg-gray-50 p-4 rounded-lg mt-4">
           <p><strong>Email:</strong> <a href="mailto:siddhant.jain15298@gmail.com" className="text-purple-600 hover:text-purple-800">siddhant.jain15298@gmail.com</a></p>
-          <p><strong>Address:</strong> GymSaaS, Dhampur, Uttar Pradesh, India</p>
+          <p><strong>Address:</strong> Centric Fit, Dhampur, Uttar Pradesh, India</p>
         </div>
       </PolicySection>
     </LegalLayout>

@@ -66,7 +66,7 @@ export default function ContactPage() {
           <div className="bg-purple-50 p-4 rounded-lg">
             <p className="text-purple-800 text-sm">
               <strong>We help with:</strong> General support, technical issues, billing questions, 
-              refunds, feature requests, and any other questions about GymSaaS.
+              refunds, feature requests, and any other questions about Centric Fit.
             </p>
           </div>
         </CardContent>
@@ -77,7 +77,7 @@ export default function ContactPage() {
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <h4 className="font-semibold text-gray-900 mb-2">Business Details</h4>
-              <p className="text-gray-700">GymSaaS</p>
+              <p className="text-gray-700">Centric Fit</p>
               <p className="text-gray-700">Gym Management Software</p>
             </div>
             <div>

@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
             checkout: {
               key: serverConfig.razorpayKeyId,
               order_id: order.id,
-              name: 'Gym SaaS Pro',
+              name: 'Centric Fit Pro',
               description: `Subscription upgrade - ${plan.name} (${billingCycle})`,
               image: `${request.headers.get('origin')}/icon.svg`,
               prefill: {
@@ -394,7 +394,7 @@ export async function POST(request: NextRequest) {
           offer_id: 'offer_R46udDRoTcRPIK',
           key: serverConfig.razorpayKeyId,
           subscription_id: subscription.id,
-          name: 'Gym SaaS Pro',
+          name: 'Centric Fit Pro',
           description: `${plan.name} - ${billingCycle} Subscription`,
           image: `${request.headers.get('origin')}/icon.svg`,
           webview_intent: true,
