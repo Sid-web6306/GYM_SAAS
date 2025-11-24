@@ -25,13 +25,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Gym SaaS MVP",
-  description: "A comprehensive gym management system",
+  title: "Centric Fit",
+  description: "A comprehensive Fitness management system",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "GymSaaS",
+    title: "Centric Fit",
   },
 };
 

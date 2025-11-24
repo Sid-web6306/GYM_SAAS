@@ -73,12 +73,12 @@ export function InstallPrompt() {
       e.preventDefault()
       setDeferredPrompt(e as BeforeInstallPromptEvent)
       
-      // Show install prompt after a delay (don't be too aggressive)
+      // Show install prompt after a shorter delay
       setTimeout(() => {
         if (!isInstalled) {
           setShowInstallPrompt(true)
         }
-      }, 30000) // Show after 30 seconds
+      }, 5000) // Show after 5 seconds
     }
 
     // Listen for app installed event
@@ -91,11 +91,26 @@ export function InstallPrompt() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     window.addEventListener('appinstalled', handleAppInstalled)
 
+    // Fallback: Show prompt even without beforeinstallprompt event
+    // This helps with browsers that don't fire the event or when conditions aren't met
+    const fallbackTimer = setTimeout(() => {
+      if (!isInstalled && !deferredPrompt && !showInstallPrompt) {
+        // Check if we should show the fallback prompt
+        const isPWACapable = 'serviceWorker' in navigator && window.location.protocol === 'https:'
+        const isNotStandalone = !window.matchMedia('(display-mode: standalone)').matches
+        
+        if (isPWACapable && isNotStandalone) {
+          setShowInstallPrompt(true)
+        }
+      }
+    }, 8000) // Show fallback after 8 seconds
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
+      clearTimeout(fallbackTimer)
     }
-  }, [mounted, isInstalled])
+  }, [mounted, isInstalled, deferredPrompt, showInstallPrompt])
 
   // Don't render anything during SSR or before mount
   if (!mounted) {
@@ -103,18 +118,24 @@ export function InstallPrompt() {
   }
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return
-
-    try {
-      await deferredPrompt.prompt()
-      const { outcome } = await deferredPrompt.userChoice
-      
-      if (outcome === 'accepted') {
-        setShowInstallPrompt(false)
-        setDeferredPrompt(null)
+    if (deferredPrompt) {
+      // Use native install prompt if available
+      try {
+        await deferredPrompt.prompt()
+        const { outcome } = await deferredPrompt.userChoice
+        
+        if (outcome === 'accepted') {
+          setShowInstallPrompt(false)
+          setDeferredPrompt(null)
+        }
+      } catch (error) {
+        console.error('Error installing PWA:', error)
       }
-    } catch (error) {
-      console.error('Error installing PWA:', error)
+    } else {
+      // Fallback: Show manual instructions
+      setShowInstallPrompt(false)
+      // You could show a modal with manual install instructions here
+      alert('To install this app:\n\n• Chrome/Edge: Look for the install icon in the address bar\n• Safari (iOS): Tap Share → Add to Home Screen\n• Firefox: Look for the install option in the menu')
     }
   }
 
@@ -132,7 +153,7 @@ export function InstallPrompt() {
   // Don't show if user dismissed recently (only check on client side)
   if (typeof window !== 'undefined') {
     const dismissedTime = localStorage.getItem('pwa-install-dismissed')
-    if (dismissedTime && Date.now() - parseInt(dismissedTime) < 24 * 60 * 60 * 1000) {
+    if (dismissedTime && Date.now() - parseInt(dismissedTime) < 2 * 60 * 60 * 1000) {
       return null
     }
   }
