@@ -1,6 +1,6 @@
 {
-  "name": "Gym SaaS MVP",
-  "short_name": "GymSaaS",
+  "name": "Centric Fit",
+  "short_name": "centricfit",
   "description": "Complete gym management solution with member tracking, analytics, and subscription management",
   "start_url": "/",
   "display": "standalone",
