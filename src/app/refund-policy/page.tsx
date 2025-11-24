@@ -6,7 +6,7 @@ export default function RefundPolicyPage() {
     <LegalLayout title="Refund and Cancellation Policy">
       <PolicySection title="Overview">
         <p>
-          At GymSaaS, we offer a <strong>14-day free trial</strong> so you can fully evaluate our service 
+          At Centric Fit, we offer a <strong>14-day free trial</strong> so you can fully evaluate our service 
           before making any payment. This policy outlines our refund and cancellation terms.
         </p>
         <p>
@@ -28,7 +28,7 @@ export default function RefundPolicyPage() {
         <div className="bg-green-50 border-l-4 border-green-400 p-4 mt-4">
           <p className="text-green-800">
             <strong>Use Your Trial Wisely:</strong> The 14-day trial period is specifically designed 
-            for you to test all features, import your data, and ensure GymSaaS meets your needs. 
+            for you to test all features, import your data, and ensure Centric Fit meets your needs. 
             Take full advantage of this evaluation period.
           </p>
         </div>
@@ -36,7 +36,7 @@ export default function RefundPolicyPage() {
 
       <PolicySection title="No Refunds After Trial">
         <p>
-          Once your free trial ends and you begin paying for GymSaaS, <strong>all subscriptions are final 
+          Once your free trial ends and you begin paying for Centric Fit, <strong>all subscriptions are final 
           and non-refundable</strong>:
         </p>
         <ul className="list-disc list-inside ml-4 space-y-2">

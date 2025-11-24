@@ -91,7 +91,7 @@ export function AdaptiveNavigation({ className }: AdaptiveNavigationProps) {
           <div className="p-1.5 sm:p-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
             <Dumbbell className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
           </div>
-          <span className="text-lg sm:text-2xl font-bold text-white">GymSaaS</span>
+          <span className="text-lg sm:text-2xl font-bold text-white">Centric Fit</span>
         </Link>
 
         {/* Skeleton for center links */}
@@ -118,7 +118,7 @@ export function AdaptiveNavigation({ className }: AdaptiveNavigationProps) {
           <div className="p-1.5 sm:p-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
             <Dumbbell className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
           </div>
-          <span className="text-lg sm:text-2xl font-bold text-white">GymSaaS</span>
+          <span className="text-lg sm:text-2xl font-bold text-white">Centric Fit</span>
         </Link>
 
         {/* Desktop Navigation Links (Center) */}

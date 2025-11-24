@@ -1,4 +1,4 @@
-// RBAC Types for Gym SaaS Application
+// RBAC Types for Centric Fit Application
 
 export type GymRole = 'owner' | 'manager' | 'staff' | 'trainer' | 'member';
 

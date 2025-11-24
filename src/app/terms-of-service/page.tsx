@@ -6,8 +6,8 @@ export default function TermsOfServicePage() {
     <LegalLayout title="Terms of Service">
       <PolicySection title="Agreement to Terms">
         <p>
-          These Terms of Service (&ldquo;Terms&rdquo;) govern your use of the GymSaaS platform (&ldquo;Service&rdquo;) 
-          operated by GymSaaS (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;). By accessing or using our 
+          These Terms of Service (&ldquo;Terms&rdquo;) govern your use of the Centric Fit platform (&ldquo;Service&rdquo;) 
+          operated by Centric Fit (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;). By accessing or using our 
           Service, you agree to be bound by these Terms.
         </p>
         <p>
@@ -18,7 +18,7 @@ export default function TermsOfServicePage() {
 
       <PolicySection title="Description of Service">
         <p>
-          GymSaaS is a cloud-based gym management software that provides tools for:
+          Centric Fit is a cloud-based gym management software that provides tools for:
         </p>
         <ul className="list-disc list-inside ml-4 space-y-2">
           <li>Member management and customer relationship management (CRM)</li>
@@ -128,7 +128,7 @@ export default function TermsOfServicePage() {
       <PolicySection title="Intellectual Property Rights">
         <p><strong>Our Rights:</strong></p>
         <ul className="list-disc list-inside ml-4 space-y-2">
-          <li>GymSaaS and all related marks are our trademarks</li>
+          <li>Centric Fit and all related marks are our trademarks</li>
           <li>The Service and underlying technology are our proprietary property</li>
           <li>All rights not expressly granted to you are reserved by us</li>
         </ul>
@@ -204,7 +204,7 @@ export default function TermsOfServicePage() {
         <p>If you have questions about these Terms, please contact us:</p>
         <div className="bg-gray-50 p-4 rounded-lg mt-4">
           <p><strong>Email:</strong> <a href="mailto:siddhant.jain15298@gmail.com" className="text-purple-600 hover:text-purple-800">siddhant.jain15298@gmail.com</a></p>
-          <p><strong>Address:</strong> GymSaaS, Dhampur, Uttar Pradesh, India</p>
+          <p><strong>Address:</strong> Centric Fit, Dhampur, Uttar Pradesh, India</p>
         </div>
       </PolicySection>
     </LegalLayout>

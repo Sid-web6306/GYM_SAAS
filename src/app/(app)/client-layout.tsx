@@ -81,7 +81,7 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
               <div className="flex items-center min-w-0">
                 <Dumbbell className="h-8 w-8 text-primary flex-shrink-0" />
                 <span className="ml-2 text-xl font-bold text-card-foreground whitespace-nowrap">
-                  {profile?.gym_id ? 'Gym SaaS' : 'Setup Required'}
+                  {profile?.gym_id ? 'Centric Fit' : 'Setup Required'}
                 </span>
               </div>
               <SidebarToggle />
@@ -128,7 +128,7 @@ function ClientLayoutContent({ children }: ClientLayoutProps) {
                 <div className="flex items-center min-w-0">
                   <Dumbbell className="h-8 w-8 text-primary flex-shrink-0" />
                   <span className="ml-2 text-xl font-bold text-card-foreground whitespace-nowrap">
-                    {profile?.gym_id ? 'Gym SaaS' : 'Setup Required'}
+                    {profile?.gym_id ? 'Centric Fit' : 'Setup Required'}
                   </span>
                 </div>
                 <SidebarToggle isMobile />

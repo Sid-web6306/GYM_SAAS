@@ -597,7 +597,7 @@ export class PaymentService {
         checkout: {
           key: serverConfig.razorpayKeyId!,
           order_id: order.id,
-          name: 'Gym SaaS Pro',
+          name: 'Centric Fit Pro',
           description: `Subscription upgrade - ${upgradeData.newPlan.type} (${billingCycle})`,
           image: '/icon.svg',
           prefill: {

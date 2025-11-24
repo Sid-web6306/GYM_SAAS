@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const recipientEmail = body.to || 'test-recipient@example.com'
     const inviterName = body.inviterName || 'Gym Admin'
     const inviterEmail = body.inviterEmail || 'test-inviter@example.com'
-    const gymName = body.gymName || 'Gym SaaS Demo'
+    const gymName = body.gymName || 'Centric Fit Demo'
     const role = body.role || 'manager'
     const message = body.message || 'Welcome to the team! This is a test invitation email sent via Resend.'
     const expiresAt = new Date(Date.now() + (body.expiresInHours || 72) * 60 * 60 * 1000).toISOString()

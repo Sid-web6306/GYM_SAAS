@@ -317,7 +317,7 @@ function HomeComponent() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-10 sm:mb-12 lg:mb-16">
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4 sm:mb-6">
-              Why forward-thinking fitness businesses choose GymSaaS
+              Why forward-thinking fitness businesses choose Centric Fit
             </h2>
             <p className="text-base sm:text-lg lg:text-xl text-slate-300 max-w-3xl mx-auto px-2">
               Built specifically for the fitness industry with modern technology and proven business growth strategies
@@ -416,7 +416,7 @@ function HomeComponent() {
               Loved by fitness professionals worldwide
             </h2>
             <p className="text-base sm:text-lg lg:text-xl text-slate-300 max-w-2xl mx-auto px-2">
-              Join thousands of successful gym owners who trust GymSaaS
+              Join thousands of successful gym owners who trust Centric Fit
             </p>
           </div>
 
