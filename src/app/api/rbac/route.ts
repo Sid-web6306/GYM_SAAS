@@ -14,7 +14,7 @@ import {
   getUserPermissions
 } from '@/actions/rbac.actions'
 import { logger } from '@/lib/logger'
-import type { RoleAssignmentRequest } from '@/types/rbac.types'
+import type { Permission, RoleAssignmentRequest } from '@/types/rbac.types'
 
 // Validation schemas
 const assignRoleSchema = z.object({
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
         if (!gym_id || !permission) {
           return NextResponse.json({ error: 'gym_id and permission are required' }, { status: 400 })
         }
-        const hasPermission = await checkUserPermission(user.id, gym_id, permission as any)
+        const hasPermission = await checkUserPermission(user.id, gym_id, permission as Permission)
         return NextResponse.json({ hasPermission })
 
       default:
