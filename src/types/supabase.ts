@@ -611,6 +611,8 @@ export type Database = {
           id: string
           is_gym_owner?: boolean | null
           last_role_sync?: string | null
+          phone?: string | null
+          phone_verified?: boolean | null
           preferences?: Json | null
           updated_at?: string
         }
@@ -626,6 +628,8 @@ export type Database = {
           id?: string
           is_gym_owner?: boolean | null
           last_role_sync?: string | null
+          phone?: string | null
+          phone_verified?: boolean | null
           preferences?: Json | null
           updated_at?: string
         }
@@ -1245,18 +1249,9 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: boolean
       }
-      check_trial_access: {
-        Args: { p_user_id: string }
-        Returns: boolean
-      }
-      cleanup_expired_invitations: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      cleanup_old_webhook_events: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      check_trial_access: { Args: { p_user_id: string }; Returns: boolean }
+      cleanup_expired_invitations: { Args: never; Returns: Json }
+      cleanup_old_webhook_events: { Args: never; Returns: undefined }
       complete_user_profile: {
         Args: { gym_name: string; p_user_id: string }
         Returns: string
@@ -1330,6 +1325,12 @@ export type Database = {
           subject_type: string
           updated_at: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "attendance_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       get_gym_owner_info: {
         Args: { gym_uuid: string }
@@ -1339,10 +1340,7 @@ export type Database = {
           owner_id: string
         }[]
       }
-      get_invitation_stats: {
-        Args: { gym_id_param?: string }
-        Returns: Json
-      }
+      get_invitation_stats: { Args: { gym_id_param?: string }; Returns: Json }
       get_member_attendance: {
         Args: {
           p_from?: string
@@ -1382,9 +1380,15 @@ export type Database = {
           updated_at: string
           user_id: string | null
         }
+        SetofOptions: {
+          from: "*"
+          to: "members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       get_member_current_status: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           check_in_at: string
           is_checked_in: boolean
@@ -1444,14 +1448,8 @@ export type Database = {
           total_seconds: number
         }[]
       }
-      get_user_gym_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_user_id_by_email: {
-        Args: { p_email: string }
-        Returns: string
-      }
+      get_user_gym_id: { Args: never; Returns: string }
+      get_user_id_by_email: { Args: { p_email: string }; Returns: string }
       get_user_permissions: {
         Args: { gym_uuid: string; user_uuid: string }
         Returns: string[]
@@ -1486,10 +1484,7 @@ export type Database = {
         }
         Returns: string
       }
-      mark_expired_invitations: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      mark_expired_invitations: { Args: never; Returns: undefined }
       member_check_in: {
         Args: { p_method?: string; p_notes?: string }
         Returns: {
@@ -1505,6 +1500,12 @@ export type Database = {
           staff_user_id: string | null
           subject_type: string
           updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "attendance_sessions"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       member_check_out: {
@@ -1522,6 +1523,12 @@ export type Database = {
           staff_user_id: string | null
           subject_type: string
           updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "attendance_sessions"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       pause_subscription: {
@@ -1579,6 +1586,12 @@ export type Database = {
           subject_type: string
           updated_at: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "attendance_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       track_document_download: {
         Args: {
@@ -1632,6 +1645,12 @@ export type Database = {
           staff_user_id: string | null
           subject_type: string
           updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "attendance_sessions"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       update_gym_metrics: {

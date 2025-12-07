@@ -105,13 +105,18 @@ async function fetchAuthSession(): Promise<AuthData> {
     // Profile not existing is not an error for new users
     const profileData = profileError?.code === 'PGRST116' ? null : profile
 
+    // Convert PostgrestError to Error for type compatibility
+    const errorToReturn = profileError?.code !== 'PGRST116' && profileError
+      ? new Error(profileError.message)
+      : null
+
     const result = {
       user: user,
       profile: profileData as ProfileWithRBAC | null,
       isLoading: false,
       isAuthenticated: true,
       hasGym: !!(profileData?.gym_id),
-      error: profileError?.code !== 'PGRST116' ? profileError : null
+      error: errorToReturn
     }
 
     logger.info('Final auth result:', { 
