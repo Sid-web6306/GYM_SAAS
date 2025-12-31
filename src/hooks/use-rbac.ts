@@ -1,10 +1,11 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
 import { useCallback, useMemo } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { logger } from '@/lib/logger'
+
+// NOTE: All data operations now go through API routes.
 import type { 
   GymRole, 
   Permission, 
@@ -39,43 +40,16 @@ export const useRBAC = (): RBACContext | null => {
     queryFn: async (): Promise<UserPermissions | null> => {
       if (!user?.id || !profile?.gym_id) return null
 
-      const supabase = createClient()
+      // Get user permissions via API
+      const response = await fetch(`/api/rbac?action=user-permissions&user_id=${user.id}&gym_id=${profile.gym_id}`)
+      const result = await response.json()
       
-      // Get user's role and permissions using the database function
-      const { data, error } = await supabase.rpc('get_user_permissions', {
-        user_uuid: user.id,
-        gym_uuid: profile.gym_id
-      })
-
-      if (error) {
-        logger.error('Error fetching user permissions:', {error})
+      if (!response.ok) {
+        logger.error('Error fetching user permissions:', { error: result.error })
         return null
       }
-
-      // Return the permissions array (data is string[])
-      if (Array.isArray(data)) {
-        // Get the user's role from user_roles table
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select('role:roles(name, level)')
-          .eq('user_id', user.id)
-          .eq('gym_id', profile.gym_id)
-          .eq('is_active', true)
-          .single()
-
-        const role = (roleData?.role as { name: string; level: number })?.name || 'member'
-        const roleLevel = (roleData?.role as { name: string; level: number })?.level || ROLE_LEVELS.member
-
-        return {
-          gym_id: profile.gym_id,
-          role: role as GymRole,
-          role_level: roleLevel,
-          permissions: data as Permission[],
-          custom_permissions: profile.custom_permissions || {}
-        }
-      }
-
-      return null
+      
+      return result.permissions as UserPermissions
     },
     enabled: isAuthenticated && !!user?.id && !!profile?.gym_id,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -167,20 +141,15 @@ export const useGymRoles = (gymId?: string) => {
     queryFn: async (): Promise<UserRole[]> => {
       if (!targetGymId) return []
 
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select(`
-          *,
-          role:roles(*),
-          gym:gyms(id, name)
-        `)
-        .eq('gym_id', targetGymId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      return (data || []) as UserRole[]
+      // Get gym roles via API
+      const response = await fetch(`/api/rbac?action=gym-roles&gym_id=${targetGymId}`)
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch gym roles')
+      }
+      
+      return (result.roles || []) as UserRole[]
     },
     enabled: !!targetGymId,
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -191,14 +160,15 @@ export const useAllRoles = () => {
   return useQuery({
     queryKey: rbacKeys.roles(),
     queryFn: async (): Promise<Role[]> => {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('roles')
-        .select('*')
-        .order('level', { ascending: false })
-
-      if (error) throw error
-      return (data || []) as Role[]
+      // Get all roles via API
+      const response = await fetch('/api/rbac?action=all-roles')
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch roles')
+      }
+      
+      return (result.roles || []) as Role[]
     },
     staleTime: 10 * 60 * 1000, // 10 minutes (roles don't change often)
   })
@@ -208,15 +178,15 @@ export const useAllPermissions = () => {
   return useQuery({
     queryKey: rbacKeys.permissions(),
     queryFn: async (): Promise<PermissionDefinition[]> => {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('permissions')
-        .select('*')
-        .order('resource', { ascending: true })
-        .order('action', { ascending: true })
-
-      if (error) throw error
-      return (data || []) as PermissionDefinition[]
+      // Get all permissions via API
+      const response = await fetch('/api/rbac?action=all-permissions')
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch permissions')
+      }
+      
+      return (result.permissions || []) as PermissionDefinition[]
     },
     staleTime: 10 * 60 * 1000, // 10 minutes (permissions don't change often)
   })

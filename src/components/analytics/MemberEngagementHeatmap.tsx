@@ -15,7 +15,7 @@ import {
   Zap,
   Target
 } from 'lucide-react'
-import { useGymAnalytics } from '@/hooks/use-gym-data'
+import { useGymAnalytics } from '@/hooks/use-gym-analytics'
 import { useMemberPortalStats } from '@/hooks/use-member-analytics'
 
 interface MemberEngagementHeatmapProps {
@@ -27,15 +27,15 @@ interface MemberEngagementHeatmapProps {
 const generateEngagementData = () => {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const hours = Array.from({ length: 24 }, (_, i) => i)
-  
+
   const data: { [key: string]: { [key: number]: number } } = {}
-  
+
   days.forEach(day => {
     data[day] = {}
     hours.forEach(hour => {
       // Generate realistic engagement patterns
       let baseEngagement = 0
-      
+
       // Morning rush (6-9 AM)
       if (hour >= 6 && hour <= 9) {
         baseEngagement = Math.random() * 40 + 60
@@ -56,7 +56,7 @@ const generateEngagementData = () => {
       else {
         baseEngagement = Math.random() * 10
       }
-      
+
       // Weekend adjustments
       if (day === 'Sat' || day === 'Sun') {
         if (hour >= 8 && hour <= 12) {
@@ -67,30 +67,30 @@ const generateEngagementData = () => {
           baseEngagement *= 0.7 // Lower overall activity
         }
       }
-      
+
       data[day][hour] = Math.round(Math.max(0, Math.min(100, baseEngagement)))
     })
   })
-  
+
   return data
 }
 
-export function MemberEngagementHeatmap({ 
-  gymId, 
-  periodDays = 30 
+export function MemberEngagementHeatmap({
+  gymId,
+  periodDays = 30
 }: MemberEngagementHeatmapProps) {
-  const { 
-    data: gymAnalytics, 
-    isLoading: gymLoading, 
+  const {
+    data: gymAnalytics,
+    isLoading: gymLoading,
     error: gymError,
-    refetch: refetchGym 
+    refetch: refetchGym
   } = useGymAnalytics(gymId)
 
-  const { 
-    data: portalStats, 
-    isLoading: portalLoading, 
+  const {
+    data: portalStats,
+    isLoading: portalLoading,
     error: portalError,
-    refetch: refetchPortal 
+    refetch: refetchPortal
   } = useMemberPortalStats(gymId, periodDays)
 
   const isLoading = gymLoading || portalLoading
@@ -110,7 +110,7 @@ export function MemberEngagementHeatmap({
   let maxEngagement = 0
   let peakDay = ''
   let peakHour = 0
-  
+
   Object.entries(engagementData).forEach(([day, dayData]) => {
     Object.entries(dayData).forEach(([hour, engagement]) => {
       if (engagement > maxEngagement) {
@@ -230,7 +230,7 @@ export function MemberEngagementHeatmap({
                 <span className="font-medium">Peak Hours</span>
               </div>
               <div className="text-2xl font-bold text-purple-600">
-                {Math.max(...hours.filter(h => 
+                {Math.max(...hours.filter(h =>
                   days.some(day => engagementData[day][h] >= 70)
                 ))}:00
               </div>
@@ -306,7 +306,7 @@ export function MemberEngagementHeatmap({
             <CheckCircle2 className="h-4 w-4" />
             Engagement Insights
           </h4>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-3">
               <h5 className="font-medium text-sm">Peak Activity Periods</h5>

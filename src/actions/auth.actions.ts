@@ -26,9 +26,11 @@ export async function signupWithEmail(formData: FormData): Promise<AuthResult> {
   let needsLoginRedirect = false
   let needsVerifyRedirect = false
   let verifyEmail = ''
+  let inviteToken = ''
 
   try {
     const email = formData.get('email') as string
+    inviteToken = (formData.get('inviteToken') as string) || ''
     const validation = EmailSchema.safeParse({ email })
     
     if (!validation.success) {
@@ -59,12 +61,18 @@ export async function signupWithEmail(formData: FormData): Promise<AuthResult> {
     return { error: 'An unexpected error occurred' }
   }
 
-  // Handle redirects outside try-catch
+  // Handle redirects outside try-catch - preserve invite token
   if (needsLoginRedirect) {
-    redirect('/login?message=account-exists')
+    const loginUrl = inviteToken 
+      ? `/login?message=account-exists&invite=${encodeURIComponent(inviteToken)}`
+      : '/login?message=account-exists'
+    redirect(loginUrl)
   }
   if (needsVerifyRedirect) {
-    redirect(`/verify-email?email=${encodeURIComponent(verifyEmail)}`)
+    const verifyUrl = inviteToken
+      ? `/verify-email?email=${encodeURIComponent(verifyEmail)}&invite=${encodeURIComponent(inviteToken)}`
+      : `/verify-email?email=${encodeURIComponent(verifyEmail)}`
+    redirect(verifyUrl)
   }
 
   return { error: 'An unexpected error occurred' }
@@ -103,7 +111,7 @@ export async function loginWithEmail(formData: FormData): Promise<AuthResult> {
 
   // Handle redirect outside try-catch
   if (shouldRedirectToVerify) {
-    redirect(`/verify-email?email=${encodeURIComponent(verifyEmail)}`)
+    redirect(`/verify-email?email=${encodeURIComponent(verifyEmail)}&mode=login`)
   }
 
   return { error: 'An unexpected error occurred' }
@@ -196,6 +204,15 @@ export async function updateUserEmail(formData: FormData): Promise<AuthResult> {
 
     if (error) {
       logger.error('Email update error:', { error })
+      
+      // Handle specific error codes
+      if (error.code === 'email_exists') {
+        return { error: 'This email address is already registered to another account.' }
+      }
+      if (error.message?.includes('rate limit') || error.code === 'over_request_rate_limit') {
+        return { error: 'Please wait a moment before trying again.' }
+      }
+      
       return { error: 'Failed to initiate email change. Please try again.' }
     }
 
@@ -230,11 +247,12 @@ export async function resendEmailVerification(formData: FormData): Promise<AuthR
       return { error: 'This is already your current email address' }
     }
 
-    // For resend, we need to call updateUser again
-    // The resend method with type: 'email_change' only works if there's an active email change request
-    // Since updateUser creates the email change context, we call it again for resend
-    const { error } = await supabase.auth.updateUser({
-      email: newEmail
+    // Use the proper resend API method for email_change
+    // IMPORTANT: For email_change, the email parameter should be the CURRENT user's email
+    // to identify the user, not the new email. Supabase will resend to the new email automatically.
+    const { error } = await supabase.auth.resend({
+      type: 'email_change',
+      email: user.email!
     })
 
     if (error) {
@@ -243,6 +261,11 @@ export async function resendEmailVerification(formData: FormData): Promise<AuthR
       // Handle rate limiting specifically
       if (error.message.includes('rate limit') || error.message.includes('429')) {
         return { error: 'Please wait a moment before requesting another verification code.' }
+      }
+      
+      // Handle case where there's no pending email change
+      if (error.message.includes('no email change') || error.message.includes('not found')) {
+        return { error: 'No pending email change found. Please start the process again.' }
       }
       
       return { error: 'Failed to resend verification code. Please try again.' }

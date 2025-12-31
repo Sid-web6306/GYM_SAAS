@@ -92,6 +92,15 @@ export const PERMISSION_LABELS: Record<Permission, PermissionLabel> = {
   },
 
   // Gym Settings
+  'gym.create': {
+    permission: 'gym.create',
+    title: 'Create Gym',
+    description: 'Create new gyms and manage facility setup',
+    icon: Building2,
+    category: 'Gym Settings',
+    severity: 'critical',
+    color: 'bg-orange-100 text-orange-800 border-orange-200'
+  },
   'gym.read': {
     permission: 'gym.read',
     title: 'View Gym Settings',
@@ -241,6 +250,7 @@ export const PERMISSION_CATEGORIES = {
     'analytics.export'
   ],
   'Gym Settings': [
+    'gym.create',
     'gym.read',
     'gym.update'
   ],

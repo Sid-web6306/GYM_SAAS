@@ -226,6 +226,7 @@ export function getPermissionDescription(permission: Permission): string {
     'members.delete': 'Remove members from the gym',
     'analytics.read': 'Access gym analytics and reports',
     'analytics.export': 'Export analytics data and reports',
+    'gym.create': 'Create new gym',
     'gym.read': 'View gym information and settings',
     'gym.update': 'Modify gym settings and information',
     'staff.create': 'Invite new staff members',
@@ -275,7 +276,7 @@ export function isValidPermission(permission: string): permission is Permission 
   const validPermissions: Permission[] = [
     'members.create', 'members.read', 'members.update', 'members.delete',
     'analytics.read', 'analytics.export',
-    'gym.read', 'gym.update',
+    'gym.create', 'gym.read', 'gym.update',
     'staff.create', 'staff.read', 'staff.update', 'staff.delete',
     'billing.read', 'billing.update',
     'activities.create', 'activities.read', 'activities.update', 'activities.delete',

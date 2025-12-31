@@ -51,7 +51,7 @@ export function generateInviteUrl(token: string, baseUrl?: string): string {
   const base = baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   // Avoid accidental double slashes when base ends with '/'
   const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base
-  return `${normalizedBase}/onboarding?invite=${token}`
+  return `${normalizedBase}/accept-invite?invite=${token}`
 }
 
 /**

@@ -24,29 +24,29 @@ import {
   Zap
 } from 'lucide-react'
 import { useMemberPortalStats, useMemberAnalyticsInsights } from '@/hooks/use-member-analytics'
-import { useGymAnalytics } from '@/hooks/use-gym-data'
+import { useGymAnalytics } from '@/hooks/use-gym-analytics'
 
 interface AdvancedMemberInsightsProps {
   gymId: string
   periodDays?: number
 }
 
-export function AdvancedMemberInsights({ 
-  gymId, 
-  periodDays = 30 
+export function AdvancedMemberInsights({
+  gymId,
+  periodDays = 30
 }: AdvancedMemberInsightsProps) {
-  const { 
-    data: portalStats, 
-    isLoading: portalLoading, 
+  const {
+    data: portalStats,
+    isLoading: portalLoading,
     error: portalError,
-    refetch: refetchPortal 
+    refetch: refetchPortal
   } = useMemberPortalStats(gymId, periodDays)
 
-  const { 
-    data: gymAnalytics, 
-    isLoading: gymLoading, 
+  const {
+    data: gymAnalytics,
+    isLoading: gymLoading,
     error: gymError,
-    refetch: refetchGym 
+    refetch: refetchGym
   } = useGymAnalytics(gymId)
 
   const insights = useMemberAnalyticsInsights(portalStats)
@@ -101,17 +101,13 @@ export function AdvancedMemberInsights({
   }
 
   // Calculate additional metrics
-  const totalCheckins = gymAnalytics.checkinData?.reduce((sum, day) => sum + day.checkins, 0) || 0
-  const avgDailyCheckins = Math.round(totalCheckins / 7)
-  const peakDay = gymAnalytics.checkinData?.reduce((peak, day) => 
+  const totalCheckins = gymAnalytics.attendanceTrend?.reduce((sum: number, day: { checkins: number }) => sum + day.checkins, 0) || 0
+  const avgDailyCheckins = Math.round(totalCheckins / (gymAnalytics.attendanceTrend?.length || 1))
+  const peakDay = gymAnalytics.attendanceTrend?.reduce((peak: { date: string, checkins: number }, day: { date: string, checkins: number }) =>
     day.checkins > peak.checkins ? day : peak
-  ) || { day: 'N/A', checkins: 0 }
+    , { date: 'N/A', checkins: 0 }) || { date: 'N/A', checkins: 0 }
 
-  const memberGrowthRate = gymAnalytics.memberGrowthData?.length > 1 
-    ? ((gymAnalytics.memberGrowthData[gymAnalytics.memberGrowthData.length - 1].members - 
-        gymAnalytics.memberGrowthData[gymAnalytics.memberGrowthData.length - 2].members) / 
-        gymAnalytics.memberGrowthData[gymAnalytics.memberGrowthData.length - 2].members * 100)
-    : 0
+  const memberGrowthRate = gymAnalytics.memberGrowthRate || 0
 
   return (
     <Card>
@@ -195,7 +191,7 @@ export function AdvancedMemberInsights({
                     </div>
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">
-                    Peak: {peakDay.day} ({peakDay.checkins} check-ins)
+                    Peak: {new Date(peakDay.date).toLocaleDateString(undefined, { weekday: 'short' })} ({peakDay.checkins} check-ins)
                   </div>
                 </CardContent>
               </Card>
@@ -243,7 +239,7 @@ export function AdvancedMemberInsights({
                       {((portalStats.active_portal_users / portalStats.total_members) * 100).toFixed(1)}% of total
                     </div>
                   </div>
-                  
+
                   <div className="text-center p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
                     <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
                       {portalStats.portal_enabled - portalStats.active_portal_users}
@@ -253,7 +249,7 @@ export function AdvancedMemberInsights({
                       {(((portalStats.portal_enabled - portalStats.active_portal_users) / portalStats.total_members) * 100).toFixed(1)}% of total
                     </div>
                   </div>
-                  
+
                   <div className="text-center p-4 bg-gray-50 dark:bg-gray-950 rounded-lg">
                     <div className="text-2xl font-bold text-gray-700 dark:text-gray-300">
                       {portalStats.total_members - portalStats.portal_enabled}
@@ -329,7 +325,7 @@ export function AdvancedMemberInsights({
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm">Peak Day</span>
-                        <span className="font-medium">{peakDay.day}</span>
+                        <span className="font-medium">{peakDay.date !== 'N/A' ? new Date(peakDay.date).toLocaleDateString(undefined, { weekday: 'long' }) : 'N/A'}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm">Peak Check-ins</span>

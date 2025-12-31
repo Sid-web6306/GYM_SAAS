@@ -198,37 +198,37 @@ export function BulkImportDialog({ open, onOpenChange, onSuccess }: BulkImportDi
     }
 
     setStage('importing')
-    let successCount = 0
-    let failedCount = 0
-    const createdMembers: Array<{ id: string; email: string | null }> = []
     const failedMembers: Array<{ name: string; error: string }> = []
 
     try {
-      // Import members one by one with progress tracking
-      for (let i = 0; i < membersToImport.length; i++) {
-        const memberData = {
-          ...membersToImport[i],
-          gym_id: gymId,
-        }
+      // Prepare members with gym_id
+      const membersWithGym = membersToImport.map(m => ({
+        ...m,
+        gym_id: gymId,
+      }))
 
-        try {
-          const createdMember = await MemberService.createMember(memberData)
-          successCount++
-          createdMembers.push({
-            id: createdMember.id,
-            email: createdMember.email,
-          })
-        } catch (error) {
-          const memberName = `${memberData.first_name} ${memberData.last_name}`.trim()
-          const userFriendlyError = getUserFriendlyErrorMessage(error)
-          logger.error('Failed to import member:', { memberData, error, userFriendlyError })
-          failedCount++
-          failedMembers.push({ name: memberName, error: userFriendlyError })
-        }
+      // Bulk import all members in a single database operation
+      setImportProgress(10)
+      const bulkResult = await MemberService.bulkCreateMembers(membersWithGym)
+      setImportProgress(50)
 
-        // Update progress (50% for import phase)
-        const progress = Math.round(((i + 1) / membersToImport.length) * 50)
-        setImportProgress(progress)
+      const successCount = bulkResult.success.length
+      const failedCount = bulkResult.failed.length
+      const createdMembers = bulkResult.success
+
+      // Map failed members to user-friendly format
+      for (const failure of bulkResult.failed) {
+        const memberName = `${failure.data.first_name} ${failure.data.last_name}`.trim()
+        const userFriendlyError = getUserFriendlyErrorMessage(new Error(failure.error))
+        failedMembers.push({ name: memberName, error: userFriendlyError })
+      }
+
+      if (failedCount > 0) {
+        logger.warn('Some members failed to import', { 
+          successCount, 
+          failedCount, 
+          failures: bulkResult.failed 
+        })
       }
 
       // Send portal invitations if checkbox was selected

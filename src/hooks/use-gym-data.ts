@@ -5,6 +5,8 @@ import { useEffect } from 'react'
 import { useAuth } from './use-auth'
 import { logger } from '@/lib/logger'
 
+// NOTE: All data operations now go through API routes. The Supabase client is only used for real-time subscriptions.
+
 // Types
 export interface Gym {
   id: string
@@ -13,11 +15,7 @@ export interface Gym {
   updated_at?: string
 }
 
-interface MemberData {
-  created_at: string
-  status: string | null
-  join_date: string | null
-}
+// NOTE: MemberData interface removed - no longer needed after API refactor
 
 export interface GymStats {
   totalMembers: number
@@ -112,33 +110,31 @@ export function useGymData(gymId: string | null) {
     queryFn: async () => {
       if (!gymId) throw new Error('Gym ID is required')
       
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('gyms')
-        .select('*')
-        .eq('id', gymId)
-        .single()
+      // Fetch gym via API
+      const response = await fetch(`/api/gyms?id=${gymId}`)
+      const result = await response.json()
       
-      if (error) {
+      if (!response.ok) {
         // Enhanced error handling for logout scenarios
-        if (isAuthenticationError(error)) {
+        if (response.status === 401) {
           logger.info('Gym fetch: Authentication/logout error - this is expected during logout')
-          throw error
+          throw new Error('Unauthorized')
+        }
+        if (response.status === 404) {
+          logger.info('Gym not found:', { gymId })
+          throw new Error('Gym not found')
         }
         
-        // Log detailed error info for debugging (only for non-auth errors)
         logger.error('Gym fetch error:', {
-          error,
-          errorType: typeof error,
-          errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
+          error: result.error,
           gymId,
           isAuthenticated,
           hasUser: !!user
         })
-        throw error
+        throw new Error(result.error || 'Failed to fetch gym')
       }
       
-      return data as Gym
+      return result.gym as Gym
     },
     enabled: !!gymId && isAuthenticated && !!user,
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -148,7 +144,7 @@ export function useGymData(gymId: string | null) {
         return false
       }
       // Don't retry on not found errors
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'PGRST116') {
+      if (error instanceof Error && error.message === 'Gym not found') {
         return false
       }
       return failureCount < 3
@@ -213,77 +209,22 @@ export function useGymStats(gymId: string | null) {
     queryFn: async (): Promise<GymStats> => {
       if (!gymId) throw new Error('Gym ID is required')
       
-      const supabase = createClient()
+      // Fetch stats via API
+      const response = await fetch(`/api/gyms/stats?gym_id=${gymId}`)
+      const result = await response.json()
       
-      // Fetch members data
-      const { data: members, error } = await supabase
-        .from('members')
-        .select('created_at, status, join_date')
-        .eq('gym_id', gymId)
-
-      if (error) {
+      if (!response.ok) {
         // Handle authentication errors gracefully
-        if (isAuthenticationError(error)) {
+        if (response.status === 401) {
           logger.info('Stats fetch: Authentication error during logout - this is expected')
-          throw error
+          throw new Error('Unauthorized')
         }
         
-        logger.error('Members fetch error for stats:', {error})
-        throw error
+        logger.error('Stats fetch error:', { error: result.error, gymId })
+        throw new Error(result.error || 'Failed to fetch stats')
       }
 
-      const now = new Date()
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()))
-      
-      // Calculate comprehensive stats
-      const totalMembers = members.length
-      const activeMembers = members.filter(m => m.status === 'active').length
-      const inactiveMembers = members.filter(m => m.status === 'inactive').length
-      const pendingMembers = members.filter(m => m.status === 'pending').length
-      
-      const newMembersThisMonth = members.filter(m => 
-        new Date(m.created_at) >= startOfMonth
-      ).length
-      
-      const newMembersThisWeek = members.filter(m => 
-        new Date(m.created_at) >= startOfWeek
-      ).length
-
-      // Revenue calculations (you can adjust pricing logic)
-      const monthlyRevenue = activeMembers * 50 // $50 per active member
-      const projectedMonthlyRevenue = totalMembers * 50 // Potential if all were active
-      
-      // Mock check-in data (replace with actual data when available)
-      const todayCheckins = Math.floor(Math.random() * (activeMembers * 0.5)) + Math.floor(activeMembers * 0.1)
-      const averageDailyCheckins = Math.floor(activeMembers * 0.3)
-      
-      // Calculate retention rate (simplified - you may want more sophisticated calculation)
-      const memberRetentionRate = totalMembers > 0 ? (activeMembers / totalMembers) * 100 : 0
-      
-      // Average membership length (simplified calculation)
-      const averageMembershipLength = members.reduce((acc, member) => {
-        const joinDate = new Date(member.join_date || member.created_at)
-        const monthsDiff = (now.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
-        return acc + Math.max(monthsDiff, 0)
-      }, 0) / Math.max(totalMembers, 1)
-
-      const stats: GymStats = {
-        totalMembers,
-        activeMembers,
-        inactiveMembers,
-        pendingMembers,
-        newMembersThisMonth,
-        newMembersThisWeek,
-        monthlyRevenue,
-        projectedMonthlyRevenue,
-        todayCheckins,
-        averageDailyCheckins,
-        memberRetentionRate: Math.round(memberRetentionRate * 100) / 100,
-        averageMembershipLength: Math.round(averageMembershipLength * 100) / 100,
-      }
-
-      return stats
+      return result.stats as GymStats
     },
     enabled: !!gymId && isAuthenticated && !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -298,60 +239,7 @@ export function useGymStats(gymId: string | null) {
   })
 }
 
-// Gym Analytics Hook for charts and detailed insights with auth handling
-export function useGymAnalytics(gymId: string | null) {
-  const { isAuthenticated, user } = useAuth()
-  
-  return useQuery({
-    queryKey: gymKeys.analytics(gymId || ''),
-    queryFn: async (): Promise<GymAnalytics> => {
-      if (!gymId) throw new Error('Gym ID is required')
-      
-      const supabase = createClient()
-      
-      // Fetch members data for analytics
-      const { data: members, error } = await supabase
-        .from('members')
-        .select('created_at, status, join_date')
-        .eq('gym_id', gymId)
-
-      if (error) {
-        // Handle authentication errors gracefully
-        if (isAuthenticationError(error)) {
-          logger.info('Analytics fetch: Authentication error during logout - this is expected')
-          throw error
-        }
-        
-        logger.error('Members fetch error for analytics:', {error})
-        throw error
-      }
-
-      // Generate member growth data (last 12 months)
-      const memberGrowthData = generateMemberGrowthData(members)
-      
-      // Generate revenue data (last 6 months)
-      const revenueData = generateRevenueData(members)
-      
-      // Generate check-in trends (last 7 days)
-      const checkinData = generateCheckinData(members)
-
-      return {
-        memberGrowthData,
-        revenueData,
-        checkinData,
-      }
-    },
-    enabled: !!gymId && isAuthenticated && !!user,
-    staleTime: 15 * 60 * 1000, // 15 minutes - analytics can be slightly stale
-    retry: (failureCount, error) => {
-      // Don't retry on authentication errors
-      if (isAuthenticationError(error)) {
-        return false
-      }
-      return failureCount < 3
-    },
-  })
-}
+// NOTE: Old useGymAnalytics function removed - now using use-gym-analytics.ts with API routes
 
 // Enhanced Update Gym with optimistic updates
 export function useUpdateGym() {
@@ -359,23 +247,21 @@ export function useUpdateGym() {
   
   return useMutation({
     mutationFn: async ({ gymId, updates }: { gymId: string; updates: Partial<Gym> }) => {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('gyms')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', gymId)
-        .select()
-        .single()
+      // Update gym via API
+      const response = await fetch(`/api/gyms?id=${gymId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      })
       
-      if (error) {
-        logger.error('Gym update error:', {error})
-        throw error
+      const result = await response.json()
+      
+      if (!response.ok) {
+        logger.error('Gym update error:', { error: result.error, gymId })
+        throw new Error(result.error || 'Failed to update gym')
       }
       
-      return data as Gym
+      return result.gym as Gym
     },
     onMutate: async ({ gymId, updates }) => {
       // Cancel outgoing refetches
@@ -423,22 +309,21 @@ export function useCreateGym() {
         throw new Error('User must be authenticated to create a gym')
       }
       
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('gyms')
-        .insert({
-          name,
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single()
+      // Create gym via API
+      const response = await fetch('/api/gyms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      })
       
-      if (error) {
-        logger.error('Gym creation error:', {error})
-        throw error
+      const result = await response.json()
+      
+      if (!response.ok) {
+        logger.error('Gym creation error:', { error: result.error })
+        throw new Error(result.error || 'Failed to create gym')
       }
       
-      return data as Gym
+      return result.gym as Gym
     },
     onSuccess: (newGym) => {
       // Add to cache
@@ -466,106 +351,10 @@ export function useRefreshGymData() {
   }
 }
 
-// Helper functions for generating mock analytics data
-function generateMemberGrowthData(members: MemberData[]) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const currentMonth = new Date().getMonth()
-  const data = []
-  
-  let totalMembers = 0
-  
-  for (let i = 0; i < 12; i++) {
-    const monthIndex = (currentMonth - 11 + i + 12) % 12
-    const monthName = months[monthIndex]
-    
-    // Calculate members added in this month
-    const monthStart = new Date()
-    monthStart.setMonth(monthIndex, 1)
-    monthStart.setHours(0, 0, 0, 0)
-    
-    const monthEnd = new Date()
-    monthEnd.setMonth(monthIndex + 1, 0)
-    monthEnd.setHours(23, 59, 59, 999)
-    
-    const newMembers = members.filter(m => {
-      const createdAt = new Date(m.created_at)
-      return createdAt >= monthStart && createdAt <= monthEnd
-    }).length
-    
-    totalMembers += newMembers
-    
-    data.push({
-      month: monthName,
-      members: totalMembers,
-      newMembers
-    })
-  }
-  
-  return data
-}
-
-function generateRevenueData(members: MemberData[]) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
-  const data = []
-  
-  for (let i = 0; i < 6; i++) {
-    const monthName = months[i]
-    
-    // Calculate active members for revenue (simplified)
-    const activeMembers = members.filter(m => m.status === 'active').length
-    const baseRevenue = activeMembers * 50
-    const variation = (Math.random() - 0.5) * 0.3
-    const revenue = Math.round(baseRevenue * (1 + variation))
-    const target = Math.round(baseRevenue * 1.1)
-    
-    data.push({
-      month: monthName,
-      revenue,
-      target
-    })
-  }
-  
-  return data
-}
-
-function generateCheckinData(members: MemberData[]) {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const data = []
-  const today = new Date()
-  const activeMembers = members.filter(m => m.status === 'active').length
-  
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
-    
-    const dayName = days[date.getDay()]
-    const dayNum = date.getDate()
-    
-    // Generate realistic check-in patterns
-    let baseCheckins = Math.floor(activeMembers * 0.3)
-    if (dayName === 'Sat' || dayName === 'Sun') {
-      baseCheckins = Math.floor(activeMembers * 0.2) // Lower weekend activity
-    } else if (dayName === 'Mon' || dayName === 'Fri') {
-      baseCheckins = Math.floor(activeMembers * 0.25) // Moderate
-    } else {
-      baseCheckins = Math.floor(activeMembers * 0.35) // Higher midweek
-    }
-    
-    const variation = Math.floor(Math.random() * 10) - 5
-    const checkins = Math.max(Math.floor(activeMembers * 0.1), baseCheckins + variation)
-    
-    data.push({
-      day: `${dayName} ${dayNum}`,
-      checkins,
-      weekday: dayName
-    })
-  }
-  
-  return data
-}
+// NOTE: Helper functions removed - analytics now handled by API routes
 
 // Prefetch function for server-side usage
-// Hook to get gym owner information using secure RPC function
+// Hook to get gym owner information using API
 export function useGymOwner(gymId: string | null) {
   const { isAuthenticated, user } = useAuth()
   
@@ -574,48 +363,28 @@ export function useGymOwner(gymId: string | null) {
     queryFn: async () => {
       if (!gymId) throw new Error('Gym ID is required')
       
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .rpc('get_gym_owner_info', { gym_uuid: gymId })
+      // Fetch owner via API
+      const response = await fetch(`/api/gyms/owner?gym_id=${gymId}`)
+      const result = await response.json()
       
-      if (error) {
+      if (!response.ok) {
         // Handle authentication errors gracefully
-        if (isAuthenticationError(error)) {
+        if (response.status === 401) {
           logger.info('Gym owner fetch: Authentication error during logout - this is expected')
-          throw error
+          throw new Error('Unauthorized')
         }
         
-        // Handle access denied (user not in gym) - return null
-        if (error.message?.includes('Access denied')) {
-          logger.info('Gym owner fetch: Access denied - user not member of gym')
-          return null
-        }
-        
-        logger.error('Gym owner fetch error:', {error})
-        throw error
+        logger.error('Gym owner fetch error:', { error: result.error, gymId })
+        throw new Error(result.error || 'Failed to fetch owner info')
       }
       
-      // RPC returns array with different field names, map to expected format
-      if (data && data.length > 0) {
-        const owner = data[0]
-        return {
-          id: owner.owner_id,
-          full_name: owner.owner_full_name,
-          email: owner.owner_email
-        }
-      }
-      return null
+      return result.owner || null
     },
     enabled: !!gymId && isAuthenticated && !!user,
     staleTime: 15 * 60 * 1000, // 15 minutes - owner info changes rarely
     retry: (failureCount, error) => {
       // Don't retry on authentication errors
       if (isAuthenticationError(error)) {
-        return false
-      }
-      // Don't retry on access denied errors
-      if (error && typeof error === 'object' && 'message' in error && 
-          typeof error.message === 'string' && error.message.includes('Access denied')) {
         return false
       }
       return failureCount < 3
@@ -628,47 +397,22 @@ export async function prefetchGymData(queryClient: QueryClient, gymId: string) {
     queryClient.prefetchQuery({
       queryKey: gymKeys.detail(gymId),
       queryFn: async () => {
-        const supabase = createClient()
-        const { data, error } = await supabase
-          .from('gyms')
-          .select('*')
-          .eq('id', gymId)
-          .single()
+        const response = await fetch(`/api/gyms?id=${gymId}`)
+        const result = await response.json()
         
-        if (error) throw error
-        return data
+        if (!response.ok) throw new Error(result.error || 'Failed to fetch gym')
+        return result.gym
       },
       staleTime: 10 * 60 * 1000,
     }),
     queryClient.prefetchQuery({
       queryKey: gymKeys.stats(gymId),
       queryFn: async () => {
-        const supabase = createClient()
-        const { data: members, error } = await supabase
-          .from('members')
-          .select('created_at, status, join_date')
-          .eq('gym_id', gymId)
-
-        if (error) throw error
+        const response = await fetch(`/api/gyms/stats?gym_id=${gymId}`)
+        const result = await response.json()
         
-        // Calculate basic stats for prefetch
-        const totalMembers = members.length
-        const activeMembers = members.filter(m => m.status === 'active').length
-        
-        return {
-          totalMembers,
-          activeMembers,
-          inactiveMembers: members.filter(m => m.status === 'inactive').length,
-          pendingMembers: members.filter(m => m.status === 'pending').length,
-          newMembersThisMonth: 0, // Calculate as needed
-          newMembersThisWeek: 0,
-          monthlyRevenue: activeMembers * 50,
-          projectedMonthlyRevenue: totalMembers * 50,
-          todayCheckins: Math.floor(activeMembers * 0.3),
-          averageDailyCheckins: Math.floor(activeMembers * 0.3),
-          memberRetentionRate: (activeMembers / Math.max(totalMembers, 1)) * 100,
-          averageMembershipLength: 6, // Default value
-        }
+        if (!response.ok) throw new Error(result.error || 'Failed to fetch stats')
+        return result.stats
       },
       staleTime: 5 * 60 * 1000,
     }),

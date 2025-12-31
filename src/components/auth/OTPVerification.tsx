@@ -13,29 +13,31 @@ interface OTPVerificationProps {
   email: string
   onVerificationSuccess?: () => void
   redirectTo?: string
+  isLogin?: boolean // true if user is logging in, false if signing up
 }
 
 export const OTPVerification: React.FC<OTPVerificationProps> = ({
   email,
   onVerificationSuccess,
-  redirectTo = '/onboarding'
+  redirectTo = '/onboarding',
+  isLogin = false
 }) => {
   const [otp, setOtp] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
   const [isResending, setIsResending] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(30) // 30 seconds
+  const [resendCooldown, setResendCooldown] = useState(60) // 60 second cooldown before resend
   const [error, setError] = useState('')
   const [attempts, setAttempts] = useState(0)
   const router = useRouter()
   const queryClient = useQueryClient()
 
-  // Countdown timer
+  // Cooldown timer for resend button (not code expiry - codes are valid much longer)
   useEffect(() => {
-    if (timeLeft > 0) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000)
       return () => clearTimeout(timer)
     }
-  }, [timeLeft])
+  }, [resendCooldown])
 
   const handleVerifyOTP = useCallback(async () => {
     if (otp.length !== 6) {
@@ -64,18 +66,21 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
       if (response.ok && result.success) {
         toastActions.success('Email Verified!', 'Your email has been successfully verified.')
         
-        // Force refresh auth queries to ensure profile is loaded
-        queryClient.invalidateQueries({ queryKey: ['auth-session'] })
-        queryClient.refetchQueries({ queryKey: ['auth-session'] })
+        // Force refresh auth queries and wait for completion
+        await queryClient.invalidateQueries({ queryKey: ['auth-session'] })
+        await queryClient.refetchQueries({ queryKey: ['auth-session'] })
 
-        // Small delay to allow auth state to update before redirect
+        // Use router.refresh() to ensure cookies are synced, then redirect
+        router.refresh()
+        
+        // Small delay to allow auth state to fully sync after refresh
         setTimeout(() => {
           if (onVerificationSuccess) {
             onVerificationSuccess()
           } else {
             router.push(redirectTo)
           }
-        }, 100)
+        }, 300)
       } else {
         setAttempts(prev => prev + 1)
         setError(result.error || 'Invalid verification code. Please try again.')
@@ -116,14 +121,15 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
         },
         body: JSON.stringify({
           action: 'resend-otp',
-          email
+          email,
+          isLogin
         }),
       })
 
       const result = await response.json()
 
       if (response.ok && result.success) {
-        setTimeLeft(30) // Reset timer to 30 seconds
+        setResendCooldown(60) // Reset cooldown to 60 seconds
         setAttempts(0) // Reset attempts
         setOtp('') // Clear current OTP
         toastActions.success('Code Sent!', 'A new verification code has been sent to your email.')
@@ -144,7 +150,7 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  const isExpired = timeLeft <= 0
+  const canResend = resendCooldown <= 0
 
   return (
     <div className="space-y-6">
@@ -179,7 +185,7 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
           <OTPInput
             value={otp}
             onChange={setOtp}
-            disabled={isVerifying || isExpired}
+            disabled={isVerifying}
             autoFocus
             className="mb-4"
           />
@@ -193,16 +199,19 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
         )}
 
         <div className="space-y-3">
-          {/* Timer and Resend */}
+          {/* Resend Cooldown */}
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">
-              {isExpired ? 'Code expired' : `Code expires in ${formatTime(timeLeft)}`}
+              {canResend 
+                ? 'You can request a new code' 
+                : `Resend available in ${formatTime(resendCooldown)}`
+              }
             </span>
             <Button
               variant="ghost"
               size="sm"
               onClick={handleResendOTP}
-              disabled={isResending || (!isExpired && timeLeft > 0)} // Allow resend only after 1 minute or if expired
+              disabled={isResending || !canResend}
               className="h-auto p-0 text-blue-600 hover:text-blue-700"
             >
               {isResending ? (
@@ -222,7 +231,7 @@ export const OTPVerification: React.FC<OTPVerificationProps> = ({
           {/* Manual verification button (backup) */}
           <Button
             onClick={handleVerifyOTP}
-            disabled={otp.length !== 6 || isVerifying || isExpired}
+            disabled={otp.length !== 6 || isVerifying}
             className="w-full"
           >
             {isVerifying ? (

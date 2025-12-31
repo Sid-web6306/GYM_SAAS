@@ -1,9 +1,10 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { logger } from '@/lib/logger'
+
+// NOTE: All data operations now go through API routes instead of direct DB access.
 
 export interface StaffMember {
   id: string
@@ -29,64 +30,31 @@ export function useStaffData(gymId: string, filters?: StaffFilters & { enabled?:
     queryFn: async (): Promise<{ staff: StaffMember[]; total: number }> => {
       if (!gymId) return { staff: [], total: 0 }
       
-      const supabase = createClient()
+      // Build query params for API call
+      const params = new URLSearchParams({ gym_id: gymId })
       
-      // Build query for profiles who have roles in this gym (staff members)
-      let query = supabase
-        .from('profiles')
-        .select(`
-          id,
-          full_name,
-          email,
-          default_role,
-          created_at,
-          user_roles!inner(
-            gym_id,
-            is_active,
-            role_id,
-            roles(name, display_name)
-          )
-        `)
-        .eq('user_roles.gym_id', gymId)
-        .eq('user_roles.is_active', true)
-        .order('full_name', { ascending: true })
-
-      // Apply search filter
       if (filters?.search) {
-        query = query.or(
-          `full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`,
-        )
+        params.set('search', filters.search)
       }
-
-      // Apply role filter
       if (filters?.role) {
-        query = query.eq('user_roles.roles.name', filters.role)
+        params.set('role', filters.role)
+      }
+      if (filters?.limit) {
+        params.set('limit', filters.limit.toString())
+        params.set('offset', (filters.offset || 0).toString())
       }
 
-      // Apply pagination
-      const limit = filters?.limit || 50
-      const offset = filters?.offset || 0
-      query = query.range(offset, offset + limit - 1)
+      const response = await fetch(`/api/staff?${params}`)
+      const result = await response.json()
 
-      const { data, error, count } = await query
-
-      if (error) {
-        logger.error('Staff query failed', { gymId, error: error.message })
-        throw error
+      if (!response.ok) {
+        logger.error('Staff query failed', { gymId, error: result.error })
+        throw new Error(result.error || 'Failed to fetch staff')
       }
-
-      // Transform data to flatten the role information
-      const staff: StaffMember[] = (data || []).map(profile => ({
-        id: profile.id,
-        full_name: profile.full_name,
-        email: profile.email,
-        default_role: profile.default_role || null,
-        created_at: profile.created_at,
-      }))
 
       return {
-        staff,
-        total: count || 0
+        staff: result.staff || [],
+        total: result.pagination?.total || 0
       }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -130,36 +98,18 @@ export function useGymRoles(gymId: string) {
     queryFn: async () => {
       if (!gymId) return []
       
-      const supabase = createClient()
+      // Use the RBAC API to get all roles
+      const response = await fetch(`/api/rbac?action=all-roles`)
+      const result = await response.json()
       
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select(`
-          roles(
-            id,
-            name,
-            display_name,
-            description,
-            level
-          )
-        `)
-        .eq('gym_id', gymId)
-        .eq('is_active', true)
-      
-      if (error) {
-        logger.error('Roles query failed', { gymId, error: error.message })
-        throw error
+      if (!response.ok) {
+        logger.error('Roles query failed', { gymId, error: result.error })
+        throw new Error(result.error || 'Failed to fetch roles')
       }
       
-      // Extract unique roles
-      const uniqueRoles = new Map()
-      data?.forEach(item => {
-        if (item.roles) {
-          uniqueRoles.set(item.roles.id, item.roles)
-        }
-      })
-      
-      return Array.from(uniqueRoles.values()).sort((a, b) => a.level - b.level)
+      // Sort by level
+      const roles = result.roles || []
+      return roles.sort((a: { level: number }, b: { level: number }) => a.level - b.level)
     },
     staleTime: 15 * 60 * 1000, // 15 minutes
   })

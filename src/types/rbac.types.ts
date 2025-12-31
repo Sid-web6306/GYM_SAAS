@@ -12,6 +12,7 @@ export type Permission =
   | 'analytics.read'
   | 'analytics.export'
   // Gym Settings
+  | 'gym.create'
   | 'gym.read'
   | 'gym.update'
   // Staff Management
@@ -163,6 +164,7 @@ export const PERMISSION_GROUPS = {
     'analytics.export',
   ],
   'Gym Settings': [
+    'gym.create',
     'gym.read',
     'gym.update',
   ],

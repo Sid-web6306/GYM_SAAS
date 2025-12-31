@@ -89,10 +89,10 @@ self.addEventListener('fetch', (event) => {
 
 // Handle background sync (optional)
 self.addEventListener('sync', (event) => {
-  logger.info('Background sync event:', {event})
+  console.log('Background sync event:', event.tag)
 })
 
 // Handle push notifications (optional)
 self.addEventListener('push', (event) => {
-  logger.info('Push notification received:', {event})
+  console.log('Push notification received:', event.data?.text())
 })

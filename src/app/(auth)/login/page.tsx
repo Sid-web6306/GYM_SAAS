@@ -212,13 +212,13 @@ const LoginPageComponent = () => {
       // If no error, the server action will handle the redirect
       
     } catch (error) {
-      logger.error('Login form error:', {error})
-      
       // Check if this is a Next.js redirect (not a real error)
-      if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
+      const errorStr = JSON.stringify(error)
+      if (errorStr.includes('NEXT_REDIRECT')) {
         return // Don't show error toast for redirects
       }
       
+      logger.error('Login form error:', {error})
       toastActions.error("Error", "An unexpected error occurred. Please try again.")
     } finally {
       setIsSubmitting(false)
