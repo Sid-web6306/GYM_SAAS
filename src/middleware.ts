@@ -39,7 +39,7 @@ const ROUTES = {
   APP: ['/dashboard', '/members', '/staff', '/attendance', '/settings', '/team', '/upgrade'],
   PUBLIC: ['/', '/contact', '/privacy-policy', '/terms-of-service', '/refund-policy'],
   PORTAL: ['/portal'],
-  INVITE: ['/invite', '/accept-invitation'],
+  INVITE: ['/invite', '/accept-invite'],
   SPECIAL: ['/inactive-user'],
   STATIC_PATTERNS: [
     /^\/_next/,

@@ -63,7 +63,7 @@ export default function RefundPolicyPage() {
 
         <p><strong>How to Cancel:</strong></p>
         <ul className="list-disc list-inside ml-4 space-y-2">
-          <li>Log into your GymSaaS account</li>
+          <li>Log into your account</li>
           <li>Navigate to Settings → Subscription</li>
           <li>Click &ldquo;Cancel Subscription&rdquo;</li>
           <li>Confirm cancellation in the popup dialog</li>
@@ -136,13 +136,13 @@ export default function RefundPolicyPage() {
           <p><strong>Email Support:</strong> <a href="mailto:siddhant.jain15298@gmail.com" className="text-purple-600 hover:text-purple-800">siddhant.jain15298@gmail.com</a></p>
           <p><strong>Phone Support:</strong> +91-6306730833</p>
           <p><strong>Business Hours:</strong> 9:00 AM - 6:00 PM IST, Monday - Friday</p>
-          <p><strong>Address:</strong> GymSaaS, Dhampur, Uttar Pradesh, India</p>
+          <p><strong>Address:</strong> Centric Fit, Dhampur, Uttar Pradesh, India</p>
         </div>
 
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-4">
           <p className="text-yellow-800">
-            <strong>Before You Subscribe:</strong> Remember that you have 14 full days to try GymSaaS 
-            completely free. Use this time to ensure it&rsquo;s the right fit for your gym before your 
+            <strong>Before You Subscribe:</strong> Remember that you have 14 full days to try Centric Fit 
+            completely free. Use this time to ensure it&rsquo;s the right fit for your fitness club before your 
             subscription begins.
           </p>
         </div>

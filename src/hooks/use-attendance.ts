@@ -1,7 +1,8 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { createClient } from '@/utils/supabase/client'
+
+// NOTE: All data operations now go through API routes.
 
 export type AttendanceFilters = {
   search?: string
@@ -29,17 +30,27 @@ export function useMemberAttendance(gymId: string | null, filters?: AttendanceFi
     enabled: (options?.enabled ?? true) && !!gymId,
     queryFn: async (): Promise<AttendanceRow[]> => {
       if (!gymId) return []
-      const supabase = createClient()
-      const { data, error } = await supabase.rpc('get_member_attendance', {
-        p_gym_id: gymId,
-        p_search: filters?.search ?? undefined,
-        p_from: filters?.from ?? undefined,
-        p_to: filters?.to ?? undefined,
-        p_limit: filters?.limit ?? 50,
-        p_offset: filters?.offset ?? 0,
+      
+      // Build query params for API call
+      const params = new URLSearchParams({ 
+        gym_id: gymId, 
+        type: 'members',
+        limit: (filters?.limit ?? 50).toString(),
+        offset: (filters?.offset ?? 0).toString()
       })
-      if (error) throw error
-      return (data || []) as AttendanceRow[]
+      
+      if (filters?.search) params.set('search', filters.search)
+      if (filters?.from) params.set('from', filters.from)
+      if (filters?.to) params.set('to', filters.to)
+      
+      const response = await fetch(`/api/attendance?${params}`)
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch attendance data')
+      }
+      
+      return (result.attendance || []) as AttendanceRow[]
     }
   })
 }
@@ -50,17 +61,27 @@ export function useStaffAttendance(gymId: string | null, filters?: AttendanceFil
     enabled: (options?.enabled ?? true) && !!gymId,
     queryFn: async (): Promise<AttendanceRow[]> => {
       if (!gymId) return []
-      const supabase = createClient()
-      const { data, error } = await supabase.rpc('get_staff_attendance', {
-        p_gym_id: gymId,
-        p_search: filters?.search ?? undefined,
-        p_from: filters?.from ?? undefined,
-        p_to: filters?.to ?? undefined,
-        p_limit: filters?.limit ?? 50,
-        p_offset: filters?.offset ?? 0,
+      
+      // Build query params for API call
+      const params = new URLSearchParams({ 
+        gym_id: gymId, 
+        type: 'staff',
+        limit: (filters?.limit ?? 50).toString(),
+        offset: (filters?.offset ?? 0).toString()
       })
-      if (error) throw error
-      return (data || []) as AttendanceRow[]
+      
+      if (filters?.search) params.set('search', filters.search)
+      if (filters?.from) params.set('from', filters.from)
+      if (filters?.to) params.set('to', filters.to)
+      
+      const response = await fetch(`/api/attendance?${params}`)
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch attendance data')
+      }
+      
+      return (result.attendance || []) as AttendanceRow[]
     }
   })
 }

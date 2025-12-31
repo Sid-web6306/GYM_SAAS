@@ -5,6 +5,9 @@ import { useEffect } from 'react'
 import { useAuth } from './use-auth'
 import { logger } from '@/lib/logger'
 
+// NOTE: All data operations now go through API routes instead of direct DB access.
+// The Supabase client is only used for real-time subscriptions.
+
 // Helper function to identify authentication and logout-related errors
 function isAuthenticationError(error: unknown): boolean {
   if (!error) return false
@@ -101,63 +104,43 @@ export function useMembers(gymId: string | null, filters?: MemberFilters) {
     queryFn: async (): Promise<MembersResponse> => {
       if (!gymId) throw new Error('Gym ID is required')
       
-      const supabase = createClient()
-      let query = supabase
-        .from('members')
-        .select('*', { count: 'exact' })
-        .eq('gym_id', gymId)
-
-      // Apply filters
-      if (filters?.status && filters.status !== 'all') {
-        query = query.eq('status', filters.status)
-      }
-
-      if (filters?.search) {
-        const searchTerm = `%${filters.search}%`
-        query = query.or(`first_name.ilike.${searchTerm},last_name.ilike.${searchTerm},email.ilike.${searchTerm}`)
-      }
-
-      // Apply sorting
-      const sortBy = filters?.sortBy || 'created_at'
-      const sortOrder = filters?.sortOrder || 'desc'
+      // Build query params for API call
+      const params = new URLSearchParams({ gym_id: gymId })
       
-      if (sortBy === 'name') {
-        query = query.order('first_name', { ascending: sortOrder === 'asc' })
-      } else {
-        query = query.order(sortBy, { ascending: sortOrder === 'asc' })
+      if (filters?.status && filters.status !== 'all') {
+        params.set('status', filters.status)
       }
-
-      // Apply pagination
+      if (filters?.search) {
+        params.set('search', filters.search)
+      }
       if (filters?.limit) {
-        const offset = filters?.offset || 0
-        query = query.range(offset, offset + filters.limit - 1)
+        params.set('limit', filters.limit.toString())
+        params.set('offset', (filters.offset || 0).toString())
       }
 
-      const { data, error, count } = await query
+      const response = await fetch(`/api/members?${params}`)
+      const result = await response.json()
 
-      if (error) {
+      if (!response.ok) {
         // Enhanced error handling for logout scenarios
-        if (isAuthenticationError(error)) {
+        if (response.status === 401) {
           logger.debug('Members fetch: Authentication/logout error - this is expected during logout')
-          throw error
+          throw new Error('Unauthorized')
         }
 
-        // Log detailed error info for debugging (only for non-auth errors)
         logger.error('Members fetch failed', {
-          error: error instanceof Error ? error.message : String(error),
-          errorType: typeof error,
-          errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
+          error: result.error,
           gymId,
           isAuthenticated,
           hasUser: !!user
         })
-        throw error
+        throw new Error(result.error || 'Failed to fetch members')
       }
 
       return {
-        members: data as Member[],
-        totalCount: count || 0,
-        hasMore: filters?.limit ? (count || 0) > (filters.offset || 0) + data.length : false
+        members: result.members as Member[],
+        totalCount: result.pagination?.total || 0,
+        hasMore: result.pagination?.hasMore || false
       }
     },
     enabled: !!gymId && isAuthenticated && !!user,
@@ -236,25 +219,22 @@ export function useMember(memberId: string | null) {
     queryFn: async () => {
       if (!memberId) throw new Error('Member ID is required')
       
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('members')
-        .select('*')
-        .eq('id', memberId)
-        .single()
+      const params = new URLSearchParams({ id: memberId })
+      const response = await fetch(`/api/members?${params}`)
+      const result = await response.json()
       
-      if (error) {
+      if (!response.ok) {
         // Handle authentication errors gracefully
-        if (isAuthenticationError(error)) {
+        if (response.status === 401) {
           logger.debug('Member fetch: Authentication error during logout - this is expected')
-          throw error
+          throw new Error('Unauthorized')
         }
         
-        logger.error('Member fetch failed', { memberId, error: error instanceof Error ? error.message : String(error) })
-        throw error
+        logger.error('Member fetch failed', { memberId, error: result.error })
+        throw new Error(result.error || 'Failed to fetch member')
       }
       
-      return data as Member
+      return result.member as Member
     },
     enabled: !!memberId && isAuthenticated && !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -311,27 +291,26 @@ export function useRecentActivity(gymId: string | null) {
     queryFn: async () => {
       if (!gymId) throw new Error('Gym ID is required')
       
-      // Get some recent members for mock activity
-      const supabase = createClient()
-      const { data: members, error } = await supabase
-        .from('members')
-        .select('id, first_name, last_name')
-        .eq('gym_id', gymId)
-        .limit(10)
+      // Get some recent members for mock activity via API
+      const params = new URLSearchParams({ gym_id: gymId, limit: '10' })
+      const response = await fetch(`/api/members?${params}`)
+      const result = await response.json()
       
-      if (error) {
+      if (!response.ok) {
         // Handle authentication errors gracefully
-        if (isAuthenticationError(error)) {
+        if (response.status === 401) {
           logger.debug('Activity fetch: Authentication error during logout - this is expected')
-          throw error
+          throw new Error('Unauthorized')
         }
         
-        logger.error('Member activity fetch failed', { members, error: error instanceof Error ? error.message : String(error) })
-        throw error
+        logger.error('Member activity fetch failed', { gymId, error: result.error })
+        throw new Error(result.error || 'Failed to fetch activity')
       }
       
+      const members = result.members || []
+      
       // Generate mock activity data
-      const mockActivity: MemberActivity[] = (members || []).slice(0, 5).map((member, index) => ({
+      const mockActivity: MemberActivity[] = members.slice(0, 5).map((member: Member, index: number) => ({
         id: `activity-${member.id}-${index}`,
         member_id: member.id,
         activity_type: Math.random() > 0.5 ? 'check_in' : 'check_out',
@@ -362,34 +341,34 @@ export function useMembersStats(gymId: string | null) {
     queryFn: async () => {
       if (!gymId) throw new Error('Gym ID is required')
       
-      const supabase = createClient()
-      const { data: members, error } = await supabase
-        .from('members')
-        .select('status, created_at, join_date')
-        .eq('gym_id', gymId)
+      // Fetch all members via API to calculate stats
+      const params = new URLSearchParams({ gym_id: gymId, limit: '10000' })
+      const response = await fetch(`/api/members?${params}`)
+      const result = await response.json()
 
-      if (error) {
+      if (!response.ok) {
         // Handle authentication errors gracefully
-        if (isAuthenticationError(error)) {
+        if (response.status === 401) {
           logger.debug('Members stats fetch: Authentication error during logout - this is expected')
-          throw error
+          throw new Error('Unauthorized')
         }
         
-        logger.error('Members stats fetch failed', { gymId, error: error instanceof Error ? error.message : String(error) })
-        throw error
+        logger.error('Members stats fetch failed', { gymId, error: result.error })
+        throw new Error(result.error || 'Failed to fetch stats')
       }
 
+      const members = result.members || []
       const now = new Date()
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
       const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()))
 
       return {
         total: members.length,
-        active: members.filter(m => m.status === 'active').length,
-        inactive: members.filter(m => m.status === 'inactive').length,
-        pending: members.filter(m => m.status === 'pending').length,
-        newThisMonth: members.filter(m => new Date(m.created_at) >= startOfMonth).length,
-        newThisWeek: members.filter(m => new Date(m.created_at) >= startOfWeek).length,
+        active: members.filter((m: Member) => m.status === 'active').length,
+        inactive: members.filter((m: Member) => m.status === 'inactive').length,
+        pending: members.filter((m: Member) => m.status === 'pending').length,
+        newThisMonth: members.filter((m: Member) => new Date(m.created_at) >= startOfMonth).length,
+        newThisWeek: members.filter((m: Member) => new Date(m.created_at) >= startOfWeek).length,
       }
     },
     enabled: !!gymId && isAuthenticated && !!user,
@@ -410,12 +389,10 @@ export function useCreateMember() {
   
   return useMutation({
     mutationFn: async ({ gymId, memberData }: { gymId: string; memberData: CreateMemberData }) => {
-      const supabase = createClient()
-      
-      // Create member using regular database operations
-      const { data: newMember, error: createError } = await supabase
-        .from('members')
-        .insert({
+      const response = await fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           gym_id: gymId,
           first_name: memberData.first_name,
           last_name: memberData.last_name,
@@ -424,33 +401,16 @@ export function useCreateMember() {
           status: memberData.status || 'active',
           join_date: memberData.join_date || new Date().toISOString(),
         })
-        .select('id')
-        .single()
+      })
       
-      if (createError) {
-        logger.error('Member creation failed', { error: createError.message })
-        throw createError
+      const result = await response.json()
+      
+      if (!response.ok) {
+        logger.error('Member creation failed', { error: result.error })
+        throw new Error(result.error || 'Failed to create member')
       }
       
-      const memberId = newMember.id
-      
-      if (!memberId) {
-        throw new Error('Failed to create member - no ID returned')
-      }
-      
-      // Fetch the created member data
-      const { data: createdMember, error: fetchError } = await supabase
-        .from('members')
-        .select('*')
-        .eq('id', String(memberId))
-        .single()
-      
-      if (fetchError) {
-        logger.error('Member fetch failed after creation', { memberId, error: fetchError.message })
-        throw fetchError
-      }
-      
-      return createdMember as Member
+      return result.member as Member
     },
     onMutate: async () => {
       // Cancel outgoing refetches
@@ -485,23 +445,21 @@ export function useUpdateMember() {
   
   return useMutation({
     mutationFn: async ({ memberId, updates }: { memberId: string; updates: Partial<Member> }) => {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('members')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', memberId)
-        .select()
-        .single()
+      const params = new URLSearchParams({ id: memberId })
+      const response = await fetch(`/api/members?${params}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      })
       
-      if (error) {
-        logger.error('Member update failed', { memberId, error: error.message })
-        throw error
+      const result = await response.json()
+      
+      if (!response.ok) {
+        logger.error('Member update failed', { memberId, error: result.error })
+        throw new Error(result.error || 'Failed to update member')
       }
       
-      return data as Member
+      return result.member as Member
     },
     onMutate: async ({ memberId, updates }) => {
       // Cancel outgoing refetches
@@ -547,26 +505,25 @@ export function useDeleteMember() {
   
   return useMutation({
     mutationFn: async (memberId: string) => {
-      const supabase = createClient()
+      // First get the member to know the gym_id for cache invalidation
+      const getParams = new URLSearchParams({ id: memberId })
+      const getResponse = await fetch(`/api/members?${getParams}`)
+      const getMemberResult = await getResponse.json()
+      const gymId = getMemberResult.member?.gym_id
       
-      // Get member data before deletion for cleanup
-      const { data: member } = await supabase
-        .from('members')
-        .select('gym_id')
-        .eq('id', memberId)
-        .single()
+      // Delete the member
+      const params = new URLSearchParams({ id: memberId })
+      const response = await fetch(`/api/members?${params}`, {
+        method: 'DELETE'
+      })
       
-      const { error } = await supabase
-        .from('members')
-        .delete()
-        .eq('id', memberId)
-      
-      if (error) {
-        logger.error('Member deletion failed', { memberId, error: error.message })
-        throw error
+      if (!response.ok) {
+        const result = await response.json()
+        logger.error('Member deletion failed', { memberId, error: result.error })
+        throw new Error(result.error || 'Failed to delete member')
       }
       
-      return { memberId, gymId: member?.gym_id }
+      return { memberId, gymId }
     },
     onMutate: async (memberId) => {
       // Cancel outgoing refetches
@@ -611,22 +568,24 @@ export function useBulkUpdateMembers() {
   
   return useMutation({
     mutationFn: async ({ memberIds, updates }: { memberIds: string[]; updates: Partial<Member> }) => {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('members')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
+      // Update each member via API (bulk update could be added to API later)
+      const results = await Promise.all(
+        memberIds.map(async (memberId) => {
+          const params = new URLSearchParams({ id: memberId })
+          const response = await fetch(`/api/members?${params}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+          })
+          const result = await response.json()
+          if (!response.ok) {
+            throw new Error(result.error || 'Failed to update member')
+          }
+          return result.member as Member
         })
-        .in('id', memberIds)
-        .select()
+      )
       
-      if (error) {
-        logger.error('Bulk member update failed', { memberIds: memberIds.length, error: error.message })
-        throw error
-      }
-      
-      return data as Member[]
+      return results
     },
     onSuccess: (updatedMembers) => {
       // Update individual member caches
@@ -668,20 +627,17 @@ export async function prefetchMembersData(queryClient: QueryClient, gymId: strin
     queryClient.prefetchQuery({
       queryKey: membersKeys.list(gymId, filters),
       queryFn: async () => {
-        const supabase = createClient()
-        const { data, error } = await supabase
-          .from('members')
-          .select('*')
-          .eq('gym_id', gymId)
-          .order('created_at', { ascending: false })
-          .limit(50) // Reasonable prefetch limit
+        // Note: Prefetch uses API route - ensure this runs in browser context
+        const params = new URLSearchParams({ gym_id: gymId, limit: '50' })
+        const response = await fetch(`/api/members?${params}`)
+        const result = await response.json()
         
-        if (error) throw error
+        if (!response.ok) throw new Error(result.error)
         
         return {
-          members: data as Member[],
-          totalCount: data.length,
-          hasMore: false
+          members: result.members as Member[],
+          totalCount: result.pagination?.total || 0,
+          hasMore: result.pagination?.hasMore || false
         }
       },
       staleTime: 2 * 60 * 1000,

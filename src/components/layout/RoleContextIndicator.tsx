@@ -137,9 +137,6 @@ export function RoleContextIndicator({
               <h3 className="font-semibold text-gray-900 capitalize">
                 {role}
               </h3>
-              <p className="text-sm text-gray-600">
-                Access Level: {roleLevel}
-              </p>
             </div>
           </div>
           <Badge variant="outline" className={roleColors}>

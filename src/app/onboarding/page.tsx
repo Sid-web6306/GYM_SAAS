@@ -10,8 +10,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useAuth, usePostOnboardingSync } from '@/hooks/use-auth'
 import { logger } from '@/lib/logger'
 import { RequireAuth } from '@/components/auth/AuthGuard'
-import { useInviteVerification } from '@/hooks/use-invitations'
-import { InviteVerificationErrorBoundary } from '@/components/invites/InvitationErrorBoundary'
 import { Stepper, Step } from '@/components/ui/stepper'
 import { PersonalDetailsStep } from '@/components/onboarding/PersonalDetailsStep'
 import { GymNameStep } from '@/components/onboarding/GymNameStep'
@@ -39,11 +37,23 @@ const OnboardingContent = () => {
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [isCompletingOnboarding, setIsCompletingOnboarding] = useState(false)
 
+  // Redirect to accept-invite if invite token is present
+  useEffect(() => {
+    const inviteToken = searchParams.get('invite')
+    if (inviteToken) {
+      router.replace(`/accept-invite?invite=${inviteToken}`)
+    }
+  }, [searchParams, router])
+
   // Load existing profile data
   useEffect(() => {
     const loadProfileData = async () => {
-      if (!user?.id) return
-      
+      // If no user, stop loading immediately
+      if (!user?.id) {
+        setIsLoadingProfile(false)
+        return
+      }
+
       try {
         const supabase = createClient()
         const { data: profile, error } = await supabase
@@ -51,7 +61,7 @@ const OnboardingContent = () => {
           .select('full_name')
           .eq('id', user.id)
           .single()
-        
+
         if (error) {
           logger.error('Error loading profile:', { error })
         } else if (profile?.full_name) {
@@ -65,37 +75,11 @@ const OnboardingContent = () => {
       }
     }
 
-    loadProfileData()
-  }, [user])
-
-  // No need to determine contact collection - users always sign up with email
-
-  // Get invite token from URL or user metadata
-  const inviteToken = searchParams.get('invite') || user?.user_metadata?.pendingInviteToken || ''
-  
-  // Verify invitation if token exists
-  const {
-    invitation,
-    isValid: isValidInvite,
-    isLoading: isVerifyingInvite,
-    error: inviteError,
-    acceptInvitation
-  } = useInviteVerification(inviteToken)
-
-  // Handle invite acceptance
-  const handleInviteAcceptance = async () => {
-    if (!inviteToken || !isValidInvite) return
-    
-    try {
-      logger.info('Accepting invitation')
-      await acceptInvitation()
-      toastActions.success('Welcome!', `You've successfully joined ${invitation?.gym.name}`)
-      router.replace('/dashboard')
-    } catch (error) {
-      logger.error('Failed to accept invitation:', {error})
-      toastActions.error('Error', 'Failed to accept invitation')
+    // Only try to load profile if auth is not loading
+    if (!authLoading) {
+      loadProfileData()
     }
-  }
+  }, [user, authLoading])
 
   // Navigation functions
   const goToStep = (step: OnboardingStep) => {
@@ -105,32 +89,32 @@ const OnboardingContent = () => {
   // Step 1: Personal details collected
   const handlePersonalDetailsNext = async (name: string) => {
     setFullName(name)
-    
+
     // Update profile with full name
     if (!user?.id) {
       logger.error('User ID not found')
       toastActions.error('Error', 'User not authenticated')
       return
     }
-    
+
     try {
       const supabase = createClient()
       const { error } = await supabase
         .from('profiles')
         .update({ full_name: name })
         .eq('id', user.id)
-      
+
       if (error) {
         logger.error('Error updating profile name:', { error })
         toastActions.error('Error', 'Failed to save your name')
         return
       }
-      
+
       logger.info('Profile name updated:', { name })
     } catch (error) {
       logger.error('Error updating profile:', { error })
     }
-    
+
     // Move to gym setup
     setCurrentStep(2)
   }
@@ -145,9 +129,9 @@ const OnboardingContent = () => {
   // Complete onboarding
   const completeOnboarding = async (gym: string) => {
     if (isCompletingOnboarding) return // Prevent multiple submissions
-    
+
     setIsCompletingOnboarding(true)
-    
+
     try {
       const supabase = createClient()
       const userId = user?.id
@@ -181,10 +165,10 @@ const OnboardingContent = () => {
       }
 
       toastActions.success('Success!', 'Your gym has been set up successfully')
-      
+
       // Invalidate queries to refresh data after onboarding
       await postOnboardingSync()
-      
+
       // Use router.push instead of window.location.href to preserve React Query cache
       // This avoids full page reload and allows cached data to persist
       router.push('/dashboard?welcome=true')
@@ -197,58 +181,19 @@ const OnboardingContent = () => {
   }
 
   // Show loading state
-  if (authLoading || isLoadingProfile || (inviteToken && isVerifyingInvite)) {
+  const showLoading = authLoading || (user && isLoadingProfile)
+
+  if (showLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center space-y-4">
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
           <p className="text-gray-600">
-            {inviteToken && isVerifyingInvite 
-              ? 'Verifying your invitation...'
-              : isLoadingProfile
-              ? 'Loading your profile...'
-              : 'Loading...'}
+            {authLoading
+              ? 'Checking authentication...'
+              : 'Loading your profile...'}
           </p>
         </div>
-      </div>
-    )
-  }
-
-  // Handle invitation flow (keeping existing logic)
-  if (inviteToken && isValidInvite && invitation) {
-    // Show invite acceptance UI (keeping existing implementation)
-    return (
-      <InviteVerificationErrorBoundary>
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg">
-            <CardContent className="pt-6">
-              {/* Existing invite UI */}
-              <Button onClick={handleInviteAcceptance} className="w-full">
-                Accept Invitation
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </InviteVerificationErrorBoundary>
-    )
-  }
-
-  // Handle invalid invite
-  if (inviteToken && !isVerifyingInvite && (!isValidInvite || inviteError)) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-lg">
-          <CardContent className="pt-6">
-            <div className="text-center space-y-4">
-              <AlertCircle className="mx-auto w-16 h-16 text-red-600" />
-              <h2 className="text-xl font-semibold">Invalid Invitation</h2>
-              <p className="text-gray-600">{inviteError || 'This invitation link is invalid or has expired.'}</p>
-              <Button onClick={() => router.push('/onboarding')}>
-                Continue with Gym Setup
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     )
   }
@@ -281,9 +226,9 @@ const OnboardingContent = () => {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
         <div className="w-full max-w-2xl space-y-8">
           {/* Progress Stepper */}
-          <Stepper 
-            steps={visibleSteps} 
-            currentStep={currentStep} 
+          <Stepper
+            steps={visibleSteps}
+            currentStep={currentStep}
           />
 
           {/* Step Content */}
@@ -301,19 +246,16 @@ const OnboardingContent = () => {
 
               {/* Step 2: Gym Setup */}
               {currentStep === 2 && (
-                <GymNameStep 
+                <GymNameStep
                   onNext={handleGymNameNext}
                   onBack={() => goToStep(1)}
                   initialValue={gymName}
                   isLoading={isCompletingOnboarding}
                 />
               )}
-
-
             </CardContent>
           </Card>
         </div>
-
       </div>
     </RequireAuth>
   )

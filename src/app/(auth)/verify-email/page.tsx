@@ -11,12 +11,15 @@ import { toastActions } from '@/stores/toast-store'
 const VerifyEmailContent = () => {
   const searchParams = useSearchParams()
   const { user, isLoading, isAuthenticated } = useAuth()
-  
+
   // Get email from URL params first (for unauthenticated users), then from user
   const email = searchParams.get('email') || user?.email || ''
 
   // Get invite token from URL params
   const inviteToken = searchParams.get('invite') || ''
+
+  // Check if this is a login flow (mode=login) or signup flow (default)
+  const isLogin = searchParams.get('mode') === 'login'
 
   // Show loading state while checking auth
   if (isLoading) {
@@ -71,11 +74,12 @@ const VerifyEmailContent = () => {
             Complete your account setup by verifying your email address
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent className="pt-0">
           <OTPVerification
             email={email}
-            redirectTo={inviteToken ? `/onboarding?invite=${inviteToken}` : "/onboarding"}
+            redirectTo={inviteToken ? `/accept-invite?invite=${inviteToken}` : (isLogin ? "/dashboard" : "/onboarding")}
+            isLogin={isLogin}
           />
         </CardContent>
       </Card>

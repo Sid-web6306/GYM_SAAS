@@ -88,7 +88,20 @@ export async function sendTemplateEmailViaMSG91(params: MSG91TemplateEmailParams
       body: JSON.stringify(payload)
     })
 
-    const responseData = await response.json()
+    const responseText = await response.text()
+    let responseData
+    try {
+      responseData = JSON.parse(responseText)
+    } catch {
+      responseData = { raw: responseText }
+    }
+
+    // Log full MSG91 response for debugging
+    logger.info('MSG91 API Response:', {
+      status: response.status,
+      ok: response.ok,
+      response: responseData
+    })
 
     if (!response.ok) {
       logger.error('MSG91 Template API error:', {
@@ -309,9 +322,9 @@ export function validateMSG91Config(): { valid: boolean; errors: string[]; warni
 /**
  * Test MSG91 connection and configuration
  */
-export async function testMSG91Connection(): Promise<{ success: boolean; message: string; details?: { status: number } }> {
+export async function testMSG91Connection(): Promise<{ success: boolean; message: string; details?: Record<string, unknown> }> {
   try {
-    const { msg91ApiKey } = serverConfig
+    const { msg91ApiKey, msg91EmailDomain, msg91InvitationTemplateId } = serverConfig
     
     if (!msg91ApiKey) {
       return {
@@ -320,7 +333,51 @@ export async function testMSG91Connection(): Promise<{ success: boolean; message
       }
     }
 
-    // Test with a simple API call to check authentication
+    if (!msg91EmailDomain) {
+      return {
+        success: false,
+        message: 'MSG91_EMAIL_DOMAIN not configured'
+      }
+    }
+
+    if (!msg91InvitationTemplateId) {
+      return {
+        success: false,
+        message: 'MSG91_INVITATION_TEMPLATE_ID not configured'
+      }
+    }
+
+    // Use actual configured values for validation
+    // We use the real template but with a clearly invalid test email that won't deliver
+    const testPayload = {
+      "recipients": [
+        {
+          "to": [
+            {
+              "email": "msg91-config-test@invalid-test-domain.local",
+              "name": "Config Test"
+            }
+          ],
+          "variables": {
+            "gymName": "Test Gym",
+            "inviterName": "Test Admin",
+            "role": "member",
+            "#if message": "false",
+            "message": "",
+            "/if": "false",
+            "inviteUrl": "https://example.com/test",
+            "expiresAt": new Date(Date.now() + 86400000).toISOString(),
+            "recipientEmail": "msg91-config-test@invalid-test-domain.local"
+          }
+        }
+      ],
+      "from": {
+        "email": `no-reply@${msg91EmailDomain}`
+      },
+      "domain": msg91EmailDomain,
+      "template_id": msg91InvitationTemplateId
+    }
+
     const response = await fetch('https://api.msg91.com/api/v5/email/send', {
       method: 'POST',
       headers: {
@@ -328,29 +385,53 @@ export async function testMSG91Connection(): Promise<{ success: boolean; message
         'Content-Type': 'application/json',
         'Authkey': msg91ApiKey
       },
-      body: JSON.stringify({
-        to: [{ email: 'test@example.com' }],
-        from: { email: 'noreply@yourdomain.com', name: 'Test' },
-        subject: 'Configuration Test',
-        body: {
-          data: '<p>Test email - this will not be delivered</p>',
-          type: 'html'
-        },
-        text_body: 'Test email - this will not be delivered'
-      })
+      body: JSON.stringify(testPayload)
     })
+
+    const responseText = await response.text()
+    let responseData
+    try {
+      responseData = JSON.parse(responseText)
+    } catch {
+      responseData = { raw: responseText }
+    }
 
     if (response.status === 401) {
       return {
         success: false,
-        message: 'MSG91 API key is invalid or expired. Please check your MSG91 dashboard and update your .env.local file.'
+        message: 'MSG91 API key is invalid or expired',
+        details: { status: response.status, response: responseData }
+      }
+    }
+
+    if (response.status === 422) {
+      return {
+        success: false,
+        message: 'MSG91 validation error - check template ID and domain verification',
+        details: { status: response.status, response: responseData }
+      }
+    }
+
+    // Check if MSG91 accepted the request
+    if (responseData.status === 'success' || response.ok) {
+      return {
+        success: true,
+        message: 'MSG91 configuration valid - API accepted request',
+        details: { 
+          status: response.status, 
+          response: responseData,
+          config: {
+            domain: msg91EmailDomain,
+            template_id: msg91InvitationTemplateId
+          }
+        }
       }
     }
 
     return {
-      success: true,
-      message: 'MSG91 connection successful',
-      details: { status: response.status }
+      success: false,
+      message: responseData.message || 'MSG91 returned an error',
+      details: { status: response.status, response: responseData }
     }
   } catch (error) {
     return {

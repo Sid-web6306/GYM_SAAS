@@ -223,13 +223,6 @@ const SettingsPage = () => {
                       <Label>Current Role</Label>
                       <div className="flex items-center gap-2">
                         <RoleContextIndicator variant="chip" showGym={false} />
-                        <span className="text-sm text-muted-foreground">
-                          Access Level: {profile?.default_role ? 
-                            (profile.default_role === 'owner' ? '100' :
-                             profile.default_role === 'manager' ? '75' :
-                             profile.default_role === 'trainer' ? '60' :
-                             profile.default_role === 'staff' ? '50' : '25') : 'N/A'}
-                        </span>
                       </div>
                     </div>
 

@@ -21,7 +21,7 @@ import {
   BarChart3
 } from 'lucide-react'
 import { useMemberPortalStats } from '@/hooks/use-member-analytics'
-import { useGymAnalytics } from '@/hooks/use-gym-data'
+import { useGymAnalytics } from '@/hooks/use-gym-analytics'
 
 interface RetentionAnalysisProps {
   gymId: string
@@ -34,13 +34,13 @@ const generateRetentionData = () => {
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
   ]
-  
+
   return months.map((month, index) => {
     const baseRetention = 85 + Math.random() * 10 // 85-95% base retention
     const churnRate = 100 - baseRetention
     const newMembers = Math.floor(Math.random() * 20) + 10 // 10-30 new members
     const churnedMembers = Math.floor((churnRate / 100) * (100 + index * 5)) // Growing base
-    
+
     return {
       month,
       retentionRate: Math.round(baseRetention * 100) / 100,
@@ -52,22 +52,22 @@ const generateRetentionData = () => {
   })
 }
 
-export function RetentionAnalysis({ 
-  gymId, 
-  periodDays = 30 
+export function RetentionAnalysis({
+  gymId,
+  periodDays = 30
 }: RetentionAnalysisProps) {
-  const { 
-    data: portalStats, 
-    isLoading: portalLoading, 
+  const {
+    data: portalStats,
+    isLoading: portalLoading,
     error: portalError,
-    refetch: refetchPortal 
+    refetch: refetchPortal
   } = useMemberPortalStats(gymId, periodDays)
 
-  const { 
-    data: gymAnalytics, 
-    isLoading: gymLoading, 
+  const {
+    data: gymAnalytics,
+    isLoading: gymLoading,
     error: gymError,
-    refetch: refetchGym 
+    refetch: refetchGym
   } = useGymAnalytics(gymId)
 
   const isLoading = portalLoading || gymLoading
@@ -82,7 +82,7 @@ export function RetentionAnalysis({
   const retentionData = generateRetentionData()
   const currentMonth = retentionData[retentionData.length - 1]
   const previousMonth = retentionData[retentionData.length - 2]
-  
+
   const retentionTrend = currentMonth.retentionRate - previousMonth.retentionRate
   const avgRetention = retentionData.reduce((sum, month) => sum + month.retentionRate, 0) / retentionData.length
   const totalChurned = retentionData.reduce((sum, month) => sum + month.churnedMembers, 0)
@@ -95,9 +95,9 @@ export function RetentionAnalysis({
     recentChurn: currentMonth.churnedMembers
   }
 
-  const churnRiskScore = Math.min(100, 
-    (churnRiskFactors.lowEngagement * 0.3) + 
-    (churnRiskFactors.noPortalAccess * 0.2) + 
+  const churnRiskScore = Math.min(100,
+    (churnRiskFactors.lowEngagement * 0.3) +
+    (churnRiskFactors.noPortalAccess * 0.2) +
     (churnRiskFactors.recentChurn * 0.5)
   )
 
@@ -290,14 +290,14 @@ export function RetentionAnalysis({
                     </div>
                     <div className="text-sm text-green-600 dark:text-green-400">New Members (12m)</div>
                   </div>
-                  
+
                   <div className="text-center p-3 bg-red-50 dark:bg-red-950 rounded-lg">
                     <div className="text-lg font-bold text-red-700 dark:text-red-300">
                       {totalChurned}
                     </div>
                     <div className="text-sm text-red-600 dark:text-red-400">Churned Members (12m)</div>
                   </div>
-                  
+
                   <div className="text-center p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
                     <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
                       {((totalNew - totalChurned) / totalNew * 100).toFixed(1)}%
@@ -432,7 +432,7 @@ export function RetentionAnalysis({
                         </div>
                       </div>
                     )}
-                    
+
                     {churnRiskFactors.noPortalAccess > 10 && (
                       <div className="text-sm p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
                         <div className="font-medium text-blue-800 dark:text-blue-200">Portal Adoption Opportunity</div>
@@ -441,7 +441,7 @@ export function RetentionAnalysis({
                         </div>
                       </div>
                     )}
-                    
+
                     {churnRiskScore < 30 && (
                       <div className="text-sm p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
                         <div className="font-medium text-green-800 dark:text-green-200">Excellent Retention</div>

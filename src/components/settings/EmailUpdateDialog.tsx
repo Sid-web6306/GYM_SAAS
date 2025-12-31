@@ -52,7 +52,7 @@ export const EmailUpdateDialog: React.FC<EmailUpdateDialogProps> = ({
   const [otp, setOtp] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isResending, setIsResending] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(60)
+  const [resendCooldown, setResendCooldown] = useState(60)
   const [error, setError] = useState('')
   const queryClient = useQueryClient()
 
@@ -60,13 +60,13 @@ export const EmailUpdateDialog: React.FC<EmailUpdateDialogProps> = ({
     resolver: zodResolver(emailSchema)
   })
 
-  // Countdown timer
+  // Cooldown timer for resend button (not code expiry - codes are valid for much longer)
   React.useEffect(() => {
-    if (timeLeft > 0 && step === 'verify') {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
+    if (resendCooldown > 0 && step === 'verify') {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000)
       return () => clearTimeout(timer)
     }
-  }, [timeLeft, step])
+  }, [resendCooldown, step])
 
   const handleEmailSubmit = async (data: EmailFormData) => {
     setIsLoading(true)
@@ -83,7 +83,7 @@ export const EmailUpdateDialog: React.FC<EmailUpdateDialogProps> = ({
       } else {
         setNewEmail(data.newEmail)
         setStep('verify')
-        setTimeLeft(60)
+        setResendCooldown(60)
         toastActions.success('Code Sent!', 'Please check your new email address for the verification code.')
       }
     } catch (error) {
@@ -154,7 +154,7 @@ export const EmailUpdateDialog: React.FC<EmailUpdateDialogProps> = ({
       if (result.error) {
         setError(result.error)
       } else {
-        setTimeLeft(60) // Reset to 60 seconds for resend
+        setResendCooldown(60) // Reset cooldown for next resend
         setOtp('')
         toastActions.success('Code Resent!', 'A new verification code has been sent to your new email address.')
       }
@@ -171,7 +171,7 @@ export const EmailUpdateDialog: React.FC<EmailUpdateDialogProps> = ({
     setNewEmail('')
     setOtp('')
     setError('')
-    setTimeLeft(60)
+    setResendCooldown(60)
     form.reset()
     onClose()
   }
@@ -182,7 +182,7 @@ export const EmailUpdateDialog: React.FC<EmailUpdateDialogProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  const isExpired = timeLeft <= 0
+  const canResend = resendCooldown <= 0
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -287,7 +287,7 @@ export const EmailUpdateDialog: React.FC<EmailUpdateDialogProps> = ({
                 <OTPInput
                   value={otp}
                   onChange={setOtp}
-                  disabled={isLoading || isExpired}
+                  disabled={isLoading}
                   autoFocus
                 />
               </div>
@@ -302,13 +302,16 @@ export const EmailUpdateDialog: React.FC<EmailUpdateDialogProps> = ({
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">
-                    {isExpired ? 'Code expired' : `Code expires in ${formatTime(timeLeft)}`}
+                    {canResend 
+                      ? 'You can request a new code' 
+                      : `Resend available in ${formatTime(resendCooldown)}`
+                    }
                   </span>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={handleResendOTP}
-                    disabled={isResending || (!isExpired && timeLeft > 0)}
+                    disabled={isResending || !canResend}
                     className="h-auto p-0 text-blue-600 hover:text-blue-700"
                   >
                     {isResending ? (
@@ -335,7 +338,7 @@ export const EmailUpdateDialog: React.FC<EmailUpdateDialogProps> = ({
                   </Button>
                   <Button
                     onClick={handleOTPSubmit}
-                    disabled={otp.length !== 6 || isLoading || isExpired}
+                    disabled={otp.length !== 6 || isLoading}
                     className="flex-1"
                   >
                     {isLoading ? (

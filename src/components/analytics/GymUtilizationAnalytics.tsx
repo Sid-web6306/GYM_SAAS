@@ -22,7 +22,7 @@ import {
   Target,
   Timer
 } from 'lucide-react'
-import { useGymAnalytics } from '@/hooks/use-gym-data'
+import { useGymAnalytics } from '@/hooks/use-gym-analytics'
 import { useMemberPortalStats } from '@/hooks/use-member-analytics'
 
 interface GymUtilizationAnalyticsProps {
@@ -30,22 +30,22 @@ interface GymUtilizationAnalyticsProps {
   periodDays?: number
 }
 
-export function GymUtilizationAnalytics({ 
-  gymId, 
-  periodDays = 30 
+export function GymUtilizationAnalytics({
+  gymId,
+  periodDays = 30
 }: GymUtilizationAnalyticsProps) {
-  const { 
-    data: gymAnalytics, 
-    isLoading: gymLoading, 
+  const {
+    data: gymAnalytics,
+    isLoading: gymLoading,
     error: gymError,
-    refetch: refetchGym 
+    refetch: refetchGym
   } = useGymAnalytics(gymId)
 
-  const { 
-    data: portalStats, 
-    isLoading: portalLoading, 
+  const {
+    data: portalStats,
+    isLoading: portalLoading,
     error: portalError,
-    refetch: refetchPortal 
+    refetch: refetchPortal
   } = useMemberPortalStats(gymId, periodDays)
 
   const isLoading = gymLoading || portalLoading
@@ -98,14 +98,14 @@ export function GymUtilizationAnalytics({
   }
 
   // Calculate utilization metrics
-  const totalCheckins = gymAnalytics.checkinData?.reduce((sum, day) => sum + day.checkins, 0) || 0
-  const avgDailyCheckins = Math.round(totalCheckins / 7)
-  const peakDay = gymAnalytics.checkinData?.reduce((peak, day) => 
+  const totalCheckins = gymAnalytics.attendanceTrend?.reduce((sum: number, day: { checkins: number }) => sum + day.checkins, 0) || 0
+  const avgDailyCheckins = Math.round(totalCheckins / (gymAnalytics.attendanceTrend?.length || 1))
+  const peakDay = gymAnalytics.attendanceTrend?.reduce((peak: { date: string, checkins: number }, day: { date: string, checkins: number }) =>
     day.checkins > peak.checkins ? day : peak
-  ) || { day: 'N/A', checkins: 0 }
-  const lowDay = gymAnalytics.checkinData?.reduce((low, day) => 
+    , { date: 'N/A', checkins: 0 }) || { date: 'N/A', checkins: 0 }
+  const lowDay = gymAnalytics.attendanceTrend?.reduce((low: { date: string, checkins: number }, day: { date: string, checkins: number }) =>
     day.checkins < low.checkins ? day : low
-  ) || { day: 'N/A', checkins: 0 }
+    , { date: 'N/A', checkins: 0 }) || { date: 'N/A', checkins: 0 }
 
   // Calculate capacity utilization (assuming 50% capacity for demo)
   const estimatedCapacity = Math.max(portalStats.total_members * 0.5, 20)
@@ -202,7 +202,7 @@ export function GymUtilizationAnalytics({
                     </div>
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">
-                    {peakDay.day}
+                    {peakDay.date !== 'N/A' ? new Date(peakDay.date).toLocaleDateString(undefined, { weekday: 'long' }) : 'N/A'}
                   </div>
                 </CardContent>
               </Card>
@@ -244,15 +244,15 @@ export function GymUtilizationAnalytics({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {gymAnalytics.checkinData?.map((day, index) => {
+                  {gymAnalytics.attendanceTrend?.map((day, index) => {
                     const isPeak = day.checkins === peakDay.checkins
                     const isLow = day.checkins === lowDay.checkins
-                    const utilization = (day.checkins / peakDay.checkins) * 100
-                    
+                    const utilization = peakDay.checkins > 0 ? (day.checkins / peakDay.checkins) * 100 : 0
+
                     return (
                       <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                         <div className="flex items-center gap-3">
-                          <div className="w-16 text-sm font-medium">{day.day}</div>
+                          <div className="w-16 text-sm font-medium">{new Date(day.date).toLocaleDateString(undefined, { weekday: 'short' })}</div>
                           <div className="flex items-center gap-2">
                             {isPeak && <Badge variant="default" className="bg-green-100 text-green-800">Peak</Badge>}
                             {isLow && <Badge variant="secondary">Low</Badge>}
@@ -298,7 +298,7 @@ export function GymUtilizationAnalytics({
                       {capacityUtilization > 80 ? 'High' : capacityUtilization > 60 ? 'Medium' : 'Low'}
                     </Badge>
                   </div>
-                  
+
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm">Estimated Capacity</span>
@@ -313,15 +313,15 @@ export function GymUtilizationAnalytics({
                       <span className="font-medium">{capacityUtilization.toFixed(1)}%</span>
                     </div>
                   </div>
-                  
+
                   <Progress value={capacityUtilization} className="h-3" />
-                  
+
                   <div className="text-sm text-muted-foreground">
-                    {capacityUtilization > 80 
+                    {capacityUtilization > 80
                       ? 'High utilization - consider expanding hours or capacity'
-                      : capacityUtilization > 60 
-                      ? 'Good utilization - monitor for peak times'
-                      : 'Low utilization - consider marketing or schedule adjustments'
+                      : capacityUtilization > 60
+                        ? 'Good utilization - monitor for peak times'
+                        : 'Low utilization - consider marketing or schedule adjustments'
                     }
                   </div>
                 </div>
@@ -348,7 +348,7 @@ export function GymUtilizationAnalytics({
                         </div>
                       </div>
                     )}
-                    
+
                     {capacityUtilization < 40 && (
                       <div className="text-sm p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                         <div className="flex items-start gap-2">
@@ -362,7 +362,7 @@ export function GymUtilizationAnalytics({
                         </div>
                       </div>
                     )}
-                    
+
                     {capacityUtilization >= 40 && capacityUtilization <= 80 && (
                       <div className="text-sm p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
                         <div className="flex items-start gap-2">
@@ -430,7 +430,7 @@ export function GymUtilizationAnalytics({
                           Evening hours (5:00 PM - 8:00 PM) show the highest utilization at 92%
                         </div>
                       </div>
-                      
+
                       <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                           <Timer className="h-4 w-4 text-green-600" />

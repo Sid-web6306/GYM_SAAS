@@ -13,6 +13,8 @@ import { useMemo, useCallback, useEffect } from 'react'
 import { logger } from '@/lib/logger'
 import { toastActions } from '@/stores/toast-store'
 
+// NOTE: Most operations go through API routes. The Supabase client is only used for real-time subscriptions.
+
 // ========== QUERY KEYS ==========
 
 export const invitationKeys = {
@@ -323,19 +325,21 @@ export const useInvitationSummary = (gymId?: string) => {
         return { total: 0, pending: 0, accepted: 0, expired: 0, revoked: 0 }
       }
 
-      const supabase = createClient()
-      
-      // Get summary counts
-      const { data, error } = await supabase
-        .from('gym_invitations')
-        .select('status')
-        .eq('gym_id', targetGymId)
+      // Fetch all invitations via API and calculate summary
+      const response = await fetch(`/api/invites?gym_id=${targetGymId}&status=all`)
+      const result = await response.json()
 
-      if (error) throw error
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch invitations')
+      }
 
-      const summary = data.reduce((acc, invitation) => {
+      const invitations = result.invitations || []
+      const summary = invitations.reduce((acc: InvitationSummary, invitation: { status: string }) => {
         acc.total++
-        acc[invitation.status as keyof InvitationSummary]++
+        const status = invitation.status as keyof Omit<InvitationSummary, 'total'>
+        if (status in acc) {
+          acc[status]++
+        }
         return acc
       }, { total: 0, pending: 0, accepted: 0, expired: 0, revoked: 0 })
 
@@ -352,37 +356,15 @@ export const useInvitation = (invitationId: string) => {
   return useQuery({
     queryKey: invitationKeys.detail(invitationId),
     queryFn: async (): Promise<InvitationWithDetails | null> => {
-      const supabase = createClient()
-      
-      const { data, error } = await supabase
-        .from('gym_invitations')
-        .select(`
-          id,
-          gym_id,
-          email,
-          role,
-          status,
-          token,
-          expires_at,
-          accepted_at,
-          metadata,
-          created_at,
-          updated_at,
-          accepted_by:profiles!gym_invitations_accepted_by_fkey(
-            id,
-            full_name,
-            email
-          ),
-          gym:gyms(
-            id,
-            name
-          )
-        `)
-        .eq('id', invitationId)
-        .single()
+      const response = await fetch(`/api/invites/${invitationId}`)
+      const result = await response.json()
 
-      if (error) throw error
-      return data as InvitationWithDetails
+      if (!response.ok) {
+        if (response.status === 404) return null
+        throw new Error(result.error || 'Failed to fetch invitation')
+      }
+
+      return result.invitation as InvitationWithDetails
     },
     enabled: !!invitationId,
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -537,11 +519,15 @@ export const useInvitationCleanup = () => {
 
   return useMutation({
     mutationFn: async () => {
-      const supabase = createClient()
-      
-      // Mark expired invitations
-      const { error } = await supabase.rpc('mark_expired_invitations')
-      if (error) throw error
+      // Call cleanup API endpoint
+      const response = await fetch('/api/invites/cleanup', {
+        method: 'POST'
+      })
+
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to cleanup invitations')
+      }
 
       return { success: true }
     },

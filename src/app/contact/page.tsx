@@ -78,7 +78,7 @@ export default function ContactPage() {
             <div>
               <h4 className="font-semibold text-gray-900 mb-2">Business Details</h4>
               <p className="text-gray-700">Centric Fit</p>
-              <p className="text-gray-700">Gym Management Software</p>
+              <p className="text-gray-700">Fitness Management Software</p>
             </div>
             <div>
               <h4 className="font-semibold text-gray-900 mb-2">Location</h4>

@@ -228,7 +228,7 @@ function routeUserBasedOnProfile(
 
     // If there's an invite token, try to handle it even if user has a gym
     if (inviteToken) {
-      return NextResponse.redirect(`${origin}/dashboard?invite=${inviteToken}`)
+      return NextResponse.redirect(`${origin}/accept-invite?invite=${inviteToken}`)
     }
     if(profile.default_role === 'member') {
       return NextResponse.redirect(`${origin}/portal`)
@@ -257,7 +257,7 @@ function routeUserBasedOnProfile(
   
   // For existing users, go directly to onboarding
   if (inviteToken) {
-    return NextResponse.redirect(`${origin}/onboarding?invite=${inviteToken}`)
+    return NextResponse.redirect(`${origin}/accept-invite?invite=${inviteToken}`)
   }
   
   return NextResponse.redirect(`${origin}/onboarding`)

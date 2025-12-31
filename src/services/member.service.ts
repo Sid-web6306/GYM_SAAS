@@ -1,9 +1,10 @@
 /**
  * MemberService - Clean service layer for member operations
  * Implements the Two-Phase Pattern: Customer Records → Portal Access
+ * 
+ * NOTE: All operations now go through API routes instead of direct DB access
  */
 
-import { createClient } from '@/utils/supabase/client'
 import { type Member } from '@/types/member.types'
 import { logger } from '@/lib/logger'
 
@@ -81,39 +82,74 @@ export interface EligibleMember {
 
 /**
  * MemberService - Core member management operations
+ * All operations now go through API routes for consistency
  */
 export class MemberService {
-  private static supabase = createClient()
-
   /**
    * PHASE 1: Create member record (customer management)
    * Always succeeds if basic data is valid
    */
   static async createMember(data: CreateMemberData): Promise<Member> {
-    const { data: createdMember, error } = await this.supabase
-      .from('members')
-      .insert({
-        gym_id: data.gym_id,
-        first_name: data.first_name,
-        last_name: data.last_name,
-        email: data.email || null,
-        phone_number: data.phone_number || null,
-        status: data.status || 'active',
-        join_date: data.join_date || new Date().toISOString(),
+    const response = await fetch('/api/members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      logger.error('Member creation failed', { error: result.error, gymId: data.gym_id })
+      throw new Error(result.error || 'Failed to create member')
+    }
+
+    return result.member as Member
+  }
+
+  /**
+   * Bulk create members via API
+   * Much more efficient than creating one-by-one for large imports
+   */
+  static async bulkCreateMembers(
+    members: CreateMemberData[]
+  ): Promise<{
+    success: Array<{ id: string; email: string | null; first_name: string; last_name: string }>
+    failed: Array<{ data: CreateMemberData; error: string }>
+  }> {
+    if (members.length === 0) {
+      return { success: [], failed: [] }
+    }
+
+    // All members must have the same gym_id for bulk creation
+    const gymId = members[0].gym_id
+    
+    const response = await fetch('/api/members/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        gym_id: gymId,
+        members: members.map(m => ({
+          first_name: m.first_name,
+          last_name: m.last_name,
+          email: m.email,
+          phone_number: m.phone_number,
+          status: m.status,
+          join_date: m.join_date
+        }))
       })
-      .select('*')
-      .single()
+    })
 
-    if (error) {
-      logger.error('Member creation failed', { error: error.message, gymId: data.gym_id })
-      throw new Error(`Failed to create member: ${error.message}`)
+    const result = await response.json()
+
+    if (!response.ok && response.status !== 207) {
+      logger.error('Bulk member creation failed', { error: result.error })
+      throw new Error(result.error || 'Failed to create members')
     }
 
-    if (!createdMember) {
-      throw new Error('Failed to create member - no data returned')
+    return {
+      success: result.success || [],
+      failed: result.failed || []
     }
-
-    return createdMember as Member
   }
 
   /**
@@ -125,50 +161,15 @@ export class MemberService {
     options: PortalInviteOptions = {}
   ): Promise<{ success: boolean; invitation_id?: string; error?: string; warning?: string }> {
     try {
-      // Get member details first
-      const member = await this.getMemberById(memberId)
-      if (!member) {
-        throw new Error('Member not found')
-      }
-
-      if (!member.email) {
-        throw new Error('Member must have email for portal access')
-      }
-
-      if (member.user_id) {
-        throw new Error('Member already has portal access')
-      }
-
-      // Prepare request body
-      const requestBody = {
-        email: member.email,
-        role: 'member' as const,
-        gym_id: member.gym_id,
-        expires_in_hours: options.expires_in_hours || 72,
-        message: options.message,
-        notify_user: true, // Always send invitation email when portal access is enabled
-        metadata: {
-          member_id: memberId,
-          member_name: `${member.first_name} ${member.last_name}`.trim(),
-          portal_invitation: true,
-          custom_message: options.message,
-          send_welcome_message: options.send_welcome_message
-        }
-      }
-
-      // Debug: Log the request
-      logger.debug('🔍 MemberService.enablePortalAccess request:', {
-        email: requestBody.email,
-        notify_user: requestBody.notify_user,
-        role: requestBody.role,
-        metadata: requestBody.metadata
-      })
-
-      // Call the API endpoint
-      const response = await fetch('/api/invites', {
+      const response = await fetch('/api/members/portal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          member_id: memberId,
+          message: options.message,
+          expires_in_hours: options.expires_in_hours || 72,
+          send_welcome_message: options.send_welcome_message
+        })
       })
 
       const result = await response.json()
@@ -186,13 +187,13 @@ export class MemberService {
 
       logger.info('Portal access enabled successfully', { 
         memberId, 
-        invitationId: result.invitation?.id,
-        recipientEmail: member.email
+        invitationId: result.invitation_id
       })
 
       return {
         success: true,
-        invitation_id: result.invitation?.id
+        invitation_id: result.invitation_id,
+        warning: result.warning
       }
     } catch (error) {
       logger.error('Portal access enablement failed', { 
@@ -214,18 +215,28 @@ export class MemberService {
     options: BulkInviteOptions
   ): Promise<BulkInviteResult> {
     try {
-      const { data, error } = await this.supabase.rpc('bulk_invite_members_to_portal', {
-        p_gym_id: gymId,
-        p_member_ids: options.member_ids,
-        p_message: options.message || undefined,
-        p_expires_in_hours: options.expires_in_hours || 72
+      const response = await fetch('/api/members/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'bulk-invite',
+          gym_id: gymId,
+          member_ids: options.member_ids,
+          message: options.message,
+          expires_in_hours: options.expires_in_hours || 72
+        })
       })
 
-      if (error) {
-        throw error
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send bulk invitations')
       }
 
-      return data as unknown as BulkInviteResult
+      return {
+        success: true,
+        data: result.result
+      }
     } catch (error) {
       logger.error('Bulk portal invite failed', { 
         gymId, 
@@ -247,18 +258,22 @@ export class MemberService {
     limit: number = 50,
     offset: number = 0
   ): Promise<EligibleMember[]> {
-    const { data, error } = await this.supabase.rpc('get_members_eligible_for_portal', {
-      p_gym_id: gymId,
-      p_limit: limit,
-      p_offset: offset
+    const params = new URLSearchParams({
+      action: 'eligible',
+      gym_id: gymId,
+      limit: limit.toString(),
+      offset: offset.toString()
     })
 
-    if (error) {
-      logger.error('Failed to fetch eligible members', { gymId, error: error.message })
-      throw error
+    const response = await fetch(`/api/members/portal?${params}`)
+    const result = await response.json()
+
+    if (!response.ok) {
+      logger.error('Failed to fetch eligible members', { gymId, error: result.error })
+      throw new Error(result.error || 'Failed to fetch eligible members')
     }
 
-    return data || []
+    return result.members || []
   }
 
   /**
@@ -268,37 +283,41 @@ export class MemberService {
     gymId: string,
     periodDays: number = 30
   ): Promise<MemberPortalStats> {
-    const { data, error } = await this.supabase.rpc('get_member_portal_stats', {
-      p_gym_id: gymId,
-      p_period_days: periodDays
+    const params = new URLSearchParams({
+      action: 'stats',
+      gym_id: gymId,
+      period_days: periodDays.toString()
     })
 
-    if (error) {
-      logger.error('Failed to fetch portal stats', { gymId, periodDays, error: error.message })
-      throw error
+    const response = await fetch(`/api/members/portal?${params}`)
+    const result = await response.json()
+
+    if (!response.ok) {
+      logger.error('Failed to fetch portal stats', { gymId, periodDays, error: result.error })
+      throw new Error(result.error || 'Failed to fetch portal stats')
     }
 
-    return data as unknown as MemberPortalStats
+    return result.stats as MemberPortalStats
   }
 
   /**
    * Get member by ID
    */
   static async getMemberById(memberId: string): Promise<Member | null> {
-    const { data, error } = await this.supabase
-      .from('members')
-      .select('*')
-      .eq('id', memberId)
-      .single()
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null // Not found
-      }
-      throw error
+    const params = new URLSearchParams({ id: memberId })
+    const response = await fetch(`/api/members?${params}`)
+    
+    if (response.status === 404) {
+      return null
     }
 
-    return data as Member
+    const result = await response.json()
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to fetch member')
+    }
+
+    return result.member as Member
   }
 
   /**
@@ -308,39 +327,36 @@ export class MemberService {
     memberId: string,
     updates: Partial<CreateMemberData>
   ): Promise<Member> {
-    const { data, error } = await this.supabase
-      .from('members')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', memberId)
-      .select('*')
-      .single()
+    const params = new URLSearchParams({ id: memberId })
+    const response = await fetch(`/api/members?${params}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    })
 
-    if (error) {
-      logger.error('Member update failed', { memberId, error: error.message })
-      throw error
+    const result = await response.json()
+
+    if (!response.ok) {
+      logger.error('Member update failed', { memberId, error: result.error })
+      throw new Error(result.error || 'Failed to update member')
     }
 
-    return data as Member
+    return result.member as Member
   }
 
   /**
    * Delete member (soft delete by marking as inactive)
    */
   static async deleteMember(memberId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('members')
-      .update({
-        status: 'inactive',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', memberId)
+    const params = new URLSearchParams({ id: memberId })
+    const response = await fetch(`/api/members?${params}`, {
+      method: 'DELETE'
+    })
 
-    if (error) {
-      logger.error('Member deletion failed', { memberId, error: error.message })
-      throw error
+    if (!response.ok) {
+      const result = await response.json()
+      logger.error('Member deletion failed', { memberId, error: result.error })
+      throw new Error(result.error || 'Failed to delete member')
     }
   }
 
@@ -348,14 +364,16 @@ export class MemberService {
    * Track member portal activation (called when invitation is accepted)
    */
   static async trackPortalActivation(userId: string, memberId: string): Promise<void> {
-    const { error } = await this.supabase.rpc('track_member_portal_activation', {
-      p_user_id: userId,
-      p_member_id: memberId
+    const response = await fetch('/api/members/portal', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, member_id: memberId })
     })
 
-    if (error) {
-      logger.error('Portal activation tracking failed', { userId, memberId, error: error.message })
-      throw error
+    if (!response.ok) {
+      const result = await response.json()
+      logger.error('Portal activation tracking failed', { userId, memberId, error: result.error })
+      throw new Error(result.error || 'Failed to track portal activation')
     }
   }
 
@@ -363,25 +381,38 @@ export class MemberService {
    * Check if member has portal access
    */
   static async hasPortalAccess(memberId: string): Promise<boolean> {
-    const member = await this.getMemberById(memberId)
-    return member?.user_id != null
+    const params = new URLSearchParams({
+      action: 'check',
+      member_id: memberId
+    })
+
+    const response = await fetch(`/api/members/portal?${params}`)
+    const result = await response.json()
+
+    if (!response.ok) {
+      return false
+    }
+
+    return result.hasPortalAccess === true
   }
 
   /**
    * Get member portal adoption view data
    */
   static async getPortalAdoptionView(gymId: string): Promise<unknown[]> {
-    const { data, error } = await this.supabase
-      .from('member_portal_adoption')
-      .select('*')
-      .eq('gym_id', gymId)
-      .order('member_created_at', { ascending: false })
+    const params = new URLSearchParams({
+      action: 'adoption',
+      gym_id: gymId
+    })
 
-    if (error) {
-      logger.error('Failed to fetch portal adoption view', { gymId, error: error.message })
-      throw error
+    const response = await fetch(`/api/members/portal?${params}`)
+    const result = await response.json()
+
+    if (!response.ok) {
+      logger.error('Failed to fetch portal adoption view', { gymId, error: result.error })
+      throw new Error(result.error || 'Failed to fetch portal adoption data')
     }
 
-    return data || []
+    return result.adoption || []
   }
 }
