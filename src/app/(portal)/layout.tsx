@@ -73,7 +73,7 @@ export default function PortalLayout({
 
   return (
     <RealtimeProvider>
-      <PortalDataProvider>
+      <PortalDataProvider key="portal-data-provider">
         <PWAWrapper />
         <div className="min-h-screen bg-gray-50">
         {/* Mobile header */}
@@ -196,7 +196,7 @@ export default function PortalLayout({
           </div>
         </div>
       </div>
-        </PortalDataProvider>
-      </RealtimeProvider>
+      </PortalDataProvider>
+    </RealtimeProvider>
   )
 }

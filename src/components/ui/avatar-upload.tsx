@@ -56,7 +56,8 @@ export function AvatarUpload({
       }
       return null
     } catch (error) {
-      console.error('Failed to extract path from storage URL:', error)
+      logger.error('Failed to extract path from storage URL:', {error: error})
+      // Failed to extract path from storage URL
       return null
     }
   }
@@ -80,7 +81,7 @@ export function AvatarUpload({
         logger.warn('Failed to delete old avatar file:', {error: error.message})
         // Don't throw - cleanup failure shouldn't break the main flow
       } else {
-        console.log('Successfully deleted old avatar:', filePath)
+        // Successfully deleted old avatar
       }
     } catch (error) {
       logger.warn('Error during avatar cleanup:', {error})
@@ -146,7 +147,7 @@ export function AvatarUpload({
         })
 
       if (error) {
-        console.error('Upload error:', error)
+        // Upload error occurred
         
         // Provide specific error messages based on error type
         if (error.message?.includes('bucket') || error.message?.includes('not found')) {
@@ -176,8 +177,8 @@ export function AvatarUpload({
         })
         
         setPreviewUrl(null)
-      } catch (updateError) {
-        console.error('Profile update error:', updateError)
+      } catch (_updateError) {
+        // Profile update error
         toastActions.error('Update Failed', 'Failed to update profile. Please try again.')
         
         // Clean up uploaded file
@@ -186,8 +187,8 @@ export function AvatarUpload({
         return
       }
 
-    } catch (error) {
-      console.error('Avatar upload error:', error)
+    } catch (_error) {
+      // Avatar upload error
       toastActions.error('Upload Failed', 'An unexpected error occurred. Please try again.')
       setPreviewUrl(null)
     } finally {
@@ -210,8 +211,8 @@ export function AvatarUpload({
         updated_at: new Date().toISOString() 
       })
 
-    } catch (error) {
-      console.error('Remove avatar error:', error)
+    } catch (_error) {
+      // Remove avatar error
       toastActions.error('Update Failed', 'Failed to remove avatar. Please try again.')
     } finally {
       setUploading(false)

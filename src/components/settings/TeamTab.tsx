@@ -135,7 +135,7 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
         toastActions.error('Failed to Revoke', result.error || 'Unknown error')
       }
     } catch (error) {
-      console.error('Error revoking invitation:', error)
+      
       toastActions.error('Error', 'Failed to revoke invitation')
     }
   }
@@ -149,20 +149,20 @@ export const TeamTab: React.FC<TeamTabProps> = ({ className }) => {
         toastActions.error('Failed to Resend', result.error || 'Unknown error')
       }
     } catch (error) {
-      console.error('Error resending invitation:', error)
+      
       toastActions.error('Error', 'Failed to resend invitation')
     }
   }
 
   const copyInviteLink = async (invitation: InvitationWithDetails) => {
-    console.log('invitation', invitation)
+    
     // Note: In production, you'd generate the actual invite URL
     const inviteUrl = `${window.location.origin}/onboarding?invite=${invitation.id}`
     try {
       await navigator.clipboard.writeText(inviteUrl)
       toastActions.success('Link Copied', 'Invitation link copied to clipboard')
     } catch (error) {
-      console.error('Error copying invite link:', error)
+      
       toastActions.error('Failed to Copy', 'Could not copy link to clipboard')
     }
   }

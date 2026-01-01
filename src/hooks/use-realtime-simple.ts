@@ -352,7 +352,7 @@ export function useRealtimeSync(gymId: string | null) {
         .subscribe((status) => {
           // Only log status in debug mode to reduce console noise
           if (process.env.DEBUG_REALTIME) {
-            console.log('Realtime subscription status:', status, 'for table:', table, 'channel:', channelName, 'type:', typeof status)
+            // Realtime subscription status logged
           }
           
           if (status === 'SUBSCRIBED') {
@@ -364,7 +364,7 @@ export function useRealtimeSync(gymId: string | null) {
           } else {
             // Log unexpected status but don't treat as error (only in debug mode)
             if (process.env.DEBUG_REALTIME) {
-              console.log('Unexpected realtime status:', status, 'type:', typeof status, 'table:', table, 'channel:', channelName)
+              // Unexpected realtime status logged
             }
             logger.realtime.update('Realtime subscription status update', { table, channelName, status })
           }
@@ -503,7 +503,7 @@ export function useRealtimeSync(gymId: string | null) {
         .subscribe((status) => {
           // Only log status in debug mode to reduce console noise
           if (process.env.DEBUG_REALTIME) {
-            console.log('DELETE subscription status:', status, 'for channel:', channelName, 'type:', typeof status)
+            // DELETE subscription status logged
           }
           
           // Handle different subscription statuses
@@ -516,7 +516,7 @@ export function useRealtimeSync(gymId: string | null) {
           } else {
             // Log unexpected status but don't treat as error (only in debug mode)
             if (process.env.DEBUG_REALTIME) {
-              console.log('Unexpected DELETE status:', status, 'type:', typeof status, 'channel:', channelName)
+              // Unexpected DELETE status logged
             }
             logger.realtime.update('Member DELETE subscription status update', { channelName, status })
           }
@@ -651,8 +651,8 @@ export function useTableRealtime(
           table,
           filter
         },
-        (payload) => {
-          console.log(`📡 Table realtime update - ${table}:`, payload.eventType)
+        (_payload) => {
+          // Table realtime update logged
           
           // Get query keys to invalidate
           const getQueryKeys = TABLE_QUERY_MAPPINGS[table]
@@ -666,7 +666,7 @@ export function useTableRealtime(
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log(`✅ Table ${table} realtime subscription active`)
+          // Table realtime subscription active
         }
       })
 

@@ -20,7 +20,7 @@ export async function GET() {
       }
     })
   } catch (error) {
-    console.error('Auth check API error:', error)
+    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -91,7 +91,7 @@ export const createClient = async () => {
             // Use environment-specific cookie names
             const envName = `${envPrefix}-${name}`
             cookieStore.set({ name: envName, value, ...options })
-            console.log(`Server cookie set: ${envName} (environment: ${envPrefix})`)
+            
           } catch (error) { 
             // Ignore errors on Server Components
             logger.warn('Server cookie set error:', {error})
@@ -102,7 +102,7 @@ export const createClient = async () => {
             // Use environment-specific cookie names
             const envName = `${envPrefix}-${name}`
             cookieStore.set({ name: envName, value: '', ...options })
-            console.log(`Server cookie removed: ${envName} (environment: ${envPrefix})`)
+            
           } catch (error) { 
             // Ignore errors on Server Components
             logger.warn('Server cookie remove error:', {error})
@@ -126,7 +126,7 @@ export const getServerAuth = async () => {
     
     // If there are errors, treat as unauthenticated
     if (userError || sessionError) {
-      console.log('Server auth check failed:', { userError, sessionError })
+      
       return { user: null, session: null, isAuthenticated: false }
     }
     
@@ -135,7 +135,7 @@ export const getServerAuth = async () => {
     
     return { user, session, isAuthenticated }
   } catch (error) {
-    console.error('Server auth check error:', error)
+    
     return { user: null, session: null, isAuthenticated: false }
   }
 }

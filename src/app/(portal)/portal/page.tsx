@@ -50,7 +50,7 @@ export default function MemberPortalDashboard() {
       })
       setCheckinNotes('')
     } catch (error) {
-      console.error('Check-in error:', error)
+      
     }
   }
 
@@ -58,7 +58,7 @@ export default function MemberPortalDashboard() {
     try {
       await checkoutMutation.mutateAsync({})
     } catch (error) {
-      console.error('Check-out error:', error)
+      
     }
   }
 

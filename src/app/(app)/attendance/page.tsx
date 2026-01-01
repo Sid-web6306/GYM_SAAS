@@ -164,7 +164,7 @@ export default function AttendancePage() {
         notes: undefined
       })
     } catch (error) {
-      console.error('Staff check-in error:', error)
+      
     }
   }, [staffCheckinMutation])
 
@@ -172,7 +172,7 @@ export default function AttendancePage() {
     try {
       await staffCheckoutMutation.mutateAsync({})
     } catch (error) {
-      console.error('Staff check-out error:', error)
+      
     }
   }, [staffCheckoutMutation])
 
