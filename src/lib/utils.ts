@@ -21,5 +21,5 @@ export function handleCatchError(error: unknown, fallbackMessage?: string): void
   }
   
   // Log other errors
-  console.error(fallbackMessage || 'Caught error:', error)
+  
 }

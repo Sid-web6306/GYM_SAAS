@@ -9,7 +9,7 @@ export default function ServiceWorkerRegister() {
     const register = async () => {
       try {
         const registration = await navigator.serviceWorker.register('/sw.js')
-        console.log('SW: Registered at scope:', registration.scope)
+        
 
         // Handle updates
         registration.addEventListener('updatefound', () => {
@@ -17,13 +17,13 @@ export default function ServiceWorkerRegister() {
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('SW: New content available, please refresh.')
+                
               }
             })
           }
         })
       } catch (error) {
-        console.error('SW: Registration failed:', error)
+        
       }
     }
 

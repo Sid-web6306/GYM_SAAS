@@ -63,7 +63,7 @@ export const GymTab = () => {
       })
       toastActions.success('Gym Updated', 'Your gym information has been updated successfully.')
     } catch (error) {
-      console.error('Gym update error:', error)
+      
       toastActions.error('Update Failed', 'Failed to update gym information. Please try again.')
     }
   }

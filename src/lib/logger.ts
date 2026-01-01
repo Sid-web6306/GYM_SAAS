@@ -22,20 +22,28 @@ function formatContext(ctx?: LogContext): string {
 }
 
 function log(level: LogLevel, message: string, context?: LogContext) {
+  // Completely suppress all logs in the browser environment (Inspect console)
+  if (typeof window !== 'undefined') {
+    return
+  }
+
   if (!shouldLog(level)) return
   
-  const isServer = typeof window === 'undefined'
   const time = new Date().toISOString().slice(11, 19) // HH:MM:SS
   const ctx = formatContext(context)
   
-  if (isServer) {
-    // Colored server logs
-    const color = colors[level]
-    const icon = icons[level]
-    console[level](`${color}${icon} [${time}] ${message}${ctx}${reset}`)
+  // Colored server logs for the terminal
+  const color = colors[level]
+  const icon = icons[level]
+  const logMessage = `${color}${icon} [${time}] ${message}${ctx}${reset}\n`
+
+  // Use process.stdout.write if available (better for server-only logs in some environments)
+  // otherwise fallback to console.
+  const g = globalThis as any
+  if (typeof g.process !== 'undefined' && g.process.stdout) {
+    g.process.stdout.write(logMessage)
   } else {
-    // Browser logs with emoji
-    console[level](`${icons[level]} ${message}${ctx}`)
+    console[level](logMessage.trim())
   }
 }
 

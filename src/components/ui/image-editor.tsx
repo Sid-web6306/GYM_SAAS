@@ -100,7 +100,7 @@ export function ImageEditor({ isOpen, onClose, onSave, originalFile, originalUrl
         onSave(croppedFile)
       }
     } catch (error) {
-      console.error('Error processing image:', error)
+      
     } finally {
       setIsProcessing(false)
     }

@@ -227,12 +227,12 @@ export async function POST(request: NextRequest) {
               },
               modal: {
                 ondismiss: function() {
-                  console.log('Payment modal dismissed');
+                  
                 }
               },
               handler: async function(response: any) {
                 // This will be handled by the frontend
-                console.log('Payment successful:', response);
+                
               }
             },
             subscriptionData: {
@@ -407,7 +407,7 @@ export async function POST(request: NextRequest) {
           },
           modal: {
             ondismiss: function() {
-              console.log('Payment modal dismissed');
+              
             }
           }
         }

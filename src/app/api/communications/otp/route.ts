@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (err) {
-    console.error('OTP route error', err)
+    
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }

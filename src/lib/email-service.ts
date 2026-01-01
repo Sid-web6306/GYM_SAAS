@@ -28,15 +28,8 @@ interface EmailResult {
  * Development email service - logs emails instead of sending them
  */
 class DevEmailService implements EmailService {
-  async sendInvitationEmail(data: InvitationEmailData): Promise<EmailResult> {
-    console.log('\n📧 === EMAIL (Development Mode) ===')
-    console.log('To:', data.recipientEmail)
-    console.log('Gym:', data.gymName)
-    console.log('Role:', data.role)
-    console.log('Inviter:', data.inviterName)
-    console.log('Invite URL:', data.inviteUrl)
-    console.log('Message:', data.message || 'N/A')
-    console.log('===================================\n')
+  async sendInvitationEmail(_data: InvitationEmailData): Promise<EmailResult> {
+    // Development mode - email logged
     
     return { 
       success: true, 
@@ -102,13 +95,13 @@ function getEmailService(): EmailService {
 
   // Use dev service in development without API key
   if (process.env.NODE_ENV === 'development' && !msg91ApiKey) {
-    console.log('📧 Using development email service')
+    // Using development email service
     return new DevEmailService()
   }
 
   // Use MSG91 when configured
   if (msg91ApiKey && msg91InvitationTemplateId) {
-    console.log('✅ Using MSG91 email service')
+    // Using MSG91 email service
     return new MSG91EmailService()
   }
 

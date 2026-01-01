@@ -61,7 +61,7 @@ export default function MemberHistoryPage() {
   
   // Debug logging to track when history page is rendered
   React.useEffect(() => {
-    console.log('📊 History page rendered with filters:', { from, to, limit: pageSize, offset: currentPage * pageSize })
+    
   }, [from, to, pageSize, currentPage])
 
   // Filter attendance by search query

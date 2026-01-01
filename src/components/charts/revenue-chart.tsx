@@ -84,7 +84,7 @@ export const RevenueChart = ({ data, isLoading = false }: RevenueChartProps) => 
   const colors = getThemeColors(theme)
   
   // Debug logging for colors
-  console.log('Revenue Chart Debug:', { theme, colors, resolvedTheme: theme })
+  
 
   if (!isClient) {
     return (

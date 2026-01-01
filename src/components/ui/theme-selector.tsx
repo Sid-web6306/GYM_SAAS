@@ -1,4 +1,4 @@
- 'use client'
+'use client'
 
 import { useTheme } from 'next-themes'
 import { useState, useEffect } from 'react'
@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Palette } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 const themes = [
   {
@@ -50,7 +51,7 @@ export const ThemeSelector = () => {
   // Debug logging
   useEffect(() => {
     if (mounted) {
-      console.log('ThemeSelector Debug:', {
+      logger.debug('Theme changed', {
         theme,
         resolvedTheme,
         availableThemes,
@@ -60,12 +61,11 @@ export const ThemeSelector = () => {
   }, [theme, resolvedTheme, availableThemes, mounted])
 
   const handleThemeChange = (newTheme: string) => {
-    console.log('Theme changing to:', newTheme)
     setTheme(newTheme)
-    
+
     // Force a re-render after theme change
     setTimeout(() => {
-      console.log('After theme change:', {
+      logger.debug('Theme update applied', {
         theme,
         resolvedTheme,
         htmlClass: document.documentElement.className
@@ -85,7 +85,7 @@ export const ThemeSelector = () => {
         <Palette className="h-3 w-3" />
         Theme
       </div>
-      
+
       <Select value={currentTheme} onValueChange={handleThemeChange}>
         <SelectTrigger className="mx-3 h-8 text-xs">
           <SelectValue placeholder="Select theme" />

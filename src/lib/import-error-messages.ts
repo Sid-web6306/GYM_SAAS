@@ -74,7 +74,7 @@ export function getUserFriendlyErrorMessage(error: unknown): string {
   
   // Log the actual error for debugging (can be removed in production)
   if (process.env.NODE_ENV === 'development') {
-    console.log('Import error received:', errorStr)
+    
   }
   
   // Find matching error pattern
@@ -83,7 +83,7 @@ export function getUserFriendlyErrorMessage(error: unknown): string {
     const hasMatch = mapping.patterns.some(pattern => errorStr.includes(pattern.toLowerCase()))
     if (hasMatch) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('Matched pattern, returning message:', mapping.message)
+        
       }
       return mapping.message
     }
@@ -91,7 +91,7 @@ export function getUserFriendlyErrorMessage(error: unknown): string {
   
   // Log when no pattern matches
   if (process.env.NODE_ENV === 'development') {
-    console.log('No pattern matched, returning default message')
+    
   }
   
   // Return default message if no pattern matches

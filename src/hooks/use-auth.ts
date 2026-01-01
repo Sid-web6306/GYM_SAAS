@@ -48,7 +48,10 @@ async function fetchAuthSession(): Promise<AuthData> {
         
         // Try to clear all Supabase cookies to fix the issue
         try {
-          const envPrefix = process.env.NODE_ENV === 'development' ? 'dev' : 'prod'
+          // Robust check for process.env
+          const g = globalThis as any
+          const isDev = typeof g.process !== 'undefined' && g.process.env?.NODE_ENV === 'development'
+          const envPrefix = isDev ? 'dev' : 'prod'
           const cookieNames = [
             `${envPrefix}-sb-access-token`,
             `${envPrefix}-sb-refresh-token`,
@@ -138,7 +141,9 @@ async function fetchAuthSession(): Promise<AuthData> {
       // Try to clear all Supabase cookies to fix the issue
       try {
         if (typeof document !== 'undefined') {
-          const envPrefix = process.env.NODE_ENV === 'development' ? 'dev' : 'prod'
+          const g = globalThis as any
+          const isDev = typeof g.process !== 'undefined' && g.process.env?.NODE_ENV === 'development'
+          const envPrefix = isDev ? 'dev' : 'prod'
           const cookieNames = [
             `${envPrefix}-sb-access-token`,
             `${envPrefix}-sb-refresh-token`,
@@ -207,25 +212,8 @@ export function useAuth() {
     refetchOnMount: false, // Only refetch if data is stale (respects staleTime) - middleware already validates
   })
 
-  // Handle auth state changes
-  useEffect(() => {
-    const supabase = createClient()
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      // Note: We intentionally don't use the session parameter to avoid security warnings
-      // The session data from onAuthStateChange could be insecure, so we refetch via getUser()
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-        // Add a small delay to reduce race conditions with middleware
-        const delay = event === 'SIGNED_IN' ? 100 : 0
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['auth-session'] })
-        }, delay)
-      }
-      // Don't invalidate on TOKEN_REFRESHED to prevent infinite loops during profile updates
-    })
-
-    return () => subscription.unsubscribe()
-  }, [queryClient])
+  // Auth state changes are now handled globally in SessionProvider
+  // to prevent redundant listeners and excessive API calls.
 
   return {
     user: authQuery.data?.user || null,
@@ -359,7 +347,7 @@ export function useUpdateProfile() {
 
 // Post-onboarding sync for refreshing data
 // Debounce helper to prevent multiple rapid calls
-let syncDebounceTimer: NodeJS.Timeout | null = null
+let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null
 const SYNC_DEBOUNCE_MS = 500
 
 export function usePostOnboardingSync() {

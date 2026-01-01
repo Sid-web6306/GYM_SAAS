@@ -119,7 +119,7 @@ export const EmailUpdateDialog: React.FC<EmailUpdateDialogProps> = ({
         const { error: sessionError } = await supabase.auth.getSession()
         
         if (sessionError) {
-          console.error('Session refresh error:', sessionError)
+          
         }
         
         // Refetch user data to get updated email

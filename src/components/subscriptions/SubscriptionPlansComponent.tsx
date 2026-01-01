@@ -206,7 +206,7 @@ export function SubscriptionPlansComponent({
 
               const upgradeResult = await upgradeResponse.json()
               
-              console.log('Upgrade response:', upgradeResult)
+              
 
               if (upgradeResult.success) {
                 toastActions.success(
@@ -225,7 +225,7 @@ export function SubscriptionPlansComponent({
                 )
               }
             } catch (upgradeError) {
-              console.error('Upgrade payment verification failed:', upgradeError)
+              
               toastActions.error(
                 'Upgrade Failed', 
                 'Failed to complete subscription upgrade. Please contact support.'
@@ -284,7 +284,7 @@ export function SubscriptionPlansComponent({
         }
       }
     } catch (error) {
-      console.error('Payment/subscription operation failed:', error)
+      
       toastActions.error('Operation Failed', error instanceof Error ? error.message : 'Failed to process request')
     } finally {
       setSelectedPlan(null)

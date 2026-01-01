@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { BeforeInstallPromptEvent } from '@/types/pwa'
+import { logger } from '@/lib/logger'
 
 const DISMISS_KEY = 'pwa-install-dismissed-at'
 const DISMISS_DURATION = 24 * 60 * 60 * 1000 // 24 hours
@@ -38,7 +39,7 @@ export function usePWA() {
     // or from the early-catch script in layout.tsx
     const existingPrompt = window.deferredPrompt
     if (existingPrompt) {
-      console.log('usePWA: Found existing deferredPrompt')
+      // Found existing deferredPrompt
       setDeferredPrompt(existingPrompt as BeforeInstallPromptEvent)
       if (!installed && !checkDismissed()) {
         // Show after a short delay for better UX
@@ -91,15 +92,15 @@ export function usePWA() {
 
   const install = async () => {
     if (!deferredPrompt) {
-      console.warn('usePWA: No deferredPrompt available for installation')
+      // No deferredPrompt available for installation
       return false
     }
     
     try {
-      console.log('usePWA: Triggering native install prompt')
+      // Triggering native install prompt
       await deferredPrompt.prompt()
       const { outcome } = await deferredPrompt.userChoice
-      console.log(`usePWA: User choice outcome: ${outcome}`)
+      // User choice outcome logged
       
       if (outcome === 'accepted') {
         setIsInstalled(true)
@@ -109,7 +110,8 @@ export function usePWA() {
         return true
       }
     } catch (error) {
-      console.error('usePWA: Install error:', error)
+      // Install error occurred
+      logger.error('Error installing PWA', { error })
     }
     return false
   }
