@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const to = searchParams.get('to')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
+    const summary = searchParams.get('summary') === 'true'
 
     if (!gymId) {
       return NextResponse.json({ error: 'Gym ID is required' }, { status: 400 })
@@ -31,6 +32,35 @@ export async function GET(request: NextRequest) {
     const canView = await checkUserPermission(user.id, gymId, permission)
     if (!canView) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
+    }
+
+    if (summary) {
+      // Efficiently fetch counts of active sessions
+      const [membersResult, staffResult] = await Promise.all([
+        supabase
+          .from('attendance_sessions')
+          .select('*', { count: 'exact', head: true })
+          .eq('gym_id', gymId)
+          .eq('subject_type', 'member')
+          .is('check_out_at', null),
+        supabase
+          .from('attendance_sessions')
+          .select('*', { count: 'exact', head: true })
+          .eq('gym_id', gymId)
+          .eq('subject_type', 'staff')
+          .is('check_out_at', null)
+      ])
+
+      if (membersResult.error) logger.error('Error counting member attendance:', { error: membersResult.error.message })
+      if (staffResult.error) logger.error('Error counting staff attendance:', { error: staffResult.error.message })
+
+      return NextResponse.json({
+        stats: {
+          membersPresent: membersResult.count || 0,
+          staffPresent: staffResult.count || 0,
+          totalPresent: (membersResult.count || 0) + (staffResult.count || 0)
+        }
+      })
     }
 
     // Call the appropriate RPC function

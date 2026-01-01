@@ -1,13 +1,9 @@
-// Simple Service Worker for PWA functionality
-// No hardcoded chunk precaching to avoid build conflicts
+const CACHE_NAME = 'centric-fit-v2'
+const STATIC_CACHE = 'centric-fit-static-v2'
 
-const CACHE_NAME = 'centric-fit-v1'
-const STATIC_CACHE = 'centric-fit-static-v1'
-
-// Basic files to cache (avoiding dynamic chunks)
+// Basic files to cache
 const STATIC_ASSETS = [
   '/',
-  '/manifest.json',
   '/icon-192x192.png',
   '/icon-512x512.png',
   '/offline'
@@ -16,7 +12,7 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then((cache) => cache.addAll(STATIC_ASSETS.filter(url => url !== '/offline')))
+      .then((cache) => cache.addAll(STATIC_ASSETS))
       .then(() => self.skipWaiting())
   )
 })
@@ -37,16 +33,21 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event
-  
+
   // Skip non-GET requests
   if (request.method !== 'GET') return
-  
-  // Skip API calls and auth callbacks
-  if (request.url.includes('/api/') || request.url.includes('/auth/')) return
-  
-  // Network first for HTML pages, Cache first for static assets
-  if (request.headers.get('accept')?.includes('text/html')) {
-    // Network first strategy for pages
+
+  // Skip API calls, auth callbacks, and external resources
+  if (
+    request.url.includes('/api/') ||
+    request.url.includes('/auth/') ||
+    request.url.includes('supabase.co') ||
+    request.url.includes('googleusercontent.com') ||
+    request.url.includes('razorpay.com')
+  ) return
+
+  // Strategy: Network First for HTML, Cache First for assets
+  if (request.headers.get('accept')?.includes('text/html') || request.url.includes('_rsc=')) {
     event.respondWith(
       fetch(request)
         .then((response) => {
@@ -61,38 +62,46 @@ self.addEventListener('fetch', (event) => {
         .catch(() => {
           return caches.match(request)
             .then((cachedResponse) => {
-              return cachedResponse || caches.match('/')
+              if (cachedResponse) return cachedResponse
+              // For navigation requests, return the offline page
+              if (request.mode === 'navigate') {
+                return caches.match('/offline')
+              }
+              return null
             })
         })
     )
   } else {
-    // Cache first strategy for static assets  
+    // Cache first for static assets
     event.respondWith(
       caches.match(request)
         .then((cachedResponse) => {
           if (cachedResponse) return cachedResponse
-          
-          return fetch(request)
-            .then((response) => {
-              if (response.ok && response.url.includes('/_next/static/')) {
-                const responseClone = response.clone()
-                caches.open(CACHE_NAME).then((cache) => {
-                  cache.put(request, responseClone)
-                })
-              }
-              return response
-            })
+
+          return fetch(request).then((response) => {
+            // Only cache valid responses and static assets
+            const isManifest = response.url.includes('manifest.json') || response.url.includes('manifest.webmanifest')
+
+            if (response.ok && !isManifest && (
+              response.url.includes('/_next/static/') ||
+              response.url.includes('.png') ||
+              response.url.includes('.svg') ||
+              response.url.includes('.json')
+            )) {
+              const responseClone = response.clone()
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(request, responseClone)
+              })
+            }
+            return response
+          }).catch(() => {
+            // Fallback for manifest or navigation if fetch fails
+            if (request.url.includes('manifest.json')) {
+              return caches.match('/manifest.json') // Fallback if we happen to have it, though we try not to cache it
+            }
+            return caches.match(request)
+          })
         })
     )
   }
-})
-
-// Handle background sync (optional)
-self.addEventListener('sync', (event) => {
-  console.log('Background sync event:', event.tag)
-})
-
-// Handle push notifications (optional)
-self.addEventListener('push', (event) => {
-  console.log('Push notification received:', event.data?.text())
 })

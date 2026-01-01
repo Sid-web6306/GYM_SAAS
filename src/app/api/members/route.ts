@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
     const search = searchParams.get('search')
+    const summary = searchParams.get('summary') === 'true'
 
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -67,6 +68,44 @@ export async function GET(request: NextRequest) {
     const canView = await checkUserPermission(user.id, targetGymId, 'members.read')
     if (!canView) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
+    }
+
+    if (summary) {
+      const now = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+      
+      // Calculate week start (Sunday)
+      const sunday = new Date(now)
+      sunday.setDate(now.getDate() - now.getDay())
+      sunday.setHours(0, 0, 0, 0)
+      const startOfWeek = sunday.toISOString()
+
+      const [
+        totalRes,
+        activeRes,
+        inactiveRes,
+        pendingRes,
+        monthRes,
+        weekRes
+      ] = await Promise.all([
+        supabase.from('members').select('*', { count: 'exact', head: true }).eq('gym_id', targetGymId),
+        supabase.from('members').select('*', { count: 'exact', head: true }).eq('gym_id', targetGymId).eq('status', 'active'),
+        supabase.from('members').select('*', { count: 'exact', head: true }).eq('gym_id', targetGymId).eq('status', 'inactive'),
+        supabase.from('members').select('*', { count: 'exact', head: true }).eq('gym_id', targetGymId).eq('status', 'pending'),
+        supabase.from('members').select('*', { count: 'exact', head: true }).eq('gym_id', targetGymId).gte('created_at', startOfMonth),
+        supabase.from('members').select('*', { count: 'exact', head: true }).eq('gym_id', targetGymId).gte('created_at', startOfWeek)
+      ])
+
+      return NextResponse.json({
+        stats: {
+          total: totalRes.count || 0,
+          active: activeRes.count || 0,
+          inactive: inactiveRes.count || 0,
+          pending: pendingRes.count || 0,
+          newThisMonth: monthRes.count || 0,
+          newThisWeek: weekRes.count || 0
+        }
+      })
     }
 
     // Single member lookup

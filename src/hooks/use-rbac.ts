@@ -59,7 +59,7 @@ export const useRBAC = (): RBACContext | null => {
     if (!user?.id || !profile?.gym_id || !userPermissions) return null
 
     const role = userPermissions.role
-    const permissions = userPermissions.permissions
+    const permissions = userPermissions.permissions || []
     const roleLevel = userPermissions.role_level
 
     return {

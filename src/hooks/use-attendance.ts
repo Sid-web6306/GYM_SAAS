@@ -51,7 +51,8 @@ export function useMemberAttendance(gymId: string | null, filters?: AttendanceFi
       }
       
       return (result.attendance || []) as AttendanceRow[]
-    }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
   })
 }
 
@@ -82,7 +83,33 @@ export function useStaffAttendance(gymId: string | null, filters?: AttendanceFil
       }
       
       return (result.attendance || []) as AttendanceRow[]
-    }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+export function useAttendanceStats(gymId: string | null) {
+  return useQuery({
+    queryKey: ['attendance', 'stats', gymId],
+    enabled: !!gymId,
+    queryFn: async () => {
+      if (!gymId) return null
+      
+      const response = await fetch(`/api/attendance?gym_id=${gymId}&summary=true`)
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch attendance stats')
+      }
+      
+      return result.stats as {
+        membersPresent: number
+        staffPresent: number
+        totalPresent: number
+      }
+    },
+    staleTime: 1 * 60 * 1000, // 1 minute is enough for stats
+    refetchInterval: 2 * 60 * 1000, // Refresh every 2 minutes
   })
 }
 

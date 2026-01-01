@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { logger } from '@/lib/logger'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { 
+import {
   Table,
   TableBody,
   TableCell,
@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Users, BookUser, Search, Clock, LogIn, LogOut } from 'lucide-react'
 import { StaffManagementGuard, MemberManagementGuard, AccessDenied } from '@/components/rbac/rbac-guards'
 import { useAuth } from '@/hooks/use-auth'
-import { useMemberAttendance, useStaffAttendance, formatDurationFromSeconds } from '@/hooks/use-attendance'
+import { useMemberAttendance, useStaffAttendance, useAttendanceStats, formatDurationFromSeconds } from '@/hooks/use-attendance'
 import type { AttendanceRow } from '@/hooks/use-attendance'
 import { useStaffStatus, useStaffCheckin, useStaffCheckout } from '@/hooks/use-staff-portal'
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,7 @@ export default function AttendancePage() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  
+
   const [memberSearch, setMemberSearch] = useState('')
   const [staffSearch, setStaffSearch] = useState('')
   const [activeView, setActiveView] = useState<'members' | 'staff'>(
@@ -38,12 +38,12 @@ export default function AttendancePage() {
   const [fromDate, setFromDate] = useState<string | null>(null)
   const [toDate, setToDate] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  
+
   const pageSize = 20
-  
+
   // Get gym ID from user profile
   const gymId = profile?.gym_id || null
-  
+
   // Initialize URL params on mount
   useEffect(() => {
     const currentView = searchParams.get('view')
@@ -62,22 +62,22 @@ export default function AttendancePage() {
     params.set('view', view)
     router.push(`${pathname}?${params.toString()}`)
   }, [searchParams, pathname, router])
-  
+
   // Staff check-in/check-out functionality
   const { data: staffStatus, isLoading: staffStatusLoading } = useStaffStatus()
   const staffCheckinMutation = useStaffCheckin()
   const staffCheckoutMutation = useStaffCheckout()
-  
+
   // Debounced search values
   const debouncedMemberSearch = useDebounce(memberSearch, 300)
   const debouncedStaffSearch = useDebounce(staffSearch, 300)
-  
+
   // Deferred values for better performance
   const deferredMemberSearch = useDeferredValue(debouncedMemberSearch)
   const deferredStaffSearch = useDeferredValue(debouncedStaffSearch)
   const deferredFromDate = useDeferredValue(fromDate)
   const deferredToDate = useDeferredValue(toDate)
-  
+
   // Memoize filter objects to prevent unnecessary re-renders
   // This ensures stable queryKeys for react-query, which triggers proper refetches
   // when filter values actually change (date, search, pagination)
@@ -88,7 +88,7 @@ export default function AttendancePage() {
     limit: pageSize,
     offset: (currentPage - 1) * pageSize
   }), [deferredMemberSearch, deferredFromDate, deferredToDate, currentPage, pageSize])
-  
+
   const staffFilters = useMemo(() => ({
     search: deferredStaffSearch || undefined,
     from: deferredFromDate || undefined,
@@ -96,13 +96,13 @@ export default function AttendancePage() {
     limit: pageSize,
     offset: (currentPage - 1) * pageSize
   }), [deferredStaffSearch, deferredFromDate, deferredToDate, currentPage, pageSize])
-  
+
   // For present counts, we need all current check-ins without date filters
   const presentFilters = useMemo(() => ({
     limit: 1000,
     offset: 0
   }), [])
-  
+
   // Attendance data queries for history view
   const {
     data: memberAttendance,
@@ -111,7 +111,7 @@ export default function AttendancePage() {
   } = useMemberAttendance(gymId, memberFilters, {
     enabled: !!gymId
   })
-  
+
   const {
     data: staffAttendance,
     isLoading: staffLoading,
@@ -119,27 +119,18 @@ export default function AttendancePage() {
   } = useStaffAttendance(gymId, staffFilters, {
     enabled: !!gymId
   })
-  
-  // Separate queries for present counts (no date filter, only current check-ins)
-  const {
-    data: membersPresentData
-  } = useMemberAttendance(gymId, presentFilters, {
-    enabled: !!gymId
-  })
-  
-  const {
-    data: staffPresentData
-  } = useStaffAttendance(gymId, presentFilters, {
-    enabled: !!gymId
-  })
-  
+
+  // Stats query (replaces heavy count queries)
+  const { data: attendanceStats } = useAttendanceStats(gymId)
+
+
   // URL state management
   // Update URL when view changes
   const handleViewChange = useCallback((view: 'members' | 'staff') => {
     updateView(view)
     setCurrentPage(1) // Reset to first page when switching views
   }, [updateView])
-  
+
   // Search handlers
   const handleSearchChange = useCallback((value: string) => {
     if (activeView === 'members') {
@@ -149,14 +140,14 @@ export default function AttendancePage() {
     }
     setCurrentPage(1) // Reset to first page when searching
   }, [activeView])
-  
+
   // Date range handler
   const handleDateRangeChange = useCallback((range: { from: string | null; to: string | null }) => {
     setFromDate(range.from)
     setToDate(range.to)
     setCurrentPage(1) // Reset to first page when changing date range
   }, [])
-  
+
   // Page change handler
   const handlePageChange = useCallback((direction: 'prev' | 'next') => {
     setCurrentPage(prev => {
@@ -164,7 +155,7 @@ export default function AttendancePage() {
       return Math.max(1, newPage) // Ensure page is at least 1
     })
   }, [])
-  
+
   // Staff check-in/check-out handlers
   const handleStaffCheckin = useCallback(async () => {
     try {
@@ -176,7 +167,7 @@ export default function AttendancePage() {
       console.error('Staff check-in error:', error)
     }
   }, [staffCheckinMutation])
-  
+
   const handleStaffCheckout = useCallback(async () => {
     try {
       await staffCheckoutMutation.mutateAsync({})
@@ -184,18 +175,17 @@ export default function AttendancePage() {
       console.error('Staff check-out error:', error)
     }
   }, [staffCheckoutMutation])
-  
+
   // Calculate present counts for display (from unfiltered data)
+
   const presentCounts = useMemo(() => {
-    const membersPresent = membersPresentData?.filter(row => !row.check_out_at).length || 0
-    const staffPresent = staffPresentData?.filter(row => !row.check_out_at).length || 0
     return {
-      membersPresent,
-      staffPresent,
-      totalPresent: membersPresent + staffPresent
+      membersPresent: attendanceStats?.membersPresent || 0,
+      staffPresent: attendanceStats?.staffPresent || 0,
+      totalPresent: attendanceStats?.totalPresent || 0
     }
-  }, [membersPresentData, staffPresentData])
-  
+  }, [attendanceStats])
+
   // Reset search when switching views
   useEffect(() => {
     if (activeView === 'members') {
@@ -204,11 +194,11 @@ export default function AttendancePage() {
       setMemberSearch('')
     }
   }, [activeView])
-  
+
   // Log page view and data for debugging
   useEffect(() => {
-    logger.info('Attendance page state', { 
-      view: activeView, 
+    logger.info('Attendance page state', {
+      view: activeView,
       gymId,
       filters: {
         fromDate: deferredFromDate,
