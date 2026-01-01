@@ -1,147 +1,146 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { BeforeInstallPromptEvent } from '@/types/pwa'
 
-// Extend the Window interface
-declare global {
-  interface Window {
-    deferredPrompt?: BeforeInstallPromptEvent
-    MSStream?: unknown
-  }
-  interface Navigator {
-    standalone?: boolean
-  }
-}
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
-}
+const DISMISS_KEY = 'pwa-install-dismissed-at'
+const DISMISS_DURATION = 24 * 60 * 60 * 1000 // 24 hours
 
 export function usePWA() {
   const [isInstalled, setIsInstalled] = useState(false)
-  const [isInstallable, setIsInstallable] = useState(false)
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isOnline, setIsOnline] = useState(true)
+  const [showPrompt, setShowPrompt] = useState(false)
+
+  const checkInstalled = useCallback(() => {
+    if (typeof window === 'undefined') return false
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                        (window.navigator as any).standalone === true
+    setIsInstalled(isStandalone)
+    return isStandalone
+  }, [])
+
+  const checkDismissed = useCallback(() => {
+    if (typeof window === 'undefined') return true
+    const dismissedAt = localStorage.getItem(DISMISS_KEY)
+    if (!dismissedAt) return false
+    return Date.now() - parseInt(dismissedAt) < DISMISS_DURATION
+  }, [])
 
   useEffect(() => {
-    // Check if app is installed
-    const checkInstalled = () => {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-      const isIOSStandalone = window.navigator.standalone === true
-      setIsInstalled(isStandalone || isIOSStandalone)
-    }
-
-    // Check network status
-    const checkOnline = () => {
-      setIsOnline(navigator.onLine)
-    }
+    if (typeof window === 'undefined') return
 
     // Initial checks
-    checkInstalled()
-    checkOnline()
+    const installed = checkInstalled()
+    setIsOnline(navigator.onLine)
 
-    // Listen for install prompt
+    // Check if we already have a deferred prompt from a previous component mount
+    // or from the early-catch script in layout.tsx
+    const existingPrompt = window.deferredPrompt
+    if (existingPrompt) {
+      console.log('usePWA: Found existing deferredPrompt')
+      setDeferredPrompt(existingPrompt as BeforeInstallPromptEvent)
+      if (!installed && !checkDismissed()) {
+        // Show after a short delay for better UX
+        const showTimeout = setTimeout(() => setShowPrompt(true), 2000)
+        return () => clearTimeout(showTimeout)
+      }
+    }
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault()
-      setIsInstallable(true)
+      const promptEvent = e as BeforeInstallPromptEvent
+      window.deferredPrompt = promptEvent
+      setDeferredPrompt(promptEvent)
+      
+      if (!checkInstalled() && !checkDismissed()) {
+        setTimeout(() => setShowPrompt(true), 3000)
+      }
     }
 
-    // Listen for app installed
     const handleAppInstalled = () => {
       setIsInstalled(true)
-      setIsInstallable(false)
+      setShowPrompt(false)
+      window.deferredPrompt = null
+      setDeferredPrompt(null)
     }
 
-    // Listen for network changes
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
 
-    // Add event listeners
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     window.addEventListener('appinstalled', handleAppInstalled)
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
+
+    // iOS/Fallback Timer
+    const timer = setTimeout(() => {
+      if (!checkInstalled() && !checkDismissed() && !showPrompt) {
+        setShowPrompt(true)
+      }
+    }, 10000)
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      clearTimeout(timer)
     }
-  }, [])
+  }, [checkInstalled, checkDismissed, showPrompt])
 
-  const isPWACapable = () => {
-    // Check if browser supports PWA features
-    return (
-      'serviceWorker' in navigator &&
-      'BeforeInstallPromptEvent' in window
-    )
-  }
-
-  const getInstallPrompt = () => {
-    // This would be stored from the beforeinstallprompt event
-    return window.deferredPrompt
-  }
-
-  const isIOS = () => {
-    const userAgent = window.navigator.userAgent
-    return /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream
-  }
-
-  const isAndroid = () => {
-    const userAgent = window.navigator.userAgent
-    return /Android/.test(userAgent)
-  }
-
-  const getDisplayMode = () => {
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      return 'standalone'
+  const install = async () => {
+    if (!deferredPrompt) {
+      console.warn('usePWA: No deferredPrompt available for installation')
+      return false
     }
-    if (window.matchMedia('(display-mode: minimal-ui)').matches) {
-      return 'minimal-ui'
-    }
-    if (window.matchMedia('(display-mode: fullscreen)').matches) {
-      return 'fullscreen'
-    }
-    return 'browser'
-  }
-
-  const requestPersistentStorage = async () => {
-    if ('storage' in navigator && 'persist' in navigator.storage) {
-      try {
-        const persistent = await navigator.storage.persist()
-        return persistent
-      } catch (error) {
-        console.error('Error requesting persistent storage:', error)
-        return false
+    
+    try {
+      console.log('usePWA: Triggering native install prompt')
+      await deferredPrompt.prompt()
+      const { outcome } = await deferredPrompt.userChoice
+      console.log(`usePWA: User choice outcome: ${outcome}`)
+      
+      if (outcome === 'accepted') {
+        setIsInstalled(true)
+        setShowPrompt(false)
+        window.deferredPrompt = null
+        setDeferredPrompt(null)
+        return true
       }
+    } catch (error) {
+      console.error('usePWA: Install error:', error)
     }
     return false
   }
 
-  const getStorageEstimate = async () => {
-    if ('storage' in navigator && 'estimate' in navigator.storage) {
-      try {
-        const estimate = await navigator.storage.estimate()
-        return estimate
-      } catch (error) {
-        console.error('Error getting storage estimate:', error)
-        return null
-      }
-    }
-    return null
+  const dismiss = () => {
+    setShowPrompt(false)
+    localStorage.setItem(DISMISS_KEY, Date.now().toString())
+  }
+
+  const isIOS = () => {
+    if (typeof window === 'undefined') return false
+    const userAgent = window.navigator.userAgent.toLowerCase()
+    return /iphone|ipad|ipod/.test(userAgent) && !window.MSStream
+  }
+
+  const getDisplayMode = () => {
+    if (typeof window === 'undefined') return 'browser'
+    if (window.matchMedia('(display-mode: standalone)').matches) return 'standalone'
+    if (window.matchMedia('(display-mode: minimal-ui)').matches) return 'minimal-ui'
+    if ((window.navigator as any).standalone) return 'standalone'
+    return 'browser'
   }
 
   return {
     isInstalled,
-    isInstallable,
     isOnline,
-    isPWACapable: isPWACapable(),
+    showPrompt,
+    install,
+    dismiss,
     isIOS: isIOS(),
-    isAndroid: isAndroid(),
     displayMode: getDisplayMode(),
-    getInstallPrompt,
-    requestPersistentStorage,
-    getStorageEstimate,
+    canPrompt: !!deferredPrompt
   }
 } 

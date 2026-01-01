@@ -341,8 +341,7 @@ export function useMembersStats(gymId: string | null) {
     queryFn: async () => {
       if (!gymId) throw new Error('Gym ID is required')
       
-      // Fetch all members via API to calculate stats
-      const params = new URLSearchParams({ gym_id: gymId, limit: '10000' })
+      const params = new URLSearchParams({ gym_id: gymId, summary: 'true' })
       const response = await fetch(`/api/members?${params}`)
       const result = await response.json()
 
@@ -357,18 +356,13 @@ export function useMembersStats(gymId: string | null) {
         throw new Error(result.error || 'Failed to fetch stats')
       }
 
-      const members = result.members || []
-      const now = new Date()
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()))
-
-      return {
-        total: members.length,
-        active: members.filter((m: Member) => m.status === 'active').length,
-        inactive: members.filter((m: Member) => m.status === 'inactive').length,
-        pending: members.filter((m: Member) => m.status === 'pending').length,
-        newThisMonth: members.filter((m: Member) => new Date(m.created_at) >= startOfMonth).length,
-        newThisWeek: members.filter((m: Member) => new Date(m.created_at) >= startOfWeek).length,
+      return result.stats as {
+        total: number
+        active: number
+        inactive: number
+        pending: number
+        newThisMonth: number
+        newThisWeek: number
       }
     },
     enabled: !!gymId && isAuthenticated && !!user,

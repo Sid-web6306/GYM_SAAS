@@ -15,6 +15,7 @@ import {
 } from '@/actions/rbac.actions'
 import { logger } from '@/lib/logger'
 import type { Permission, RoleAssignmentRequest } from '@/types/rbac.types'
+import { ROLE_LEVELS } from '@/types/rbac.types'
 
 // Validation schemas
 const assignRoleSchema = z.object({
@@ -82,8 +83,25 @@ export async function GET(request: NextRequest) {
         if (!user_id || !gym_id) {
           return NextResponse.json({ error: 'user_id and gym_id are required' }, { status: 400 })
         }
-        const permissions = await getUserPermissions(user_id, gym_id)
-        return NextResponse.json({ permissions })
+        
+        const [userRole, userPermissions] = await Promise.all([
+          getUserRole(user_id, gym_id),
+          getUserPermissions(user_id, gym_id)
+        ])
+
+        // Determine role level
+        // We need to import ROLE_LEVELS or map it locally if import fails
+        const roleLevel = userRole && userRole in ROLE_LEVELS ? ROLE_LEVELS[userRole] : 0
+
+        const userPermissionsObj = {
+          gym_id,
+          role: userRole || 'member',
+          role_level: roleLevel,
+          permissions: userPermissions,
+          custom_permissions: {}
+        }
+        
+        return NextResponse.json({ permissions: userPermissionsObj })
 
       case 'check-permission':
         if (!gym_id || !permission) {

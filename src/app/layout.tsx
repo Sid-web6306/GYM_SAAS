@@ -25,13 +25,12 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Centric Fit",
+  title: "Centric Fit - Fitness Management System",
   description: "A comprehensive Fitness management system",
-  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Centric Fit",
+    title: "Centric Fit - Fitness Management System",
   },
 };
 
@@ -43,10 +42,21 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="apple-touch-icon" href="/icon-192x192.png" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                window.deferredPrompt = e;
+              });
+            `,
+          }}
+        />
       </head>
       <body className={inter.className}>
-      <Script src = "https://checkout.razorpay.com/v1/checkout.js"></Script>
+        <Script src="https://checkout.razorpay.com/v1/checkout.js"></Script>
         <ThemeProvider
           attribute="class"
           defaultTheme="rose"

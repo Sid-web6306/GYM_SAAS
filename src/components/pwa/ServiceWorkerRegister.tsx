@@ -4,23 +4,35 @@ import { useEffect } from 'react'
 
 export default function ServiceWorkerRegister() {
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!('serviceWorker' in navigator)) return
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
 
-    const controller = new AbortController()
     const register = async () => {
       try {
-        await navigator.serviceWorker.register('/sw.js')
-      } catch {
-        // Swallow registration errors silently
+        const registration = await navigator.serviceWorker.register('/sw.js')
+        console.log('SW: Registered at scope:', registration.scope)
+
+        // Handle updates
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('SW: New content available, please refresh.')
+              }
+            })
+          }
+        })
+      } catch (error) {
+        console.error('SW: Registration failed:', error)
       }
     }
 
-    // Defer a tick to avoid competing with Next.js hydration
-    const id = setTimeout(register, 0)
-    return () => {
-      clearTimeout(id)
-      controller.abort()
+    // Register after page load for performance
+    if (document.readyState === 'complete') {
+      register()
+    } else {
+      window.addEventListener('load', register)
+      return () => window.removeEventListener('load', register)
     }
   }, [])
 
