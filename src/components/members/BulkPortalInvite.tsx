@@ -15,7 +15,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
 import { Users, Send, Loader2, CheckCircle, Search, UserCheck } from 'lucide-react'
-import { MemberService, type EligibleMember, type BulkInviteResult } from '@/services/member.service'
+import { PortalService, type EligibleMember, type BulkInviteResult } from '@/services/members/portal.service'
 import { toastActions } from '@/stores/toast-store'
 
 const bulkInviteSchema = z.object({
@@ -61,7 +61,7 @@ export function BulkPortalInvite({
   const loadEligibleMembers = useCallback(async () => {
     setIsLoading(true)
     try {
-      const members = await MemberService.getEligibleMembers(gymId, 100, 0)
+      const members = await PortalService.getEligibleMembers(gymId, 100, 0)
       setEligibleMembers(members)
       setFilteredMembers(members)
     } catch (error) {
@@ -127,7 +127,7 @@ export function BulkPortalInvite({
 
     setIsSubmitting(true)
     try {
-      const result = await MemberService.bulkInviteToPortal(gymId, {
+      const result = await PortalService.bulkInviteToPortal(gymId, {
         member_ids: selectedMemberIds,
         message: data.message,
         expires_in_hours: data.expires_in_hours

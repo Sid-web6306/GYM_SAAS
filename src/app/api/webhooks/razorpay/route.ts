@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { createClient } from '@/utils/supabase/server';
-import { PaymentService } from '@/services/payment.service';
+import { RazorpayClient } from '@/services/payments/razorpay-client';
 import { logger, performanceTracker } from '@/lib/logger';
 import { serverConfig } from '@/lib/config';
 // Import Razorpay's official webhook validation utility
@@ -324,9 +324,9 @@ async function handleSubscriptionActivated(
 
   if (!userId) {
     // Try to find user by customer ID
-    if (PaymentService.isConfigured()) {
+    if (RazorpayClient.isConfigured()) {
       try {
-        const razorpay = PaymentService.getRazorpayInstance();
+        const razorpay = RazorpayClient.getRazorpayInstance();
         if (razorpay) {
           const customer = await razorpay.customers.fetch(subscription.customer_id);
           if (customer.email) {
@@ -437,8 +437,8 @@ async function handleSubscriptionActivated(
         .neq('razorpay_subscription_id', subscription.id)
 
       if (previousSubs && previousSubs.length > 0) {
-        if (PaymentService.isConfigured()) {
-          const razorpay = PaymentService.getRazorpayInstance()
+        if (RazorpayClient.isConfigured()) {
+          const razorpay = RazorpayClient.getRazorpayInstance()
           if (razorpay) {
             for (const prev of previousSubs) {
               if (prev.razorpay_subscription_id) {

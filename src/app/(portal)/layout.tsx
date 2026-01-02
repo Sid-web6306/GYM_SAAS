@@ -1,36 +1,41 @@
 'use client'
 
-import { useAuth, useLogout } from '@/hooks/use-auth'
+import { useAuth } from '@/hooks/use-auth'
 import { LoadingSpinner } from '@/components/layout/LoadingSpinner'
-import { Button } from '@/components/ui/button'
 import { 
   Home, 
   History, 
   User, 
-  LogOut, 
-  Dumbbell,
-  Menu,
-  X
+  Dumbbell
 } from 'lucide-react'
-import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import React from 'react'
 import { PWAWrapper } from '@/components/pwa/PWAWrapper'
 import { RealtimeProvider } from '@/components/providers/realtime-provider-simple'
 import { PortalDataProvider } from '@/components/providers/portal-data-provider'
+import { motion } from 'framer-motion'
+import { useSidebarState } from '@/stores/ui-store'
+import { CollapsibleNavItem } from '@/components/layout/CollapsibleNavItem'
+import { SidebarToggle } from '@/components/layout/SidebarToggle'
+import { CollapsibleUserSection } from '@/components/layout/CollapsibleUserSection'
+import { cn } from '@/lib/utils'
 
 export default function PortalLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { user, profile, isLoading: authLoading } = useAuth()
-  const logoutMutation = useLogout()
+  const { user, isLoading: authLoading } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   
+  // Sidebar state for collapsible functionality
+  const {
+    sidebarCollapsed,
+    sidebarCollapsedMobile,
+    toggleMobileSidebar,
+  } = useSidebarState()
 
   // Handle redirect for unauthenticated users
   useEffect(() => {
@@ -67,129 +72,145 @@ export default function PortalLayout({
     { name: 'Profile', href: '/portal/profile', icon: User },
   ]
 
-  const handleSignOut = () => {
-    logoutMutation.mutate()
-  }
-
   return (
     <RealtimeProvider>
       <PortalDataProvider key="portal-data-provider">
         <PWAWrapper />
         <div className="min-h-screen bg-gray-50">
-        {/* Mobile header */}
-        <div className="lg:hidden bg-white shadow-sm border-b">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Dumbbell className="h-6 w-6 text-primary" />
-              <span className="font-semibold text-lg">Member Portal</span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
-          </div>
-          
-          {/* Mobile menu */}
-          {isMobileMenuOpen && (
-            <div className="border-t bg-white">
-              <nav className="px-4 py-2 space-y-1">
-                {navigation.map((item) => {
-                  const Icon = item.icon
-                  const isActive = pathname === item.href
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Icon className="h-5 w-5" />
-                      {item.name}
-                    </Link>
-                  )
-                })}
-                <button
-                  onClick={handleSignOut}
-                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 w-full text-left"
-                >
-                  <LogOut className="h-5 w-5" />
-                  Sign Out
-                </button>
-              </nav>
-            </div>
-          )}
-        </div>
-
         <div className="lg:flex">
-          {/* Desktop sidebar */}
-          <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
-            <div className="flex flex-col flex-grow bg-white border-r overflow-y-auto">
-              {/* Logo */}
-              <div className="flex items-center gap-2 px-6 py-6 border-b">
-                <Dumbbell className="h-8 w-8 text-primary" />
-                <div>
-                  <h1 className="font-semibold text-lg">Member Portal</h1>
-                  <p className="text-sm text-gray-500">Welcome back!</p>
-                </div>
-              </div>
-
-              {/* Navigation */}
-              <nav className="flex-1 px-4 py-6 space-y-2">
+          {/* Desktop Sidebar - Collapsible */}
+          <motion.div
+            initial={false}
+            animate={{ 
+              width: sidebarCollapsed ? 64 : 256,
+            }}
+            transition={{ 
+              duration: 0.3, 
+              ease: 'easeOut' 
+            }}
+            className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 bg-card shadow-lg border-r border-border"
+          >
+            {/* Sidebar Header */}
+            <div className={cn(
+              'flex items-center h-16 border-b border-border transition-all duration-300',
+              sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'
+            )}>
+              {sidebarCollapsed ? (
+                /* Desktop collapsed state - only toggle button centered */
+                <SidebarToggle />
+              ) : (
+                /* Desktop expanded state - logo + text + toggle button */
+                <>
+                  <div className="flex items-center min-w-0">
+                    <Dumbbell className="h-8 w-8 text-primary flex-shrink-0" />
+                    <span className="ml-2 text-xl font-bold text-card-foreground whitespace-nowrap">
+                      Member Portal
+                    </span>
+                  </div>
+                  <SidebarToggle />
+                </>
+              )}
+            </div>
+            
+            {/* Navigation */}
+            <nav className="mt-5 flex-1 px-2">
+              <div className="space-y-1">
                 {navigation.map((item) => {
-                  const Icon = item.icon
                   const isActive = pathname === item.href
                   return (
-                    <Link
+                    <CollapsibleNavItem
                       key={item.name}
+                      name={item.name}
                       href={item.href}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Icon className="h-5 w-5" />
-                      {item.name}
-                    </Link>
+                      icon={item.icon}
+                      isActive={isActive}
+                      prefetch={true}
+                    />
                   )
                 })}
-              </nav>
-
-              {/* User info and sign out */}
-              <div className="px-4 py-4 border-t">
-                <div className="flex items-center gap-3 px-3 py-2 text-sm">
-                  <div className="h-8 w-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-medium">
-                    {profile?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 truncate">
-                      {profile?.full_name || user?.email}
-                    </p>
-                    <p className="text-gray-500 text-xs truncate">Member</p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleSignOut}
-                  className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 mt-2"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </Button>
               </div>
+            </nav>
+
+            {/* User Section */}
+            <CollapsibleUserSection className="mt-auto" />
+          </motion.div>
+
+          {/* Mobile Sidebar */}
+          <motion.div
+            initial={{ x: '-100%' }}
+            animate={{ x: sidebarCollapsedMobile ? '-100%' : 0 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            className="lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-card shadow-lg border-r border-border"
+          >
+            {/* Mobile Header */}
+            <div className="flex items-center justify-between h-16 px-4 border-b border-border">
+              <div className="flex items-center min-w-0">
+                <Dumbbell className="h-8 w-8 text-primary flex-shrink-0" />
+                <span className="ml-2 text-xl font-bold text-card-foreground whitespace-nowrap">
+                  Member Portal
+                </span>
+              </div>
+              <SidebarToggle isMobile />
             </div>
-          </div>
+            
+            {/* Mobile Navigation */}
+            <nav className="mt-5 px-2 flex-1">
+              <div className="space-y-1">
+                {navigation.map((item) => {
+                  const isActive = pathname === item.href
+                  return (
+                    <CollapsibleNavItem
+                      key={item.name}
+                      name={item.name}
+                      href={item.href}
+                      icon={item.icon}
+                      isActive={isActive}
+                      onClick={toggleMobileSidebar}
+                      forceExpanded={true}
+                      prefetch={true}
+                    />
+                  )
+                })}
+              </div>
+            </nav>
+
+            {/* Mobile User Section - force expanded so details + logout are visible */}
+            <CollapsibleUserSection forceExpanded />
+          </motion.div>
+
+          {/* Mobile Overlay */}
+          {!sidebarCollapsedMobile && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="lg:hidden fixed inset-0 z-40 bg-black/50"
+              onClick={toggleMobileSidebar}
+            />
+          )}
 
           {/* Main content */}
-          <div className="lg:pl-64 flex-1">
+          <div
+            className={cn(
+              'flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-out',
+              // Mobile: no margin
+              'ml-0',
+              // Desktop: margin based on sidebar state
+              sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
+            )}
+          >
+            {/* Mobile Top bar */}
+            <div className="bg-card shadow-sm border-b border-border lg:hidden">
+              <div className="flex items-center justify-between h-16 px-4">
+                <SidebarToggle isMobile />
+                <h1 className="text-lg font-semibold text-card-foreground">
+                  {navigation.find(item => item.href === pathname)?.name || 'Dashboard'}
+                </h1>
+                <div className="w-8"></div> {/* Spacer for balance */}
+              </div>
+            </div>
+
             <main className="min-h-screen">
               {children}
             </main>

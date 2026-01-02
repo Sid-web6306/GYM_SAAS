@@ -9,7 +9,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { UserPlus, Edit, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 import { EnhancedMemberFormFields, type EnhancedMemberFormData } from './EnhancedMemberFormFields'
-import { MemberService } from '@/services/member.service'
+import { MemberManagementService } from '@/services/members/member-management.service'
+import { PortalService } from '@/services/members/portal.service'
 import { toastActions } from '@/stores/toast-store'
 import { type Member } from '@/types/member.types'
 import { logger } from '@/lib/logger'
@@ -86,7 +87,7 @@ export function EnhancedMemberDialog({
     try {
       if (isEdit && member) {
         // Edit mode: update existing member
-        const updatedMember = await MemberService.updateMember(member.id, {
+        const updatedMember = await MemberManagementService.updateMember(member.id, {
           gym_id: gymId,
           first_name: data.first_name,
           last_name: data.last_name,
@@ -100,7 +101,7 @@ export function EnhancedMemberDialog({
         onOpenChange(false)
       } else {
         // Add mode: create new member (Phase 1)
-        const newMember = await MemberService.createMember({
+        const newMember = await MemberManagementService.createMember({
           gym_id: gymId,
           first_name: data.first_name,
           last_name: data.last_name,
@@ -119,13 +120,13 @@ export function EnhancedMemberDialog({
         })
         
         if (data.enable_portal_access && data.email) {
-          logger.debug('🚀 Calling MemberService.enablePortalAccess with:', {
+          logger.debug('🚀 Calling PortalService.enablePortalAccess with:', {
             memberId: newMember.id,
             message: data.custom_message,
             send_welcome_message: data.send_welcome_message
           })
           try {
-            const portalResult = await MemberService.enablePortalAccess(newMember.id, {
+            const portalResult = await PortalService.enablePortalAccess(newMember.id, {
               message: data.custom_message,
               expires_in_hours: 72,
               send_welcome_message: data.send_welcome_message

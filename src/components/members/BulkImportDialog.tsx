@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { useAuth } from '@/hooks/use-auth'
-import { MemberService } from '@/services/member.service'
+import { MemberManagementService } from '@/services/members/member-management.service'
+import { PortalService } from '@/services/members/portal.service'
 import { parseCSVFile, downloadCSVTemplate, type ValidationError } from '@/lib/member-csv'
 import { getUserFriendlyErrorMessage } from '@/lib/import-error-messages'
 import { Button } from '@/components/ui/button'
@@ -209,7 +210,7 @@ export function BulkImportDialog({ open, onOpenChange, onSuccess }: BulkImportDi
 
       // Bulk import all members in a single database operation
       setImportProgress(10)
-      const bulkResult = await MemberService.bulkCreateMembers(membersWithGym)
+      const bulkResult = await MemberManagementService.bulkCreateMembers(membersWithGym)
       setImportProgress(50)
 
       const successCount = bulkResult.success.length
@@ -241,7 +242,7 @@ export function BulkImportDialog({ open, onOpenChange, onSuccess }: BulkImportDi
         for (let i = 0; i < membersWithEmail.length; i++) {
           const member = membersWithEmail[i]
           try {
-            const result = await MemberService.enablePortalAccess(member.id)
+            const result = await PortalService.enablePortalAccess(member.id)
             if (result.success) {
               invitationsSent++
             } else {

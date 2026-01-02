@@ -1,6 +1,6 @@
 // src/lib/config-checker.ts
 
-import { validateEmailConfig } from './email-service';
+import { validateEmailConfig } from '../services/email/email-service';
 
 /**
  * Configuration checker for email and other services

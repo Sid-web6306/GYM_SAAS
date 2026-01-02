@@ -3,7 +3,7 @@ import { createClient } from '@/utils/supabase/server'
 import { z } from 'zod'
 import { checkUserPermission } from '@/actions/rbac.actions'
 import { logger } from '@/lib/logger'
-import { InvitationService, createInviteSchema } from '@/lib/invitation-service'
+import { InvitationService, createInviteSchema } from '@/services/invitation/invitation-service'
 
 // Validation schemas
 const enablePortalSchema = z.object({

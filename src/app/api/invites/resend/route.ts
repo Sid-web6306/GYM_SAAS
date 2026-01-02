@@ -3,7 +3,7 @@ import { createClient } from '@/utils/supabase/server'
 import { z } from 'zod'
 import { checkUserPermission } from '@/actions/rbac.actions'
 import { generateSecureToken, hashToken, calculateExpirationTime, generateInviteUrl } from '@/lib/invite-utils'
-import { sendInvitationEmail as sendEmail } from '@/lib/email-service'
+import { sendInvitationEmail as sendEmail } from '@/services/email/email-service'
 import { logger } from '@/lib/logger'
 
 const resendInviteSchema = z.object({

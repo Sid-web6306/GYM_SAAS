@@ -17,7 +17,7 @@ import {
   getStaticPlansByType, 
   formatStaticPrice, 
   calculateStaticSavings
-} from '@/lib/static-subscription-plans'
+} from '@/lib/constants/subscription-plans'
 
 interface StaticSubscriptionPlansProps {
   className?: string
@@ -98,7 +98,7 @@ export function StaticSubscriptionPlans({ className = "" }: StaticSubscriptionPl
           const monthlyPlan = monthly!
           const annualPlan = annual!
           const IconComponent = getPlanIcon(plan.tier_level)
-          const isPopular = plan.is_popular || plan.plan_type === 'professional'
+          const isPopular = plan.is_popular || plan.plan_type === 'premium'
           
           return (
             <Card 

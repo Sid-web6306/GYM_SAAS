@@ -5,7 +5,7 @@
 
 import Papa from 'papaparse'
 import { type Member } from '@/types/member.types'
-import { type CreateMemberData } from '@/services/member.service'
+import { type CreateMemberData } from '@/services/members/member-management.service'
 
 // CSV export fields and headers
 export const CSV_HEADERS = {

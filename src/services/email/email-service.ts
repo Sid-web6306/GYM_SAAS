@@ -3,10 +3,10 @@
  * Clean, minimal implementation with template support
  */
 
-import { type InvitationEmailData } from './email-templates/invitation-email'
-import { sendTemplateEmailViaMSG91 } from './msg91'
-import { logger } from './logger'
-import { serverConfig } from './config'
+import { type InvitationEmailData } from '@/lib/email-templates/invitation-email'
+import { sendTemplateEmailViaMSG91 } from '@/lib/msg91'
+import { logger } from '@/lib/logger'
+import { serverConfig } from '@/lib/config'
 
 // Re-export the type for consumers
 export type { InvitationEmailData }
