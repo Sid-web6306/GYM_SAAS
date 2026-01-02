@@ -3,7 +3,8 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { MemberService, type BulkInviteOptions } from '@/services/member.service'
+import { PortalService, type BulkInviteOptions } from '@/services/members/portal.service'
+import { MemberManagementService } from '@/services/members/member-management.service'
 import { membersKeys } from './use-members-data'
 import { memberAnalyticsKeys } from './use-member-analytics'
 import { toastActions } from '@/stores/toast-store'
@@ -17,7 +18,7 @@ export function useBulkPortalInvite() {
 
   return useMutation({
     mutationFn: async ({ gymId, options }: { gymId: string; options: BulkInviteOptions }) => {
-      return MemberService.bulkInviteToPortal(gymId, options)
+      return PortalService.bulkInviteToPortal(gymId, options)
     },
     onSuccess: (result, variables) => {
       const { gymId } = variables
@@ -77,7 +78,7 @@ export function useBulkMemberStatusUpdate() {
       // Update each member's status
       const results = await Promise.allSettled(
         memberIds.map(id => 
-          MemberService.updateMember(id, { status })
+          MemberManagementService.updateMember(id, { status })
         )
       )
 
@@ -133,7 +134,7 @@ export function useBulkMemberDelete() {
     mutationFn: async ({ memberIds }: { memberIds: string[] }) => {
       // Soft delete each member
       const results = await Promise.allSettled(
-        memberIds.map(id => MemberService.deleteMember(id))
+        memberIds.map(id => MemberManagementService.deleteMember(id))
       )
 
       // Process results

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { PaymentService } from '@/services/payment.service'
+import { RazorpayClient } from '@/services/payments/razorpay-client'
+import { SubscriptionService } from '@/services/payments/subscription.service'
 import { logger } from '@/lib/logger'
 import { serverConfig } from '@/lib/config'
 import { validatePaymentVerification } from 'razorpay/dist/utils/razorpay-utils'
@@ -162,8 +163,8 @@ export async function POST(request: NextRequest) {
     // Update Razorpay subscription
     if (subscription.razorpay_subscription_id) {
       try {
-        if (PaymentService.isConfigured()) {
-          await PaymentService.updateSubscription(subscription.razorpay_subscription_id, {
+        if (RazorpayClient.isConfigured()) {
+          await SubscriptionService.updateSubscription(subscription.razorpay_subscription_id, {
             plan_id: newPlan.razorpay_plan_id || `plan_${newPlanId}_${billingCycle}`,
             schedule_change_at: 'now',
             customer_notify: true

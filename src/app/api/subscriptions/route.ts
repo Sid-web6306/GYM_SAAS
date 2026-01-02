@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { PaymentService } from '@/services/payment.service'
+import { RazorpayClient } from '@/services/payments/razorpay-client'
+import { SubscriptionService } from '@/services/payments/subscription.service'
 import { logger } from '@/lib/logger'
 import type { Tables } from '@/types/supabase'
 
@@ -210,7 +211,7 @@ async function handleGetCurrentSubscription(supabase: SupabaseClient, userId: st
 type MinimalUser = { id: string; email?: string | null }
 async function handleCreateBillingPortal(supabase: SupabaseClient, user: MinimalUser) {
   try {
-    if (!PaymentService.isConfigured()) {
+    if (!RazorpayClient.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
@@ -257,7 +258,7 @@ async function handleCreateBillingPortal(supabase: SupabaseClient, user: Minimal
     // Since Razorpay doesn't have a built-in billing portal like Stripe, 
     // we'll return the subscription details for a custom billing interface
     try {
-      const razorpaySubscription = await PaymentService.fetchSubscription(subscription.razorpay_subscription_id)
+      const razorpaySubscription = await SubscriptionService.fetchSubscription(subscription.razorpay_subscription_id)
       
       logger.info('Billing portal data retrieved:', {
         userId: user.id,
@@ -297,7 +298,7 @@ async function handlePauseSubscription(supabase: SupabaseClient, userId: string,
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
     }
 
-    if (!PaymentService.isConfigured()) {
+    if (!RazorpayClient.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
@@ -333,7 +334,7 @@ async function handlePauseSubscription(supabase: SupabaseClient, userId: string,
     // Pause in Razorpay if available
     if (subscription.razorpay_subscription_id) {
       try {
-        await PaymentService.pauseSubscription(subscription.razorpay_subscription_id, 'now')
+        await SubscriptionService.pauseSubscription(subscription.razorpay_subscription_id, 'now')
       } catch (razorpayError) {
         logger.error('Error pausing Razorpay subscription:', { error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError) })
         // Don't fail the request if Razorpay update fails
@@ -361,7 +362,7 @@ async function handleResumeSubscription(supabase: SupabaseClient, userId: string
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
     }
 
-    if (!PaymentService.isConfigured()) {
+    if (!RazorpayClient.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
@@ -404,7 +405,7 @@ async function handleResumeSubscription(supabase: SupabaseClient, userId: string
       while (attempt < maxAttempts) {
         try {
           attempt++
-          await PaymentService.resumeSubscription(razorpaySubscriptionId, 'now')
+          await SubscriptionService.resumeSubscription(razorpaySubscriptionId, 'now')
           break
         } catch (razorpayError) {
           lastError = razorpayError
@@ -487,7 +488,7 @@ async function handleCancelSubscription(
       return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 })
     }
 
-    if (!PaymentService.isConfigured()) {
+    if (!RazorpayClient.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
@@ -551,10 +552,10 @@ async function handleCancelSubscription(
       try {
         if (cancelAtPeriodEnd) {
           // Schedule cancellation at period end
-          await PaymentService.cancelSubscription(subscription.razorpay_subscription_id, true)
+          await SubscriptionService.cancelSubscription(subscription.razorpay_subscription_id, true)
         } else {
           // Cancel immediately
-          await PaymentService.cancelSubscription(subscription.razorpay_subscription_id, false)
+          await SubscriptionService.cancelSubscription(subscription.razorpay_subscription_id, false)
         }
       } catch (razorpayError) {
         logger.error('Error canceling Razorpay subscription:', { error: razorpayError instanceof Error ? razorpayError.message : String(razorpayError) })
@@ -628,10 +629,10 @@ async function handleChangePlan(
     // Try to schedule the plan change in Razorpay at cycle end (pending update)
     let razorpayUpdateAttempted = false
     let razorpayUpdateSucceeded = false
-    if (PaymentService.isConfigured() && subscription.razorpay_subscription_id && newPlan.razorpay_plan_id) {
+    if (RazorpayClient.isConfigured() && subscription.razorpay_subscription_id && newPlan.razorpay_plan_id) {
       razorpayUpdateAttempted = true
       try {
-        await PaymentService.updateSubscription(subscription.razorpay_subscription_id, {
+        await SubscriptionService.updateSubscription(subscription.razorpay_subscription_id, {
           plan_id: newPlan.razorpay_plan_id,
           schedule_change_at: 'now'
         })

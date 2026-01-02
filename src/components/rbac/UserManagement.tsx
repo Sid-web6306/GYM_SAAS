@@ -29,6 +29,8 @@ import {
   Dumbbell 
 } from 'lucide-react'
 import { ROLE_COLORS } from '@/components/layout/RoleContextIndicator'
+import { PermissionBadge } from './PermissionBadge'
+import { ROLE_PERMISSIONS } from '@/lib/constants/rbac'
 import { toastActions } from '@/stores/toast-store'
 import type { GymRole } from '@/types/rbac.types'
 
@@ -143,6 +145,27 @@ export function UserManagement({
                   </p>
                 </div>
               )}
+              
+              {/* Show user permissions */}
+              <div className="mt-4 space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {userName || userEmail}&apos;s permissions:
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {ROLE_PERMISSIONS[userRole].slice(0, 3).map((permission) => (
+                    <PermissionBadge 
+                      key={permission} 
+                      permission={permission} 
+                      variant="compact"
+                    />
+                  ))}
+                  {ROLE_PERMISSIONS[userRole].length > 3 && (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      +{ROLE_PERMISSIONS[userRole].length - 3} more
+                    </Badge>
+                  )}
+                </div>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

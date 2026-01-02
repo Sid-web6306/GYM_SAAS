@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { serverConfig } from '@/lib/config'
 import { logger } from '@/lib/logger'
-import { PaymentService } from '@/services/payment.service'
+import { RazorpayClient } from '@/services/payments/razorpay-client'
+import { SubscriptionService } from '@/services/payments/subscription.service'
 // Import Razorpay's official validation utility
 import { validatePaymentVerification } from 'razorpay/dist/utils/razorpay-utils'
 
@@ -156,7 +157,7 @@ export async function POST(request: NextRequest) {
       })
 
       // Fetch subscription details from Razorpay to get plan info
-      if (!PaymentService.isConfigured()) {
+      if (!RazorpayClient.isConfigured()) {
         logger.error('Razorpay not configured for immediate subscription creation')
         return NextResponse.json(
           { error: 'Payment system not configured' },
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const razorpaySubscription = await PaymentService.fetchSubscription(razorpay_subscription_id)
+        const razorpaySubscription = await SubscriptionService.fetchSubscription(razorpay_subscription_id)
         
         // Find the matching plan in our database
         const { data: planData } = await supabase

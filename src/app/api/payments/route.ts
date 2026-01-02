@@ -1,14 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { PaymentService } from '@/services/payment.service'
+import { RazorpayClient } from '@/services/payments/razorpay-client'
+import { OrderService } from '@/services/payments/order.service'
+import { SubscriptionService } from '@/services/payments/subscription.service'
+import { CustomerService } from '@/services/payments/customer.service'
 import { logger } from '@/lib/logger'
 import { serverConfig } from '@/lib/config'
 
 // POST /api/payments - Create or update Razorpay subscription
 export async function POST(request: NextRequest) {
   try {
-    if (!PaymentService.isConfigured()) {
+    if (!RazorpayClient.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
@@ -196,7 +199,7 @@ export async function POST(request: NextRequest) {
 
           logger.info('Creating Razorpay order with data:', orderData)
           
-          const order = await PaymentService.createOrder(orderData)
+          const order = await OrderService.createOrder(orderData)
 
           logger.info('Razorpay order created for subscription upgrade', {
             orderId: order.id,
@@ -287,7 +290,7 @@ export async function POST(request: NextRequest) {
         // Update Razorpay subscription
         if (existingSubscription.razorpay_subscription_id) {
           try {
-            await PaymentService.updateSubscription(existingSubscription.razorpay_subscription_id, {
+            await SubscriptionService.updateSubscription(existingSubscription.razorpay_subscription_id, {
               plan_id: plan.razorpay_plan_id || `plan_${planId}_${billingCycle}`,
               schedule_change_at: 'now',
               customer_notify: true
@@ -341,7 +344,7 @@ export async function POST(request: NextRequest) {
       // Search for existing customer by email
       let existingCustomer = null;
       if (user.email) {
-        const customers = await PaymentService.fetchAllCustomers({
+        const customers = await CustomerService.fetchAllCustomers({
           count: 100  // Increase count or implement pagination
         });
         logger.info('Razorpay customers:', { customers: customers.items.length })
@@ -352,7 +355,7 @@ export async function POST(request: NextRequest) {
         logger.info('Razorpay customer found:', { customer: existingCustomer })
         customer = existingCustomer
       } else {
-        customer = await PaymentService.createCustomer(customerData)
+        customer = await CustomerService.createCustomer(customerData)
       }
     } catch (error) {
       logger.error('Error creating/finding Razorpay customer:', { error: error instanceof Error ? error.message : JSON.stringify(error) })
@@ -375,7 +378,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const subscription = await PaymentService.createSubscription(subscriptionData)
+      const subscription = await SubscriptionService.createSubscription(subscriptionData)
 
       logger.info('Razorpay subscription created:', {
         subscriptionId: subscription.id,

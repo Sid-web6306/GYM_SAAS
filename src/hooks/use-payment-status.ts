@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { logger } from '@/lib/logger'
-import { PaymentService } from '@/services/payment.service'
+import { RazorpayClient } from '@/services/payments/razorpay-client'
 
 interface PaymentStatusOptions {
   razorpayPaymentId?: string
@@ -45,7 +45,7 @@ export function usePaymentStatus({
    */
   const checkPaymentStatus = useCallback(async (paymentId: string): Promise<boolean> => {
     try {
-      if (!PaymentService.isConfigured()) {
+      if (!RazorpayClient.isConfigured()) {
         throw new Error('Razorpay not initialized')
       }
 

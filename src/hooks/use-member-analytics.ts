@@ -3,7 +3,8 @@
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { MemberService, type MemberPortalStats } from '@/services/member.service'
+import { AnalyticsService, type MemberPortalStats } from '@/services/members/analytics.service'
+import { PortalService } from '@/services/members/portal.service'
 
 // Query keys for member analytics
 export const memberAnalyticsKeys = {
@@ -22,7 +23,7 @@ export function useMemberPortalStats(gymId: string | null, periodDays: number = 
     queryKey: memberAnalyticsKeys.portalStats(gymId || '', periodDays),
     queryFn: () => {
       if (!gymId) throw new Error('Gym ID is required')
-      return MemberService.getPortalStats(gymId, periodDays)
+      return AnalyticsService.getPortalStats(gymId, periodDays)
     },
     enabled: !!gymId,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -42,7 +43,7 @@ export function useEligibleMembers(
     queryKey: [...memberAnalyticsKeys.eligible(gymId || ''), limit, offset],
     queryFn: () => {
       if (!gymId) throw new Error('Gym ID is required')
-      return MemberService.getEligibleMembers(gymId, limit, offset)
+      return PortalService.getEligibleMembers(gymId, limit, offset)
     },
     enabled: !!gymId,
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -57,7 +58,7 @@ export function useMemberPortalAdoption(gymId: string | null) {
     queryKey: memberAnalyticsKeys.adoption(gymId || ''),
     queryFn: () => {
       if (!gymId) throw new Error('Gym ID is required')
-      return MemberService.getPortalAdoptionView(gymId)
+      return PortalService.getPortalAdoptionView(gymId)
     },
     enabled: !!gymId,
     staleTime: 5 * 60 * 1000, // 5 minutes

@@ -2,7 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { InvitationService, createInviteSchema, type InviteResult } from '@/lib/invitation-service'
+import { InvitationService, createInviteSchema, type InviteResult } from '@/services/invitation/invitation-service'
 import { checkUserPermission } from '@/actions/rbac.actions'
 import { logger } from '@/lib/logger'
 

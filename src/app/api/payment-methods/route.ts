@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { PaymentService } from '@/services/payment.service'
+import { RazorpayClient } from '@/services/payments/razorpay-client'
+import { CustomerService } from '@/services/payments/customer.service'
 import { logger } from '@/lib/logger'
 
 export async function GET() {
   try {
-    if (!PaymentService.isConfigured()) {
+    if (!RazorpayClient.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
@@ -41,7 +42,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!PaymentService.isConfigured()) {
+    if (!RazorpayClient.isConfigured()) {
       return NextResponse.json({ error: 'Razorpay not configured' }, { status: 500 })
     }
 
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
       let customer;
       try {
         // Search for customer by email - Razorpay supports email-based search
-        const customers = await PaymentService.fetchAllCustomers()
+        const customers = await CustomerService.fetchAllCustomers()
         customer = customers.items.find((c: any) => 
           c.email?.toLowerCase() === user.email?.toLowerCase()
         )
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
       
       if (!customer) {
         try {
-          customer = await PaymentService.createCustomer(customerData)
+          customer = await CustomerService.createCustomer(customerData)
         } catch (createError) {
           logger.error('Failed to create Razorpay customer:', { 
             error: createError,
